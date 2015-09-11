@@ -18,9 +18,21 @@ LC_ALL=C
 export LC_ALL
 
 # append some extra paths
-PATH="$PATH:/opt/gnome/bin"
-# Solaris (order of paths important for tr, echo, grep, sed to work)
-PATH="/usr/xpg4/bin:/usr/ucb:$PATH:/usr/local/bin:/usr/sfw/bin:/usr/ccs/bin"
+if [ `uname -s` = "OS/2" ]; then
+  PATH=`echo $PATH | tr '\\\' '/'`
+  PATHSEP=";"
+  EXEEXT=".exe"
+  IMPLIBPREF=""
+  IMPLIBSUFF="_dll.a"
+else
+  PATH="$PATH:/opt/gnome/bin"
+  # Solaris (order of paths important for tr, echo, grep, sed to work)
+  PATH="/usr/xpg4/bin:/usr/ucb:$PATH:/usr/local/bin:/usr/sfw/bin:/usr/ccs/bin"
+  PATHSEP=":"
+  EXEEXT=""
+  IMPLIBPREF="lib"
+  IMPLIBSUFF=".so"
+fi
 ORGPATH=$PATH
 
 # Wrapper for ancient /usr/bin/which on darwin that always returns 0
@@ -43,8 +55,8 @@ which_wrapper()
   fi
 }
 
-OS=`uname -s | sed -e 's/GNU\/Linux/Linux/g' | tr '[:upper:]' '[:lower:]'`
-case "$OS" in
+OS=`uname -s | sed -e 's/GNU\/Linux/Linux/g' -e 's/OS\/2/OS2/g' | tr '[:upper:]' '[:lower:]'`
+case $OS in
   linux)
     ;;
   darwin)
@@ -55,6 +67,8 @@ case "$OS" in
     OS='solaris'
     ;;
   haiku)
+    ;;
+  os2)
     ;;
   *)
     echo "Cannot determine OS!"
@@ -133,7 +147,11 @@ INCVNCSERVER=""
 LIBVNCSERVER="-lvncserver"
 INCDEVMAPPER=""
 LIBDEVMAPPER="-ldevmapper"
-CXX_FLAGS=""
+if [ "${OS}" = "os2" ]; then
+  CXX_FLAGS="-Zomf"
+else
+  CXX_FLAGS=""
+fi
 if [ "$OS" = "freebsd" ]; then
   INCCURL="-I/usr/local/include"
   LIBCURL="-L/usr/local/lib -lcurl"
@@ -150,10 +168,17 @@ fi
 INCVPX=""
 LIBVPX="-lvpx"
 PKGCONFIG="`which_wrapper pkg-config`"
-PYTHONDIR="/usr /usr/local"
-QT4DIR="/usr/lib/qt4 /usr/share/qt4 /usr/lib64/qt4 /usr /usr/local"
-QT4DIR_PKGCONFIG=1
-QT4UIC3DIR="/usr/bin"
+if [ "${OS}" = "os2" ]; then
+  PYTHONDIR="/@unixroot/usr /@unixroot/usr/local"
+  QT4DIR="/@unixroot/usr/lib/qt4 /@unixroot/usr/share/qt4 /@unixroot/usr /@unixroot/usr/local"
+  QT4DIR_PKGCONFIG=0
+  QT4UIC3DIR="/@unixroot/usr/bin"
+else
+  PYTHONDIR="/usr /usr/local"
+  QT4DIR="/usr/lib/qt4 /usr/share/qt4 /usr/lib64/qt4 /usr /usr/local"
+  QT4DIR_PKGCONFIG=1
+  QT4UIC3DIR="/usr/bin"
+fi
 KBUILDDIR="`cd \`dirname $0\`; pwd`/kBuild"
 DEVDIR="`cd \`dirname $0\`; pwd`/tools"
 if [ -d "/lib/modules/`uname -r`/build" ]; then
@@ -242,7 +267,11 @@ strip_I()
 
 prefix_I()
 {
-  echo "$1"|$KBUILD_SED 's|^\/|-I/|g; s| \/| -I/|g'
+  if [ "$OS" = "os2" ]; then
+    echo "$1"|$KBUILD_SED 's|^\/|-I/|g; s| \/| -I/|g; s|^\([a-zA-Z]\:\/\)|-I\1|g; s| \([a-zA-Z]\:\/\)| -I\1|g'
+  else
+    echo "$1"|$KBUILD_SED 's|^\/|-I/|g; s| \/| -I/|g'
+  fi
 }
 
 check_avail()
@@ -389,6 +418,13 @@ check_environment()
   echo "export BUILD_TARGET_CPU" >> $ENV
   echo "BUILD_TYPE=\"$BUILD_TYPE\"" >> $ENV
   echo "export BUILD_TYPE" >> $ENV
+
+  if [ "$OS" = "os2" ]; then
+    # make sure tools' DLLs may be found
+    DEVDIR_BIN_BS=`echo $DEVDIR_BIN | tr '/' '\\\'`
+    echo "ENDLIBPATH=\"$ENDLIBPATH${ENDLIBPATH:+;}$DEVDIR_BIN_BS\"" >> $ENV
+    echo "export ENDLIBPATH" >> $ENV
+  fi
 }
 
 #
@@ -526,8 +562,8 @@ check_open_watcom()
   # Check that the tools we use are there.
   for prog in wasm wcc wlink;
   do
-    if [ ! -f "$WATCOM/$wc_bin/$prog" ]; then
-      log_failure "$WATCOM/$wc_bin/$prog does not exist or is not a regular file."
+    if [ ! -f "$WATCOM/$wc_bin/$prog$EXEEXT" ]; then
+      log_failure "$WATCOM/$wc_bin/$prog$EXEEXT does not exist or is not a regular file."
       fail
     fi
   done
@@ -732,7 +768,21 @@ check_libidl()
 {
   test_header libIDL
 
-  if which_wrapper libIDL-config-2 > /dev/null; then
+  if [ "$OS" = "os2" ]; then
+    # OS/2 requires special libidl and glib setup, see src/libs/xpcom18a4/Makefile.kmk
+    if [ -n "$VBOX_PATH_GLIB" ]; then
+      libidl_ver=`GLIBIDL2="$VBOX_PATH_GLIB" "$VBOX_PATH_GLIB/bin/libIDL-config" --version`
+      if [ $? -ne 0 ]; then
+        log_failure "libIDL-config not working"
+        fail
+      else
+        log_success "found version $libidl_ver"
+        cnf_append "VBOX_PATH_GLIB" "$VBOX_PATH_GLIB"
+      fi
+    else
+      log_failure "VBOX_PATH_GLIB is not set, will expect glibidl in \"$DEVDIR/$OS.$BUILD_MACHINE\""
+    fi
+  elif which_wrapper libIDL-config-2 > /dev/null; then
     libidl_ver=`libIDL-config-2 --version`
     if [ $? -ne 0 ]; then
       log_failure "libIDL-config-2 not working"
@@ -901,7 +951,7 @@ EOF
   [ -n "$INCZ" ] && I_INCZ=`prefix_I "$INCZ"`
   if test_compile "$LIBZ $I_INCZ" zlib zlib; then
     if test_execute; then
-      echo "if1of (\$(KBUILD_TARGET),darwin freebsd haiku linux)" >> $CNF
+      echo "if1of (\$(KBUILD_TARGET),darwin freebsd haiku linux os2)" >> $CNF
       cnf_append " SDK_VBOX_ZLIB_LIBS" "`strip_l "$LIBZ"`"
       cnf_append " SDK_VBOX_ZLIB_INCS" "$INCZ"
       echo "endif" >> $CNF
@@ -1093,6 +1143,15 @@ check_sdl()
       log_failure "SDL framework not found"
       fail
     fi
+  elif [ "$OS" = "os2" ]; then
+    # OS/2 requires special SDL setup, see $KBUILD_PATH/sdks/LIBSDL.kmk
+    if [ -n "$PATH_SDK_LIBSDL" ]; then
+      INCSDL="-I$PATH_SDK_LIBSDL/SDL/include"
+      FLDSDL="-L$PATH_SDK_LIBSDL/SDL -lSDL12"
+      foundsdl=1
+    else
+      log_failure "PATH_SDK_LIBSDL is not set, will expect SDL in \"$DEVDIR/$OS.$BUILD_MACHINE\""
+    fi
   else
     if which_wrapper sdl-config > /dev/null; then
       FLGSDL=`sdl-config --cflags`
@@ -1126,11 +1185,15 @@ EOF
     [ -n "$INCSDL" ] && I_INCSDL=`prefix_I "$INCSDL"`
     if test_compile "$LIBSDL $LIBSDLMAIN $I_INCSDL $FLDSDL" SDL SDL; then
       if test_execute; then
-        cnf_append "LIB_SDK_LIBSDL_SDL"     "`strip_l "$LIBSDL"`"
-        cnf_append "SDK_LIBSDL_LIBPATH"     "`strip_L "$LIBSDL"`"
-        cnf_append "LIB_SDK_LIBSDL_SDLMAIN" "`strip_l "$LIBSDLMAIN"`"
-        [ -n "$INCSDL" ] && cnf_append "SDK_LIBSDL_INCS"    "$INCSDL"
-        [ -n "$FLDSDL" ] && cnf_append "SDK_LIBSDL_LDFLAGS" "$FLDSDL"
+        if [ "$OS" = "os2" ]; then
+          cnf_append "PATH_SDK_LIBSDL" "$PATH_SDK_LIBSDL"
+        else
+          cnf_append "LIB_SDK_LIBSDL_SDL"     "`strip_l "$LIBSDL"`"
+          cnf_append "SDK_LIBSDL_LIBPATH"     "`strip_L "$LIBSDL"`"
+          cnf_append "LIB_SDK_LIBSDL_SDLMAIN" "`strip_l "$LIBSDLMAIN"`"
+          [ -n "$INCSDL" ] && cnf_append "SDK_LIBSDL_INCS"    "$INCSDL"
+          [ -n "$FLDSDL" ] && cnf_append "SDK_LIBSDL_LDFLAGS" "$FLDSDL"
+        fi
       fi
     fi
   else
@@ -1513,11 +1576,18 @@ check_qt4()
 extern "C" int main(void)
 {
   printf("found version %s", QT_VERSION_STR);
-#if QT_VERSION >= 0x040800
+#ifdef Q_OS_OS2
+#define QT_MIN_VERSION 0x040703
+#define QT_MIN_VERSION_STR "4.7.3"
+#else
+#define QT_MIN_VERSION 0x040800
+#define QT_MIN_VERSION_STR "4.8.0"
+#endif
+#if QT_VERSION >= QT_MIN_VERSION
   printf(", OK.\n");
   return 0;
 #else
-  printf(", expected version 4.8.0 or higher\n");
+  printf(", expected version " QT_MIN_VERSION_STR " or higher\n");
   return 1;
 #endif
 }
@@ -1536,6 +1606,11 @@ EOF
           foundqt4=1
           break;
         fi
+        LIBQT4="-L$q/lib -lQtCore4"
+        if test_compile "$LIBQT4 $LIBPTHREAD $I_INCQT4 $FLGQT4" qt4 qt4 nofatal; then
+          foundqt4=1
+          break;
+        fi
       done
     fi
   fi
@@ -1546,11 +1621,18 @@ EOF
 extern "C" int main(void)
 {
   printf("found version %s", QT_VERSION_STR);
-#if QT_VERSION >= 0x040800
+#ifdef Q_OS_OS2
+#define QT_MIN_VERSION 0x040703
+#define QT_MIN_VERSION_STR "4.7.3"
+#else
+#define QT_MIN_VERSION 0x040800
+#define QT_MIN_VERSION_STR "4.8.0"
+#endif
+#if QT_VERSION >= QT_MIN_VERSION
   printf(", OK.\n");
   return 0;
 #else
-  printf(", expected version 4.8.0 or higher\n");
+  printf(", expected version " QT_MIN_VERSION_STR " or higher\n");
   return 1;
 #endif
 }
@@ -1949,8 +2031,8 @@ EOF
         echo "compiling the following source file:" >> $LOG
         cat $ODIR.tmp_src.cc >> $LOG
         echo "using the following command line:" >> $LOG
-        echo "$CXX -O -Wall -o $ODIR.tmp_out $ODIR.tmp_src.cc -I$p/include/$d $p/$b/lib$d.so" >> $LOG
-        $CXX -O -Wall -o $ODIR.tmp_out $ODIR.tmp_src.cc -I$p/include/$d $p/$b/lib$d.so >> $LOG 2>&1
+        echo "$CXX -O -Wall -o $ODIR.tmp_out $ODIR.tmp_src.cc $CXX_FLAGS -I$p/include/$d $p/$b/$IMPLIBPREF$d$IMPLIBSUFF" >> $LOG
+        $CXX -O -Wall -o $ODIR.tmp_out $ODIR.tmp_src.cc $CXX_FLAGS -I$p/include/$d $p/$b/$IMPLIBPREF$d$IMPLIBSUFF >> $LOG 2>&1
         if [ $? -eq 0 ]; then
           found=1
           break
@@ -1964,7 +2046,7 @@ EOF
     if test_execute; then
       cnf_append "VBOX_WITH_PYTHON"     "1"
       cnf_append "VBOX_PATH_PYTHON_INC" "$p/include/$d"
-      cnf_append "VBOX_LIB_PYTHON"      "$p/$b/lib$d.so"
+      cnf_append "VBOX_LIB_PYTHON"      "$p/$b/$IMPLIBPREF$d$IMPLIBSUFF"
     else
       log_failure "Python not working"
       fail
@@ -2377,6 +2459,14 @@ elif [ "$OS" = "haiku" ]; then
   [ $OSE -eq 1 ] || BUILD_LIBSSL=1
 elif [ "$OS" = "solaris" ]; then
   [ $OSE -eq 1 ] && WITH_LIBVPX=0
+elif [ "$OS" = "os2" ]; then
+  WITH_OPENGL=0
+  WITH_X11=0
+  WITH_ALSA=0
+  WITH_PULSE=0
+  WITH_DBUS=0
+  WITH_KMODS=0
+  WITH_LIBVPX=0
 fi
 
 # scan command line options
@@ -2634,8 +2724,16 @@ check_kbuild
 [ -n "$ENV_ONLY" ] && exit 0
 
 # append the tools directory to the default search path
-echo "$PATH" | grep -q "$DEVDIR_BIN" || PATH="$PATH:$DEVDIR_BIN"
+echo "$PATH" | grep -q "$DEVDIR_BIN" || PATH="$PATH$PATHSEP$DEVDIR_BIN"
 export PATH
+
+if [ "$OS" = "os2" ]; then
+  # make sure tools' DLLs may be found
+  DEVDIR_BIN_BS=`echo $DEVDIR_BIN | tr '/' '\\\'`
+  echo "$ENDLIBPATH" | grep -q "$DEVDIR_BIN_BS" || ENDLIBPATH="$ENDLIBPATH$PATHSEP$DEVDIR_BIN_BS"
+  export ENDLIBPATH
+  unset DEVDIR_BIN_BS
+fi
 
 # if we will be writing to a different out directory then set this up now
 if [ $OUT_PATH_OVERRIDE -eq 1 ]; then
@@ -2842,24 +2940,26 @@ if [ $ONLY_ADDITIONS -eq 1 ]; then
     echo ""
     echo "  Tree configured to build only the Guest Additions"
     echo ""
-elif [ $WITH_HARDENING -gt 0 ]; then
-    echo ""
-    echo "  +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++"
-    echo "  Hardening is enabled which means that the VBox binaries will not run from"
-    echo "  the binary directory. The binaries have to be installed suid root and some"
-    echo "  more prerequisites have to be fulfilled which is normally done by installing"
-    echo "  the final package. For development, the hardening feature can be disabled"
-    echo "  by specifying the --disable-hardening parameter. Please never disable that"
-    echo "  feature for the final distribution!"
-    echo "  +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++"
-    echo ""
-else
-    echo ""
-    echo "  +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++"
-    echo "  Hardening is disabled. Please do NOT build packages for distribution with"
-    echo "  disabled hardening!"
-    echo "  +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++"
-    echo ""
+elif [ "$OS" != "os2" ]; then
+  if [ $WITH_HARDENING -gt 0 ]; then
+      echo ""
+      echo "  +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++"
+      echo "  Hardening is enabled which means that the VBox binaries will not run from"
+      echo "  the binary directory. The binaries have to be installed suid root and some"
+      echo "  more prerequisites have to be fulfilled which is normally done by installing"
+      echo "  the final package. For development, the hardening feature can be disabled"
+      echo "  by specifying the --disable-hardening parameter. Please never disable that"
+      echo "  feature for the final distribution!"
+      echo "  +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++"
+      echo ""
+  else
+      echo ""
+      echo "  +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++"
+      echo "  Hardening is disabled. Please do NOT build packages for distribution with"
+      echo "  disabled hardening!"
+      echo "  +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++ WARNING +++"
+      echo ""
+  fi
 fi
 echo "Enjoy!"
 cleanup
