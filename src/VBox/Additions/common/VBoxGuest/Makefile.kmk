@@ -117,7 +117,7 @@ if1of ($(KBUILD_TARGET), darwin freebsd haiku $(if $(defined VBOX_WITH_ADDITION_
   	VBoxGuest-os2.def
   #VBoxGuest_LDFLAGS       = -s -t -v
   VBoxGuest_LIBS          = \
-  	$(TARGET_VBoxGuestLibOs2Hack) \
+  	$(VBoxGuestLibOs2Hack_1_TARGET) \
   	$(VBOX_LIB_VBGL_R0BASE) \
   	$(VBOX_LIB_IPRT_GUEST_R0) \
   	$(VBOX_GCC_LIBGCC) \
