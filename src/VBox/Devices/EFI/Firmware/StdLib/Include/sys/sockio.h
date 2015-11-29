@@ -40,7 +40,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *	@(#)sockio.h	8.1 (Berkeley) 3/28/94
- * $Id: sockio.h,v 1.1.1.1 2006/05/30 06:12:59 hhzhou Exp $
+ * $Id: sockio.h $
  */
 
 #ifndef	_SYS_SOCKIO_H_

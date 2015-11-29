@@ -27,7 +27,7 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  *
- *	$Id: _posix.h,v 1.1.1.1 2006/05/30 06:13:04 hhzhou Exp $
+ *	$Id: _posix.h $
  */
 
 /*

@@ -31,7 +31,7 @@
  * SUCH DAMAGE.
  *
  *	@(#)ns.h	8.1 (Berkeley) 6/10/93
- * $Id: ns.h,v 1.1.1.1 2003/11/19 01:48:56 kyu3 Exp $
+ * $Id: ns.h $
  */
 
 #ifndef _NETNS_NS_H_

@@ -1,5 +1,5 @@
 /*
- * $Id: compint.h,v 1.8 2005/07/03 08:53:37 daniels Exp $
+ * $Id: compint.h $
  *
  * Copyright © 2003 Keith Packard
  *

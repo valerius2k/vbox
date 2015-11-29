@@ -31,7 +31,7 @@
  * SUCH DAMAGE.
  *
  *	@(#)if.h	8.1 (Berkeley) 6/10/93
- *	$Id: if.h,v 1.1.1.1 2006/05/30 06:12:41 hhzhou Exp $
+ *	$Id: if.h $
  */
 
 #ifndef _NET_IF_H_

@@ -61,7 +61,7 @@
  */
 
 #if !defined(lint) && !defined(SABER)
-static char rcsid[] = "$Id: res_mkupdate.c,v 1.1.1.1 2003/11/19 01:51:38 kyu3 Exp $";
+static char rcsid[] = "$Id: res_mkupdate.c $";
 #endif /* not lint */
 
 #include <sys/types.h>

@@ -20,7 +20,6 @@
 #else  /* !VBOX_WITH_PRECOMPILED_HEADERS */
 
 /* Qt includes: */
-# include <QDesktopWidget>
 # include <QMenu>
 # include <QTimer>
 # include <QSpacerItem>
@@ -70,6 +69,10 @@ void UIMachineWindowScale::prepareVisualState()
         QPixmap betaLabel = ::betaLabel(QSize(100, 16));
         ::darwinLabelWindow(this, &betaLabel, true);
     }
+
+    /* No 'Zoom' button since El Capitan for now: */
+    if (vboxGlobal().osRelease() >= MacOSXRelease_ElCapitan)
+        darwinSetHideTitleButton(this, CocoaWindowButtonType_Zoom);
 }
 #endif /* Q_WS_MAC */
 
@@ -100,8 +103,8 @@ void UIMachineWindowScale::loadSettings()
         else
         {
             /* Get available geometry, for screen with (x,y) coords if possible: */
-            QRect availableGeo = !geo.isNull() ? QApplication::desktop()->availableGeometry(QPoint(geo.x(), geo.y())) :
-                                                 QApplication::desktop()->availableGeometry(this);
+            QRect availableGeo = !geo.isNull() ? vboxGlobal().availableGeometry(QPoint(geo.x(), geo.y())) :
+                                                 vboxGlobal().availableGeometry(this);
 
             /* Resize to default size: */
             resize(640, 480);

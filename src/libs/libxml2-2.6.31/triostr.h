@@ -1,6 +1,6 @@
 /*************************************************************************
  *
- * $Id: triostr.h 3600 2007-04-17 12:44:58Z veillard $
+ * $Id: triostr.h $
  *
  * Copyright (C) 2001 Bjorn Reese and Daniel Stenberg.
  *

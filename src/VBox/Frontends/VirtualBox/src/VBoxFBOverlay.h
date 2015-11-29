@@ -1,4 +1,4 @@
-/* $Id: $ */
+/* $Id:  $ */
 /** @file
  * VBox Qt GUI - VBoxFrameBuffer Overly classes declarations.
  */

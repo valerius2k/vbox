@@ -15,9 +15,10 @@
  * hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
  */
 
-/*******************************************************************************
-*   Header Files                                                               *
-*******************************************************************************/
+
+/*********************************************************************************************************************************
+*   Header Files                                                                                                                 *
+*********************************************************************************************************************************/
 #include "the-linux-kernel.h"
 #include "version-generated.h"
 #include "product-generated.h"
@@ -44,17 +45,19 @@
 #define VBOXNETADP_OS_SPECFIC 1
 #include "../VBoxNetAdpInternal.h"
 
-/*******************************************************************************
-*   Defined Constants And Macros                                               *
-*******************************************************************************/
+
+/*********************************************************************************************************************************
+*   Defined Constants And Macros                                                                                                 *
+*********************************************************************************************************************************/
 #define VBOXNETADP_LINUX_NAME      "vboxnet%d"
 #define VBOXNETADP_CTL_DEV_NAME    "vboxnetctl"
 
 #define VBOXNETADP_FROM_IFACE(iface) ((PVBOXNETADP) ifnet_softc(iface))
 
-/*******************************************************************************
-*   Internal Functions                                                         *
-*******************************************************************************/
+
+/*********************************************************************************************************************************
+*   Internal Functions                                                                                                           *
+*********************************************************************************************************************************/
 static int  VBoxNetAdpLinuxInit(void);
 static void VBoxNetAdpLinuxUnload(void);
 
@@ -68,9 +71,10 @@ static long VBoxNetAdpLinuxIOCtlUnlocked(struct file *pFilp,
                                          unsigned int uCmd, unsigned long ulArg);
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36) */
 
-/*******************************************************************************
-*   Global Variables                                                           *
-*******************************************************************************/
+
+/*********************************************************************************************************************************
+*   Global Variables                                                                                                             *
+*********************************************************************************************************************************/
 module_init(VBoxNetAdpLinuxInit);
 module_exit(VBoxNetAdpLinuxUnload);
 
@@ -423,7 +427,6 @@ static int __init VBoxNetAdpLinuxInit(void)
  */
 static void __exit VBoxNetAdpLinuxUnload(void)
 {
-    int rc;
     Log(("VBoxNetAdpLinuxUnload\n"));
 
     /*
@@ -432,11 +435,7 @@ static void __exit VBoxNetAdpLinuxUnload(void)
 
     vboxNetAdpShutdown();
     /* Remove control device */
-    rc = misc_deregister(&g_CtlDev);
-    if (rc < 0)
-    {
-        printk(KERN_ERR "misc_deregister failed with rc=%x\n", rc);
-    }
+    misc_deregister(&g_CtlDev);
 
     RTR0Term();
 

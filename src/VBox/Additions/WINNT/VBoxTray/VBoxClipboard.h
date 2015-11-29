@@ -1,4 +1,4 @@
-/* $Id: $ */
+/* $Id:  $ */
 /** @file
  * VBoxSeamless - Shared Clipboard
  */

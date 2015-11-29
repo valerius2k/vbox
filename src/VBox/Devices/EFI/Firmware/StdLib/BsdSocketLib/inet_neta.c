@@ -57,7 +57,7 @@
 
 #if defined(LIBC_SCCS) && !defined(lint)
 static const char orig_rcsid[] = "From Id: inet_neta.c,v 8.2 1996/08/08 06:54:44 vixie Exp";
-static const char rcsid[] = "$Id: inet_neta.c,v 1.1.1.1 2003/11/19 01:51:29 kyu3 Exp $";
+static const char rcsid[] = "$Id: inet_neta.c $";
 #endif
 
 #include <sys/types.h>

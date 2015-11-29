@@ -45,7 +45,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *  @(#)sys_generic.c 8.5 (Berkeley) 1/21/94
- * $Id: select.c,v 1.1.1.1 2003/11/19 01:50:30 kyu3 Exp $
+ * $Id: select.c $
  */
 #include <Library/UefiBootServicesTableLib.h>
 

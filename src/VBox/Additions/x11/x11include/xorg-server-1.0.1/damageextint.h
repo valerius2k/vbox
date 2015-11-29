@@ -1,5 +1,5 @@
 /*
- * $Id: damageextint.h,v 1.6 2005/07/03 08:53:38 daniels Exp $
+ * $Id: damageextint.h $
  *
  * Copyright © 2002 Keith Packard
  *

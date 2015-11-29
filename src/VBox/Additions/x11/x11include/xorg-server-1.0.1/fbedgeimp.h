@@ -1,5 +1,5 @@
 /*
- * $Id: fbedgeimp.h,v 1.4 2005/08/30 03:05:21 anholt Exp $
+ * $Id: fbedgeimp.h $
  *
  * Copyright © 2004 Keith Packard
  *

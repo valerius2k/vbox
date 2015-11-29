@@ -85,7 +85,7 @@
 #if defined(LIBC_SCCS) && !defined(lint)
 static char sccsid[] = "@(#)res_init.c  8.1 (Berkeley) 6/7/93";
 static char orig_rcsid[] = "From: Id: res_init.c,v 8.7 1996/11/18 09:10:04 vixie Exp $";
-static char rcsid[] = "$Id: res_init.c,v 1.1.1.1 2003/11/19 01:51:37 kyu3 Exp $";
+static char rcsid[] = "$Id: res_init.c $";
 #endif /* LIBC_SCCS and not lint */
 
 #include <sys/types.h>

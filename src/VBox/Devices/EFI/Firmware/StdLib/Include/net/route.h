@@ -31,7 +31,7 @@
  * SUCH DAMAGE.
  *
  *	@(#)route.h	8.3 (Berkeley) 4/19/94
- * $Id: route.h,v 1.1.1.1 2006/05/30 06:12:46 hhzhou Exp $
+ * $Id: route.h $
  */
 
 #ifndef _NET_ROUTE_H_
