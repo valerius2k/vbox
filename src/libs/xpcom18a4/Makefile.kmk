@@ -439,50 +439,22 @@ xpidl_SOURCES = \
 	xpcom/typelib/xpt/src/xpt_struct.c \
 	xpcom/typelib/xpt/src/xpt_xdr.c
 
-ifeq ($(KBUILD_TARGET),os2)
- # glib and libIDL needed by XPCOM on OS/2.
- ifeq ($(VBOX_PATH_GLIB),)
- VBOX_PATH_GLIB := $(lastword $(sort $(wildcard $(PATH_DEVTOOLS_TRG)/glibidl/*/glibidl/gcc335)))
- endif
- VBOX_PATH_LIBIDL ?= $(VBOX_PATH_GLIB)
- ifeq ($(wildcard $(VBOX_PATH_GLIB)),)
-  $(warning VBOX_PATH_GLIB is "$(VBOX_PATH_GLIB)" which is not a valid directory!)
- endif
- ifeq ($(wildcard $(VBOX_PATH_LIBIDL)),)
-  $(warning VBOX_PATH_LIBIDL is "$(VBOX_PATH_LIBIDL)" which is not a valid directory!)
- endif
- xpidl_INCS = \
-	$(VBOX_PATH_LIBIDL)/include \
-	$(VBOX_PATH_GLIB)/include
- xpidl_LIBS = \
-	$(VBOX_PATH_LIBIDL)/lib/libidl.lib \
-	$(VBOX_PATH_LIBIDL)/lib/glib.lib
- # install necessary DLLs to the same place where xpidl goes
- INSTALLS += xpidl-DLLS
- xpidl_ORDERDEPS = $(xpidl-DLLS_1_TARGET)
- xpidl-DLLS_INST = $(xpidl_INST)
- # static libraries of these may be provided instead,
- # so copy DLLs only when they are present
- xpidl-DLLS_SOURCES += $(wildcard $(VBOX_PATH_GLIB)/lib/glib.dll)
- xpidl-DLLS_SOURCES += $(wildcard $(VBOX_PATH_LIBIDL)/lib/libIDL.dll)
-else
- # We do these ONCE.
- libIDL_config_cflags := $(shell $(VBOX_LIBIDL_CONFIG) --cflags)
- libIDL_config_libs   := $(shell $(VBOX_LIBIDL_CONFIG) --libs)
- xpidl_CFLAGS = \
+# We do these ONCE.
+libIDL_config_cflags := $(shell $(VBOX_LIBIDL_CONFIG) --cflags)
+libIDL_config_libs   := $(shell $(VBOX_LIBIDL_CONFIG) --libs)
+xpidl_CFLAGS = \
 	$(libIDL_config_cflags)
- ifeq ($(BUILD_PLATFORM),linux)
- xpidl_LDFLAGS = \
+ifeq ($(BUILD_PLATFORM),linux)
+xpidl_LDFLAGS = \
 	$(filter-out -l%,$(libIDL_config_libs))
- else
- xpidl_LDFLAGS = \
+else
+xpidl_LDFLAGS = \
 	$(libIDL_config_libs)
- endif
- xpidl_LDFLAGS.linux = \
-	$(VBOX_LD_as_needed)
- xpidl_LIBS.linux += \
-	$(subst -l,,$(filter -l%,$(libIDL_config_libs)))
 endif
+xpidl_LDFLAGS.linux = \
+	$(VBOX_LD_as_needed)
+xpidl_LIBS.linux += \
+	$(subst -l,,$(filter -l%,$(libIDL_config_libs)))
 
 #
 # The XPT linker.

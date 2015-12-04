@@ -780,21 +780,7 @@ check_libidl()
 {
   test_header libIDL
 
-  if [ "$OS" = "os2" ]; then
-    # OS/2 requires special libidl and glib setup, see src/libs/xpcom18a4/Makefile.kmk
-    if [ -n "$VBOX_PATH_GLIB" ]; then
-      libidl_ver=`GLIBIDL2="$VBOX_PATH_GLIB" "$VBOX_PATH_GLIB/bin/libIDL-config" --version`
-      if [ $? -ne 0 ]; then
-        log_failure "libIDL-config not working"
-        fail
-      else
-        log_success "found version $libidl_ver"
-        cnf_append "VBOX_PATH_GLIB" "$VBOX_PATH_GLIB"
-      fi
-    else
-      log_failure "VBOX_PATH_GLIB is not set, will expect glibidl in \"$DEVDIR/$OS.$BUILD_MACHINE\""
-    fi
-  elif which_wrapper libIDL-config-2 > /dev/null; then
+  if which_wrapper libIDL-config-2 > /dev/null; then
     libidl_ver=`libIDL-config-2 --version`
     if [ $? -ne 0 ]; then
       log_failure "libIDL-config-2 not working"
