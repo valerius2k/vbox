@@ -170,12 +170,21 @@ LIBVPX="-lvpx"
 PKGCONFIG="`which_wrapper pkg-config`"
 if [ "${OS}" = "os2" ]; then
   PYTHONDIR="/@unixroot/usr /@unixroot/usr/local"
-  QT4DIR="/@unixroot/usr/lib/qt4 /@unixroot/usr/share/qt4 /@unixroot/usr /@unixroot/usr/local"
+  # For Qt rely on what qmake tells by default instead of pre-defined locations.
+  QT4DIR=
   QT4DIR_PKGCONFIG=0
+  QT4DIR_QMAKECONFIG=1
+  QT4INFIX=4
+  QT4MINVER=0x040703
+  QT4MINVER_STR=\"4.7.3\"
 else
   PYTHONDIR="/usr /usr/local"
   QT4DIR="/usr/lib/qt4 /usr/share/qt4 /usr/lib64/qt4 /usr /usr/local"
   QT4DIR_PKGCONFIG=1
+  QT4DIR_QMAKECONFIG=0
+  QT4INFIX=
+  QT4MINVER=0x040800
+  QT4MINVER_STR=\"4.8.0\"
 fi
 KBUILDDIR="`cd \`dirname $0\`; pwd`/kBuild"
 DEVDIR="`cd \`dirname $0\`; pwd`/tools"
@@ -274,7 +283,7 @@ strip_I()
 prefix_I()
 {
   if [ "$OS" = "os2" ]; then
-    echo "$1"|$KBUILD_SED 's|^\/|-I/|g; s| \/| -I/|g; s|^\([a-zA-Z]\:\/\)|-I\1|g; s| \([a-zA-Z]\:\/\)| -I\1|g'
+    echo "$1"|$KBUILD_SED 's|^[\/\\]|-I/|g; s| [\/\\]| -I/|g; s|^\([a-zA-Z]\:[\/\\]\)|-I\1|g; s| \([a-zA-Z]\:[\/\\]\)| -I\1|g'
   else
     echo "$1"|$KBUILD_SED 's|^\/|-I/|g; s| \/| -I/|g'
   fi
@@ -1515,7 +1524,7 @@ check_qt4()
 #include <QtGlobal>
 extern "C" int main(void)
 {
-#if QT_VERSION >= 0x040800
+#ifdef QT_VERSION
   return 0;
 #else
   return 1;
@@ -1572,6 +1581,30 @@ EOF
         fail
       fi
     fi
+    if [ -z "$foundqt4" ] && [ $QT4DIR_QMAKECONFIG -eq 1 ]; then
+       # use qmake to find out Qt paths
+      if which_wrapper qmake > /dev/null; then
+        qt4_ver=`qmake -query QT_VERSION 2>> $LOG`
+        if [ $? -eq 0 ]; then
+          qt4_inc=`qmake -query QT_INSTALL_HEADERS`
+          qt4_lib=`qmake -query QT_INSTALL_LIBS`
+          qt4_bin=`qmake -query QT_INSTALL_BINS`
+          qt4_pfx=`qmake -query QT_INSTALL_PREFIX`
+          FLGQT4="-DQT_SHARED"
+          INCQT4="$qt4_inc $qt4_inc/QtCore"
+          I_INCQT4=`prefix_I "$INCQT4"`
+          LIBQT4="-L$qt4_lib -lQtCore$QT4INFIX"
+          TOOLQT4="$qt4_pfx"
+          TOOLQT4BIN="$qt4_bin"
+          if test_compile "$LIBQT4 $LIBPTHREAD $I_INCQT4 $FLGQT4" qt4 qt4 nofatal; then
+            test_execute_path "`strip_L "$LIBQT4"`" nofatal && foundqt4=3 # pkg-config
+          fi
+        fi
+      else
+        log_failure "qmake not found"
+        fail
+      fi
+    fi
     if [ -z "$foundqt4" ]; then
       # do it the old way (e.g. user has specified QT4DIR)
       for q in $QT4DIR "$PWD/tools/linux.$TARGET_MACHINE"/qt/v4.8.*; do
@@ -1591,11 +1624,6 @@ EOF
           foundqt4=1 # no pkg-config, Qt directory
           break;
         fi
-        LIBQT4="-L$q/lib -lQtCore4"
-        if test_compile "$LIBQT4 $LIBPTHREAD $I_INCQT4 $FLGQT4" qt4 qt4 nofatal; then
-          foundqt4=1
-          break;
-        fi
       done
     fi
   fi
@@ -1607,18 +1635,11 @@ EOF
 extern "C" int main(void)
 {
   printf("found version %s", QT_VERSION_STR);
-#ifdef Q_OS_OS2
-#define QT_MIN_VERSION 0x040703
-#define QT_MIN_VERSION_STR "4.7.3"
-#else
-#define QT_MIN_VERSION 0x040800
-#define QT_MIN_VERSION_STR "4.8.0"
-#endif
-#if QT_VERSION >= QT_MIN_VERSION
+#if QT_VERSION >= $QT4MINVER
   printf(", OK.\n");
   return 0;
 #else
-  printf(", expected version " QT_MIN_VERSION_STR " or higher\n");
+  printf(", expected version " $QT4MINVER_STR " or higher\n");
   return 1;
 #endif
 }
@@ -1649,6 +1670,7 @@ EOF
           cnf_append "PATH_SDK_QT4_INC" "$INCQT4"
           # this is not quite right since the qt libpath does not have to be first...
           cnf_append "PATH_SDK_QT4_LIB" '$'"(firstword `strip_L "$LIBQT4"`)"
+          [ -n "$QT4INFIX" ] && cnf_append "VBOX_QT4_INFIX" "$QT4INFIX"
           if [ "$foundqt4" = "2" ]; then
             cnf_append "VBOX_WITH_QT4_SUN" "1"
           elif [ "$foundqt4" = "3" ]; then
