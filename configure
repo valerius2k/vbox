@@ -174,7 +174,6 @@ if [ "${OS}" = "os2" ]; then
   QT4DIR=
   QT4DIR_PKGCONFIG=0
   QT4DIR_QMAKECONFIG=1
-  QT4INFIX=4
   QT4MINVER=0x040703
   QT4MINVER_STR=\"4.7.3\"
 else
@@ -182,7 +181,6 @@ else
   QT4DIR="/usr/lib/qt4 /usr/share/qt4 /usr/lib64/qt4 /usr /usr/local"
   QT4DIR_PKGCONFIG=1
   QT4DIR_QMAKECONFIG=0
-  QT4INFIX=
   QT4MINVER=0x040800
   QT4MINVER_STR=\"4.8.0\"
 fi
@@ -1593,11 +1591,17 @@ EOF
           FLGQT4="-DQT_SHARED"
           INCQT4="$qt4_inc $qt4_inc/QtCore"
           I_INCQT4=`prefix_I "$INCQT4"`
-          LIBQT4="-L$qt4_lib -lQtCore$QT4INFIX"
+          LIBQT4="-L$qt4_lib -lQtCore"
           TOOLQT4="$qt4_pfx"
           TOOLQT4BIN="$qt4_bin"
           if test_compile "$LIBQT4 $LIBPTHREAD $I_INCQT4 $FLGQT4" qt4 qt4 nofatal; then
             test_execute_path "`strip_L "$LIBQT4"`" nofatal && foundqt4=3 # pkg-config
+          fi
+          if [ -z "$foundqt4" ]; then
+            LIBQT4="-L$qt4_lib -lQtCore4"
+            if test_compile "$LIBQT4 $LIBPTHREAD $I_INCQT4 $FLGQT4" qt4 qt4 nofatal; then
+              test_execute_path "`strip_L "$LIBQT4"`" nofatal && foundqt4=3 # pkg-config
+            fi
           fi
         fi
       else
@@ -1670,7 +1674,6 @@ EOF
           cnf_append "PATH_SDK_QT4_INC" "$INCQT4"
           # this is not quite right since the qt libpath does not have to be first...
           cnf_append "PATH_SDK_QT4_LIB" '$'"(firstword `strip_L "$LIBQT4"`)"
-          [ -n "$QT4INFIX" ] && cnf_append "VBOX_QT4_INFIX" "$QT4INFIX"
           if [ "$foundqt4" = "2" ]; then
             cnf_append "VBOX_WITH_QT4_SUN" "1"
           elif [ "$foundqt4" = "3" ]; then
