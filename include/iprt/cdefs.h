@@ -977,7 +977,8 @@
 #ifdef _MSC_VER
 # define RTCALL                 __cdecl
 #elif defined(RT_OS_OS2)
-# define RTCALL                 __cdecl
+/* GCC 4 has a bug WRT cdecl, see https://github.com/psmedley/gcc/issues/18 */
+# define RTCALL                 /*__cdecl*/
 #elif defined(__GNUC__) && defined(RT_ARCH_X86)
 # define RTCALL                 __attribute__((cdecl,regparm(0)))
 #else
