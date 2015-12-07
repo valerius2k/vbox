@@ -186,6 +186,7 @@ else if "$(KBUILD_TARGET_ARCH)" == "x86" && defined(VBOX_WITH_64_BITS_GUESTS)
  #
  DLLS += VBoxRemPrimary
  VBoxRemPrimary_NAME       = VBoxREM32
+ VBoxRemPrimary_NAME.os2   = VBoxRM32
  VBoxRemPrimary_LDFLAGS.darwin = -install_name $(VBOX_DYLD_EXECUTABLE_PATH)/VBoxREM32.dylib
  VBOX_REM_WRAPPER          = 32
 
@@ -196,6 +197,7 @@ else if "$(KBUILD_TARGET_ARCH)" == "x86" && defined(VBOX_WITH_64_BITS_GUESTS)
  VBoxREM64_EXTENDS         = VBoxRemPrimary
  VBoxREM64_EXTENDS_BY      = appending
  VBoxREM64_NAME            = VBoxREM64
+ VBoxREM64_NAME.os2        = VBoxRM64
  VBoxREM64_DEFS            = VBOX_ENABLE_VBOXREM64
  VBoxREM64_LDFLAGS.darwin  = -install_name $(VBOX_DYLD_EXECUTABLE_PATH)/VBoxREM64.dylib
 
