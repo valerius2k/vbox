@@ -93,7 +93,6 @@ EXPORTS
     RTAssertMsg1Weak
     RTAssertMsg2Weak
     RTAssertShouldPanic
-    RTLogDefaultInstance
     RTTimeNanoTSLegacySyncInvarNoDelta
     RTTimeNanoTSLegacySyncInvarWithDelta
     RTTimeNanoTSLegacyAsync
