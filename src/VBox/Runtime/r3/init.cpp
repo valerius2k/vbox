@@ -203,8 +203,8 @@ int rtR3ForkOs2Child(__LIBC_PFORKHANDLE pForkHandle, __LIBC_FORKOP enmOperation)
     return 0;
 }
 
-# define static static volatile /** @todo _FORK_CHILD1 causes unresolved externals in optimized builds. Fix macro. */
-_FORK_CHILD1(0, rtR3ForkOs2Child);
+# define static extern /** @todo _FORK_CHILD1 causes unresolved externals in optimized builds. Fix macro. */
+_FORK_CHILD1(0, rtR3ForkOs2Child)
 # undef static
 #endif /* RT_OS_OS2 */
 
