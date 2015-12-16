@@ -272,6 +272,7 @@ DECLASM(int) VBoxDrvIOCtl(uint16_t sfn, uint8_t iCat, uint8_t iFunction, void *p
     const RTPROCESS     Process = RTProcSelf();
     const unsigned      iHash = SESSION_HASH(sfn);
     PSUPDRVSESSION      pSession;
+    int                 rc;
 
     RTSpinlockAcquire(g_Spinlock);
     pSession = g_apSessionHashTab[iHash];
@@ -307,7 +308,7 @@ DECLASM(int) VBoxDrvIOCtl(uint16_t sfn, uint8_t iCat, uint8_t iFunction, void *p
         PSUPREQHDR pHdr = (PSUPREQHDR)pvParm;
         AssertReturn(*pcbParm == sizeof(*pHdr), VERR_INVALID_PARAMETER);
         KernVMLock_t Lock;
-        int rc = KernVMLock(VMDHL_WRITE, pHdr, *pcbParm, &Lock, (KernPageList_t *)-1, NULL);
+        rc = KernVMLock(VMDHL_WRITE, pHdr, *pcbParm, &Lock, (KernPageList_t *)-1, NULL);
         AssertMsgReturn(!rc, ("KernVMLock(VMDHL_WRITE, %p, %#x, &p, NULL, NULL) -> %d\n", pHdr, *pcbParm, &Lock, rc), VERR_LOCK_FAILED);
 
         /*
@@ -353,7 +354,7 @@ DECLASM(int) VBoxDrvIOCtl(uint16_t sfn, uint8_t iCat, uint8_t iFunction, void *p
          * Unlock and return.
          */
         int rc2 = KernVMUnlock(&Lock);
-        AssertMsg(!rc2, ("rc2=%d\n", rc2)); NOREF(rc2);s
+        AssertMsg(!rc2, ("rc2=%d\n", rc2)); NOREF(rc2);
     }
     else
         rc = VERR_NOT_SUPPORTED;
@@ -415,7 +416,6 @@ bool VBOXCALL  supdrvOSAreCpusOfflinedOnSuspend(void)
 
 bool VBOXCALL  supdrvOSAreTscDeltasInSync(void)
 {
-    NOREF(pDevExt);
     return false;
 }
 

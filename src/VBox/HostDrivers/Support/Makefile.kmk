@@ -525,6 +525,8 @@ VBoxDrvLib_SOURCES    = \
 	SUPDrv.cpp \
 	SUPDrvGip.cpp \
 	SUPDrvSem.cpp \
+  	SUPDrvTracer.cpp \
+ 	SUPDrvTracerA.asm \
 	SUPLibAll.cpp
 
 endif # os2
