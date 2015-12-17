@@ -24,7 +24,7 @@
 # include <CoreFoundation/CFRunLoop.h>
 #endif
 
-#if defined(VBOX_WITH_XPCOM) && !defined(RT_OS_DARWIN) && !defined(RT_OS_OS2)
+#if defined(VBOX_WITH_XPCOM) && !defined(RT_OS_DARWIN)
 # define USE_XPCOM_QUEUE
 #endif
 
@@ -34,6 +34,9 @@
 #include <iprt/log.h>
 #ifdef USE_XPCOM_QUEUE
 # include <errno.h>
+# ifdef RT_OS_OS2
+#  include <sys/time.h>
+# endif
 #endif
 
 namespace com
