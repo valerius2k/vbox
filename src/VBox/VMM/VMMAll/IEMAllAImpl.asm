@@ -34,6 +34,8 @@
 %ifdef RT_ARCH_X86
  %ifdef RT_OS_WINDOWS
     ret %1
+ %elifdef RT_OS_OS2
+    ret %1
  %else
     ret
  %endif
@@ -54,6 +56,9 @@
  %ifdef RT_OS_WINDOWS
   %undef NAME_FASTCALL
   %define NAME_FASTCALL(a_Name, a_cbArgs, a_Prefix) a_Prefix %+ a_Name %+ @ %+ a_cbArgs
+ %elifdef RT_OS_OS2
+  %undef NAME_FASTCALL
+  %define NAME_FASTCALL(a_Name, a_cbArgs, a_Prefix) a_Prefix %+ a_Name %+ @ %+ a_cbArgs
  %endif
 %endif
 
@@ -69,7 +74,7 @@
  %endif
  %ifdef __NASM__
   %ifdef ASM_FORMAT_OMF
-   export NAME(%1) NAME_FASTCALL(%1,%2,$@)
+   global NAME_FASTCALL(%1,%2,$@)
   %endif
  %endif
  %ifndef ASM_FORMAT_BIN
