@@ -909,6 +909,7 @@ RuntimeR3_SOURCES.os2   = \
 	generic/RTThreadGetNativeState-generic.cpp \
 	os2/RTErrConvertFromOS2.cpp \
 	r3/generic/allocex-r3-generic.cpp \
+	r3/os2/fileaio-os2.cpp \
 	r3/os2/filelock-os2.cpp \
 	r3/os2/mp-os2.cpp \
 	r3/os2/pipe-os2.cpp \
