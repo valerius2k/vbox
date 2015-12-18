@@ -1,6 +1,6 @@
 /* $Id$ */
 /** @file
- * IPRT - File async I/O, native implementation for the Windows host platform.
+ * IPRT - File async I/O, native implementation for the OS/2 host platform.
  */
 
 /*
@@ -140,6 +140,7 @@ RTR3DECL(int) RTFileAioReqCreate(PRTFILEAIOREQ phReq)
 {
     AssertPtrReturn(phReq, VERR_INVALID_POINTER);
 
+#if 0
     PRTFILEAIOREQINTERNAL pReqInt = (PRTFILEAIOREQINTERNAL)RTMemAllocZ(sizeof(RTFILEAIOREQINTERNAL));
 
     if (RT_UNLIKELY(!pReqInt))
@@ -151,8 +152,10 @@ RTR3DECL(int) RTFileAioReqCreate(PRTFILEAIOREQ phReq)
     RTFILEAIOREQ_SET_STATE(pReqInt, COMPLETED);
 
     *phReq = (RTFILEAIOREQ)pReqInt;
+#endif
 
-    return VINF_SUCCESS;
+    //return VINF_SUCCESS;
+    return VERR_NOT_SUPPORTED;
 }
 
 RTDECL(int) RTFileAioReqDestroy(RTFILEAIOREQ hReq)
@@ -285,7 +288,9 @@ RTDECL(int) RTFileAioCtxCreate(PRTFILEAIOCTX phAioCtx, uint32_t cAioReqsMax,
     if (RT_UNLIKELY(!pCtxInt))
         return VERR_NO_MEMORY;
 
+#if 0
     // @todo Windows code, needs porting
+
     //pCtxInt->hIoCompletionPort = CreateIoCompletionPort(INVALID_HANDLE_VALUE,
     //                                                    NULL,
     //                                                    0,
@@ -301,8 +306,10 @@ RTDECL(int) RTFileAioCtxCreate(PRTFILEAIOCTX phAioCtx, uint32_t cAioReqsMax,
     pCtxInt->u32Magic = RTFILEAIOCTX_MAGIC;
 
     *phAioCtx = (RTFILEAIOCTX)pCtxInt;
+#endif
 
-    return VINF_SUCCESS;
+    return VERR_NOT_SUPPORTED;
+    //return VINF_SUCCESS;
 }
 
 RTDECL(int) RTFileAioCtxDestroy(RTFILEAIOCTX hAioCtx)
@@ -318,18 +325,18 @@ RTDECL(int) RTFileAioCtxDestroy(RTFILEAIOCTX hAioCtx)
     if (RT_UNLIKELY(pCtxInt->cRequests))
         return VERR_FILE_AIO_BUSY;
 
+#if 0
     // @todo Windows code, needs porting
     // CloseHandle(pCtxInt->hIoCompletionPort);
-
-    if (pCtxInt && pCtxInt->hIoCompletionPort)
-        DosClose(pCtxInt->hIoCompletionPort);
 
     ASMAtomicUoWriteU32(&pCtxInt->u32Magic, RTFILEAIOCTX_MAGIC_DEAD);
 
     if (pCtxInt)
         RTMemFree(pCtxInt);
+#endif
 
-    return VINF_SUCCESS;
+    return VERR_NOT_SUPPORTED;
+    //return VINF_SUCCESS;
 }
 
 RTDECL(int) RTFileAioCtxAssociateWithFile(RTFILEAIOCTX hAioCtx, RTFILE hFile)
@@ -339,9 +346,11 @@ RTDECL(int) RTFileAioCtxAssociateWithFile(RTFILEAIOCTX hAioCtx, RTFILE hFile)
     RTFILEAIOCTX_VALID_RETURN(pCtxInt);
 
     // @todo Windows code, needs porting
+
     // HFILE hTemp = CreateIoCompletionPort((HFILE)RTFileToNative(hFile), pCtxInt->hIoCompletionPort, 0, 1);
     //if (hTemp != pCtxInt->hIoCompletionPort)
     //    rc = RTErrConvertFromWin32(GetLastError());
+
     rc = VERR_NOT_SUPPORTED;
 
     return rc;
@@ -383,18 +392,18 @@ RTDECL(int) RTFileAioCtxSubmit(RTFILEAIOCTX hAioCtx, PRTFILEAIOREQ pahReqs, size
         }
         else
         {
-	        rc = VERR_INVALID_PARAMETER;
+        rc = VERR_INVALID_PARAMETER;
             AssertMsgFailed(("Invalid transfer direction\n"));
         }
 
         if (rc == NO_ERROR)
-	    rc = DosSetFilePtrL(pReqInt->hFile, cbActual,
-	                        FILE_BEGIN, &pReqInt->llOff);
+    rc = DosSetFilePtrL(pReqInt->hFile, cbActual,
+                        FILE_BEGIN, &pReqInt->llOff);
 
         if (RT_UNLIKELY(rc))
         {
             RTFILEAIOREQ_SET_STATE(pReqInt, COMPLETED);
-	        rc = RTErrConvertFromOS2(rc);
+        rc = RTErrConvertFromOS2(rc);
             pReqInt->Rc = rc;
             break;
         }
@@ -431,6 +440,7 @@ RTDECL(int) RTFileAioCtxWait(RTFILEAIOCTX hAioCtx, size_t cMinReqs, RTMSINTERVAL
     if (!cMinReqs)
         cMinReqs = 1;
 
+#if 0
     /*
      * Loop until we're woken up, hit an error (incl timeout), or
      * have collected the desired number of requests.
@@ -441,8 +451,8 @@ RTDECL(int) RTFileAioCtxWait(RTFILEAIOCTX hAioCtx, size_t cMinReqs, RTMSINTERVAL
            && cMinReqs > 0)
     {
         uint64_t     StartNanoTS = 0;
-        ULONG        dwTimeout = cMillies; // == RT_INDEFINITE_WAIT ? INFINITE : cMillies;
-        //cMillies == RT_INDEFINITE_WAIT ? SEM_INDEFINITE_WAIT : cMillies
+        //ULONG        dwTimeout = cMillies == RT_INDEFINITE_WAIT ? INFINITE : cMillies;
+        ULONG        dwTimeout = cMillies == RT_INDEFINITE_WAIT ? SEM_INDEFINITE_WAIT : cMillies
         ULONG        cbTransfered;
         //LPOVERLAPPED pOverlapped;
         //ULONG       lCompletionKey;
@@ -452,51 +462,52 @@ RTDECL(int) RTFileAioCtxWait(RTFILEAIOCTX hAioCtx, size_t cMinReqs, RTMSINTERVAL
             StartNanoTS = RTTimeNanoTS();
 
         ASMAtomicXchgBool(&pCtxInt->fWaiting, true);
+
+        // @todo Windows code, needs porting
         //fSucceeded = GetQueuedCompletionStatus(pCtxInt->hIoCompletionPort,
         //                                       &cbTransfered,
         //                                       &lCompletionKey,
         //                                       &pOverlapped,
         //                                       dwTimeout);
+
         ASMAtomicXchgBool(&pCtxInt->fWaiting, false);
         if (   !fSucceeded )
            // && !pOverlapped)
         {
             /* The call failed to dequeue a completion packet, includes VERR_TIMEOUT */
             // RTErrConvertFromWin32(GetLastError());
-            rc = NO_ERROR; //// RTErrConvertFromOs2(rc);
+            //rc = RTErrConvertFromOs2(rc);
             break;
         }
 
-        // @todo Windows code, needs porting
-
         /* Check if we got woken up. */
-        //if (lCompletionKey == AIO_CONTEXT_WAKEUP_EVENT)
-        //{
-            //Assert(fSucceeded && !pOverlapped);
-            //break;
-        //}
+        if (lCompletionKey == AIO_CONTEXT_WAKEUP_EVENT)
+        {
+            Assert(fSucceeded && !pOverlapped);
+            break;
+        }
 
         /* A request completed. */
-        //PRTFILEAIOREQINTERNAL pReqInt = OVERLAPPED_2_RTFILEAIOREQINTERNAL(pOverlapped);
-        //AssertPtr(pReqInt);
-        //Assert(pReqInt->u32Magic == RTFILEAIOREQ_MAGIC);
+        PRTFILEAIOREQINTERNAL pReqInt = OVERLAPPED_2_RTFILEAIOREQINTERNAL(pOverlapped);
+        AssertPtr(pReqInt);
+        Assert(pReqInt->u32Magic == RTFILEAIOREQ_MAGIC);
 
         /* Mark the request as finished. */
-        //RTFILEAIOREQ_SET_STATE(pReqInt, COMPLETED);
+        RTFILEAIOREQ_SET_STATE(pReqInt, COMPLETED);
 
-        //pReqInt->cbTransfered = cbTransfered;
-        if  (! fSucceeded) // (fSucceeded)
-        //    pReqInt->Rc = VINF_SUCCESS;
-        //else
+        pReqInt->cbTransfered = cbTransfered;
+        if (fSucceeded)
+            pReqInt->Rc = VINF_SUCCESS;
+        else
         {
             //ULONG errCode = GetLastError();
             //pReqInt->Rc = RTErrConvertFromWin32(errCode);
-            ////pReqInt->Rc = RTErrConvertFromOs2(rc);
-            //if (pReqInt->Rc == VERR_UNRESOLVED_ERROR)
-            //    LogRel(("AIO/win: Request %#p returned rc=%Rrc (native %u\n)", pReqInt, pReqInt->Rc, errCode));
+            pReqInt->Rc = RTErrConvertFromOs2(rc);
+            if (pReqInt->Rc == VERR_UNRESOLVED_ERROR)
+                LogRel(("AIO/win: Request %#p returned rc=%Rrc (native %u\n)", pReqInt, pReqInt->Rc, errCode));
         }
 
-        //pahReqs[cRequestsCompleted++] = (RTFILEAIOREQ)pReqInt;
+        pahReqs[cRequestsCompleted++] = (RTFILEAIOREQ)pReqInt;
 
         /* Update counter. */
         cMinReqs--;
@@ -516,19 +527,21 @@ RTDECL(int) RTFileAioCtxWait(RTFILEAIOCTX hAioCtx, size_t cMinReqs, RTMSINTERVAL
     /*
      * Update the context state and set the return value.
      */
-    //*pcReqs = cRequestsCompleted;
-    //ASMAtomicSubS32(&pCtxInt->cRequests, cRequestsCompleted);
+    *pcReqs = cRequestsCompleted;
+    ASMAtomicSubS32(&pCtxInt->cRequests, cRequestsCompleted);
 
     /*
      * Clear the wakeup flag and set rc.
      */
-    //bool fWokenUp = ASMAtomicXchgBool(&pCtxInt->fWokenUp, false);
+    bool fWokenUp = ASMAtomicXchgBool(&pCtxInt->fWokenUp, false);
 
-    //if (    fWokenUp
-    //    &&  RT_SUCCESS(rc))
-    //    rc = VERR_INTERRUPTED;
+    if (    fWokenUp
+        &&  RT_SUCCESS(rc))
+        rc = VERR_INTERRUPTED;
+#endif
 
-    return rc;
+   return VERR_NOT_SUPPORTED;
+   //return rc;
 }
 
 RTDECL(int) RTFileAioCtxWakeup(RTFILEAIOCTX hAioCtx)
@@ -544,14 +557,15 @@ RTDECL(int) RTFileAioCtxWakeup(RTFILEAIOCTX hAioCtx)
         && fWaiting)
     {
         // @todo Windows code, needs porting
+
         //BOOL fSucceeded = PostQueuedCompletionStatus(pCtxInt->hIoCompletionPort,
         //                                             0, AIO_CONTEXT_WAKEUP_EVENT,
         //                                             NULL);
-        //
+        
         //if (!fSucceeded)
         //    rc = RTErrConvertFromWin32(GetLastError());
-        rc = VERR_NOT_SUPPORTED;
     }
 
+    rc = VERR_NOT_SUPPORTED;
     return rc;
 }
