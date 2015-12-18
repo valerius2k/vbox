@@ -33,15 +33,81 @@
 #include <os2.h>
 #undef RT_MAX
 
+#include <iprt/time.h>
+#include <iprt/mem.h>
+#include <iprt/thread.h>
 #include <iprt/semaphore.h>
+#include <iprt/lockvalidator.h>
 #include <iprt/assert.h>
 #include <iprt/err.h>
 
+#include "internal/magics.h"
 
 /** Converts semaphore to OS/2 handle. */
 #define SEM2HND(Sem) ((LHANDLE)(uintptr_t)Sem)
 
 
+/*******************************************************************************
+*   Defined Constants And Macros                                               *
+*******************************************************************************/
+struct RTSEMEVENTMULTIINTERNAL
+{
+    /** Magic value (RTSEMEVENTMULTI_MAGIC). */
+    uint32_t            u32Magic;
+    /** The event handle. */
+    HEV                 hev;
+#ifdef RTSEMEVENT_STRICT
+    /** Signallers. */
+    RTLOCKVALRECSHRD    Signallers;
+    /** Indicates that lock validation should be performed. */
+    bool volatile       fEverHadSignallers;
+#endif
+};
+
+typedef R3R0PTRTYPE(struct RTSEMEVENTMULTIINTERNAL) RTSEMEVENTMULTIINTERNAL;
+typedef R3R0PTRTYPE(struct RTSEMEVENTMULTIINTERNAL *) PRTSEMEVENTMULTIINTERNAL;
+
+/*  */
+struct RTSEMEVENTINTERNAL
+{
+    /** Magic value (RTSEMEVENT_MAGIC). */
+    uint32_t            u32Magic;
+    /** The event handle. */
+    HEV                 hev;
+#ifdef RTSEMEVENT_STRICT
+    /** Signallers. */
+    RTLOCKVALRECSHRD    Signallers;
+    /** Indicates that lock validation should be performed. */
+    bool volatile       fEverHadSignallers;
+#endif
+    /** The creation flags. */
+    uint32_t            fFlags;
+};
+
+typedef R3R0PTRTYPE(struct RTSEMEVENTINTERNAL) RTSEMEVENTINTERNAL;
+typedef R3R0PTRTYPE(struct RTSEMEVENTINTERNAL *) PRTSEMEVENTINTERNAL;
+
+/** Posix internal representation of a Mutex semaphore. */
+struct RTSEMMUTEXINTERNAL
+{
+    /** Magic value (RTSEMMUTEX_MAGIC). */
+    uint32_t                u32Magic;
+    /** Recursion count. */
+    uint32_t volatile       cRecursions;
+    /** The owner thread. */
+    RTNATIVETHREAD volatile hNativeOwner;
+    /** The mutex handle. */
+    HMTX                    hMtx;
+#ifdef RTSEMMUTEX_STRICT
+    /** Lock validator record associated with this mutex. */
+    RTLOCKVALRECEXCL        ValidatorRec;
+#endif
+};
+
+typedef R3R0PTRTYPE(struct RTSEMMUTEXINTERNAL) RTSEMMUTEXINTERNAL;
+typedef R3R0PTRTYPE(struct RTSEMMUTEXINTERNAL *) PRTSEMMUTEXINTERNAL;
+
+RTDECL(int)  RTErrConvertFromOS2(unsigned uNativeCode);
 
 RTDECL(int)  RTSemEventCreate(PRTSEMEVENT phEventSem)
 {
@@ -58,11 +124,18 @@ RTDECL(int)  RTSemEventCreateEx(PRTSEMEVENT phEventSem, uint32_t fFlags, RTLOCKV
      * Create the semaphore.
      * (Auto reset, not signaled, private event object.)
      */
-    HEV hev;
+    HEV hev = NULLHANDLE;
+    PRTSEMEVENTINTERNAL pThis = (PRTSEMEVENTINTERNAL)RTMemAlloc(sizeof(*pThis));
+
+    if (! pThis)
+        return VERR_NO_MEMORY;
+
     int rc = DosCreateEventSem(NULL, &hev, DCE_AUTORESET | DCE_POSTONE, 0);
     if (!rc)
     {
-        *phEventSem = (RTSEMEVENT)(void *)hev;
+        *phEventSem = (RTSEMEVENT)pThis;
+        pThis->hev = hev;
+        pThis->u32Magic = RTSEMEVENT_MAGIC;
         return VINF_SUCCESS;
     }
     return RTErrConvertFromOS2(rc);
@@ -77,9 +150,16 @@ RTDECL(int)   RTSemEventDestroy(RTSEMEVENT hEventSem)
     /*
      * Close semaphore handle.
      */
-    int rc = DosCloseEventSem(SEM2HND(hEventSem));
-    if (!rc)
+    PRTSEMEVENTINTERNAL pThis = (PRTSEMEVENTINTERNAL)hEventSem;
+
+    int rc = DosCloseEventSem(pThis->hev);
+
+    if (! rc)
+    {
+        RTMemFree(pThis);
         return VINF_SUCCESS;
+    }
+
     AssertMsgFailed(("Destroy hEventSem %p failed, rc=%d\n", hEventSem, rc));
     return RTErrConvertFromOS2(rc);
 }
@@ -90,7 +170,8 @@ RTDECL(int)   RTSemEventWaitNoResume(RTSEMEVENT hEventSem, RTMSINTERVAL cMillies
     /*
      * Wait for condition.
      */
-    int rc = DosWaitEventSem(SEM2HND(hEventSem), cMillies == RT_INDEFINITE_WAIT ? SEM_INDEFINITE_WAIT : cMillies);
+    PRTSEMEVENTINTERNAL pThis = (PRTSEMEVENTINTERNAL)hEventSem;
+    int rc = DosWaitEventSem(pThis->hev, cMillies == RT_INDEFINITE_WAIT ? SEM_INDEFINITE_WAIT : cMillies);
     switch (rc)
     {
         case NO_ERROR:              return VINF_SUCCESS;
@@ -111,7 +192,8 @@ RTDECL(int)  RTSemEventSignal(RTSEMEVENT hEventSem)
     /*
      * Signal the object.
      */
-    int rc = DosPostEventSem(SEM2HND(hEventSem));
+    PRTSEMEVENTINTERNAL pThis = (PRTSEMEVENTINTERNAL)hEventSem;
+    int rc = DosPostEventSem(pThis->hev);
     switch (rc)
     {
         case NO_ERROR:
@@ -142,13 +224,10 @@ RTDECL(void) RTSemEventRemoveSignaller(RTSEMEVENT hEventSem, RTTHREAD hThread)
 }
 
 
-
-
 RTDECL(int)  RTSemEventMultiCreate(PRTSEMEVENTMULTI phEventMultiSem)
 {
     return RTSemEventMultiCreateEx(phEventMultiSem, 0 /*fFlags*/, NIL_RTLOCKVALCLASS, NULL);
 }
-
 
 RTDECL(int)  RTSemEventMultiCreateEx(PRTSEMEVENTMULTI phEventMultiSem, uint32_t fFlags, RTLOCKVALCLASS hClass,
                                      const char *pszNameFmt, ...)
@@ -159,13 +238,24 @@ RTDECL(int)  RTSemEventMultiCreateEx(PRTSEMEVENTMULTI phEventMultiSem, uint32_t 
      * Create the semaphore.
      * (Manual reset, not signaled, private event object.)
      */
-    HEV hev;
+    HEV hev = NULLHANDLE;
+    PRTSEMEVENTMULTIINTERNAL pThis = NULL;
+
     int rc = DosCreateEventSem(NULL, &hev, 0, FALSE);
+
     if (!rc)
     {
-        *phEventMultiSem = (RTSEMEVENTMULTI)(void *)hev;
+        pThis = (PRTSEMEVENTMULTIINTERNAL)RTMemAlloc(sizeof(*pThis));
+
+        if (! pThis)
+            return VERR_NO_MEMORY;
+
+        pThis->hev = hev;
+        pThis->u32Magic = RTSEMEVENTMULTI_MAGIC;
+        *phEventMultiSem  = (RTSEMEVENTMULTI)pThis;
         return VINF_SUCCESS;
     }
+
     return RTErrConvertFromOS2(rc);
 }
 
@@ -178,9 +268,16 @@ RTDECL(int)  RTSemEventMultiDestroy(RTSEMEVENTMULTI hEventMultiSem)
     /*
      * Close semaphore handle.
      */
-    int rc = DosCloseEventSem(SEM2HND(hEventMultiSem));
+    PRTSEMEVENTMULTIINTERNAL pThis = (PRTSEMEVENTMULTIINTERNAL)hEventMultiSem;
+
+    int rc = DosCloseEventSem(pThis->hev);
+
     if (!rc)
+    {
+        RTMemFree(pThis);
         return VINF_SUCCESS;
+    }
+
     AssertMsgFailed(("Destroy hEventMultiSem %p failed, rc=%d\n", hEventMultiSem, rc));
     return RTErrConvertFromOS2(rc);
 }
@@ -191,7 +288,10 @@ RTDECL(int)  RTSemEventMultiSignal(RTSEMEVENTMULTI hEventMultiSem)
     /*
      * Signal the object.
      */
-    int rc = DosPostEventSem(SEM2HND(hEventMultiSem));
+    PRTSEMEVENTMULTIINTERNAL pThis = (PRTSEMEVENTMULTIINTERNAL)hEventMultiSem;
+
+    int rc = DosPostEventSem(pThis->hev);
+
     switch (rc)
     {
         case NO_ERROR:
@@ -209,8 +309,9 @@ RTDECL(int)  RTSemEventMultiReset(RTSEMEVENTMULTI hEventMultiSem)
     /*
      * Reset the object.
      */
-    ULONG ulIgnore;
-    int rc = DosResetEventSem(SEM2HND(hEventMultiSem), &ulIgnore);
+    PRTSEMEVENTMULTIINTERNAL pThis = (PRTSEMEVENTMULTIINTERNAL)hEventMultiSem;
+    ULONG ulIgnore = 0;
+    int rc = DosResetEventSem(pThis->hev, &ulIgnore);
     switch (rc)
     {
         case NO_ERROR:
@@ -227,7 +328,10 @@ RTDECL(int)  RTSemEventMultiWaitNoResume(RTSEMEVENTMULTI hEventMultiSem, RTMSINT
     /*
      * Wait for condition.
      */
-    int rc = DosWaitEventSem(SEM2HND(hEventMultiSem), cMillies == RT_INDEFINITE_WAIT ? SEM_INDEFINITE_WAIT : cMillies);
+    PRTSEMEVENTMULTIINTERNAL pThis = (PRTSEMEVENTMULTIINTERNAL)hEventMultiSem;
+
+    int rc = DosWaitEventSem(pThis->hev, cMillies == RT_INDEFINITE_WAIT ? SEM_INDEFINITE_WAIT : cMillies);
+
     switch (rc)
     {
         case NO_ERROR:              return VINF_SUCCESS;
@@ -237,9 +341,125 @@ RTDECL(int)  RTSemEventMultiWaitNoResume(RTSEMEVENTMULTI hEventMultiSem, RTMSINT
         default:
         {
             AssertMsgFailed(("Wait on hEventMultiSem %p failed, rc=%d\n", hEventMultiSem, rc));
-            return RTErrConvertFromOS2(rc);
+            rc = RTErrConvertFromOS2(rc);
+            return rc;
         }
     }
+}
+
+RTDECL(int) rtSemEventMultiOs2Wait(RTSEMEVENTMULTI hEventMultiSem, uint32_t fFlags, uint64_t uTimeout,
+                                       PCRTLOCKVALSRCPOS pSrcPos)
+{
+    /*
+     * Validate input.
+     */
+    PRTSEMEVENTMULTIINTERNAL pThis = (PRTSEMEVENTMULTIINTERNAL)hEventMultiSem;
+
+    AssertPtrReturn(pThis, VERR_INVALID_HANDLE);
+    AssertReturn(pThis->u32Magic == RTSEMEVENTMULTI_MAGIC, VERR_INVALID_HANDLE);
+    AssertReturn(RTSEMWAIT_FLAGS_ARE_VALID(fFlags), VERR_INVALID_PARAMETER);
+
+    /*
+     * Convert the timeout to a millisecond count.
+     */
+    uint64_t    uAbsDeadline;
+    LONG    	dwMsTimeout;
+
+    if (fFlags & RTSEMWAIT_FLAGS_INDEFINITE)
+    {
+        dwMsTimeout  = -1; // INFINITE;
+        uAbsDeadline = UINT64_MAX;
+    }
+    else
+    {
+        if (fFlags & RTSEMWAIT_FLAGS_NANOSECS)
+            uTimeout = uTimeout < UINT64_MAX - UINT32_C(1000000) / 2
+                     ? (uTimeout + UINT32_C(1000000) / 2) / UINT32_C(1000000)
+                     : UINT64_MAX / UINT32_C(1000000);
+        if (fFlags & RTSEMWAIT_FLAGS_ABSOLUTE)
+        {
+            uAbsDeadline = uTimeout;
+            uint64_t u64Now = RTTimeSystemMilliTS();
+            if (u64Now < uTimeout)
+                uTimeout -= u64Now;
+            else
+                uTimeout = 0;
+        }
+        else if (fFlags & RTSEMWAIT_FLAGS_RESUME)
+            uAbsDeadline = RTTimeSystemMilliTS() + uTimeout;
+        else
+            uAbsDeadline = UINT64_MAX;
+
+        dwMsTimeout = (uTimeout < UINT32_MAX)
+                    ? (LONG)uTimeout
+                    : (LONG)-1;
+    }
+
+    /*
+     * Do the wait.
+     */
+    int rc;
+#ifdef RTSEMEVENT_STRICT
+    RTTHREAD hThreadSelf = RTThreadSelfAutoAdopt();
+
+    if ((PRTSEMEVENTMULTIINTERNAL)pThis->fEverHadSignallers)
+    {
+        do
+            // rc = WaitForSingleObjectEx(pThis->hev, 0 /*Timeout*/, TRUE /*fAlertable*/);
+            rc = RTErrConvertFromOS2(DosWaitEventSem(pThis->hev, 0 /*Timeout*/));
+        while (rc == VERR_INTERRUPTED && (fFlags & RTSEMWAIT_FLAGS_RESUME));
+
+        if ((rc != VERR_INTERRUPTED && rc != VERR_TIMEOUT) || dwMsTimeout == 0)
+        {
+            //return rtSemEventWaitHandleStatus(pThis, fFlags, rc);
+            rc = RTErrConvertFromOS2(rc);
+            return rc;
+        }
+
+        int rc9 = RTLockValidatorRecSharedCheckBlocking(&pThis->Signallers, hThreadSelf, pSrcPos, false,
+                                                        dwMsTimeout, RTTHREADSTATE_EVENT_MULTI, true);
+        if (RT_FAILURE(rc9))
+            return rc9;
+    }
+#else
+    RTTHREAD hThreadSelf = RTThreadSelf();
+#endif
+    RTThreadBlocking(hThreadSelf, RTTHREADSTATE_EVENT_MULTI, true);
+
+    //rc = WaitForSingleObjectEx(pThis->hev, dwMsTimeout, TRUE /*fAlertable*/);
+    rc = RTErrConvertFromOS2(DosWaitEventSem(pThis->hev, dwMsTimeout));
+
+    if ((rc == VERR_INTERRUPTED || rc == VERR_TIMEOUT) && (fFlags & RTSEMWAIT_FLAGS_RESUME))
+    {
+        while ( (rc == VERR_INTERRUPTED || rc == VERR_TIMEOUT)
+               && RTTimeSystemMilliTS() < uAbsDeadline)
+            //rc = WaitForSingleObjectEx(pThis->hev, dwMsTimeout, TRUE /*fAlertable*/);
+            rc = RTErrConvertFromOS2(DosWaitEventSem(pThis->hev, dwMsTimeout));
+    }
+
+    RTThreadUnblocked(hThreadSelf, RTTHREADSTATE_EVENT_MULTI);
+
+    // return rtSemEventWaitHandleStatus(pThis, fFlags, rc);
+    return rc;
+}
+
+
+RTDECL(int)  RTSemEventMultiWaitEx(RTSEMEVENTMULTI hEventMultiSem, uint32_t fFlags, uint64_t uTimeout)
+{
+#ifndef RTSEMEVENT_STRICT
+    return rtSemEventMultiOs2Wait(hEventMultiSem, fFlags, uTimeout, NULL);
+#else
+    RTLOCKVALSRCPOS SrcPos = RTLOCKVALSRCPOS_INIT_NORMAL_API();
+    return rtSemEventMultiOs2Wait(hEventMultiSem, fFlags, uTimeout, &SrcPos);
+#endif
+}
+
+
+RTDECL(int)  RTSemEventMultiWaitExDebug(RTSEMEVENTMULTI hEventMultiSem, uint32_t fFlags, uint64_t uTimeout,
+                                        RTHCUINTPTR uId, RT_SRC_POS_DECL)
+{
+    RTLOCKVALSRCPOS SrcPos = RTLOCKVALSRCPOS_INIT_DEBUG_API();
+    return rtSemEventMultiOs2Wait(hEventMultiSem, fFlags, uTimeout, &SrcPos);
 }
 
 
@@ -259,8 +479,6 @@ RTDECL(void) RTSemEventMultiRemoveSignaller(RTSEMEVENTMULTI hEventMultiSem, RTTH
 }
 
 
-
-#undef RTSemMutexCreate
 RTDECL(int)  RTSemMutexCreate(PRTSEMMUTEX phMutexSem)
 {
     return RTSemMutexCreateEx(phMutexSem, 0 /*fFlags*/, NIL_RTLOCKVALCLASS, RTLOCKVAL_SUB_CLASS_NONE, NULL);
@@ -276,11 +494,19 @@ RTDECL(int) RTSemMutexCreateEx(PRTSEMMUTEX phMutexSem, uint32_t fFlags,
      * Create the semaphore.
      */
     HMTX hmtx;
+    PRTSEMMUTEXINTERNAL pThis = (PRTSEMMUTEXINTERNAL)RTMemAlloc(sizeof(*pThis));
+
+    if (! pThis)
+        return VERR_NO_MEMORY;
+
     int rc = DosCreateMutexSem(NULL, &hmtx, 0, FALSE);
-    if (!rc)
+
+    if (! rc)
     {
         /** @todo implement lock validation of OS/2 mutex semaphores. */
-        *phMutexSem = (RTSEMMUTEX)(void *)hmtx;
+        *phMutexSem = (RTSEMMUTEX)pThis;
+        pThis->hMtx = hmtx;
+        pThis->u32Magic = RTSEMMUTEX_MAGIC;
         return VINF_SUCCESS;
     }
 
@@ -296,9 +522,16 @@ RTDECL(int)  RTSemMutexDestroy(RTSEMMUTEX hMutexSem)
     /*
      * Close semaphore handle.
      */
-    int rc = DosCloseMutexSem(SEM2HND(hMutexSem));
-    if (!rc)
+    PRTSEMMUTEXINTERNAL pThis = (PRTSEMMUTEXINTERNAL)hMutexSem;
+
+    int rc = DosCloseMutexSem(pThis->hMtx);
+
+    if (! rc)
+    {
+        RTMemFree(pThis);
         return VINF_SUCCESS;
+    }
+
     AssertMsgFailed(("Destroy hMutexSem %p failed, rc=%d\n", hMutexSem, rc));
     return RTErrConvertFromOS2(rc);
 }
@@ -311,24 +544,25 @@ RTDECL(uint32_t) RTSemMutexSetSubClass(RTSEMMUTEX hMutexSem, uint32_t uSubClass)
     /*
      * Validate.
      */
-    RTSEMMUTEXINTERNAL *pThis = hMutexSem;
+    RTSEMMUTEXINTERNAL *pThis = (RTSEMMUTEXINTERNAL *)hMutexSem;
     AssertPtrReturn(pThis, RTLOCKVAL_SUB_CLASS_INVALID);
     AssertReturn(pThis->u32Magic == RTSEMMUTEX_MAGIC, RTLOCKVAL_SUB_CLASS_INVALID);
 
-    return RTLockValidatorRecExclSetSubClass(&pThis->ValidatorRec, uSubClass);
+    return RTLockValidatorRecExclSetSubClass(pThis->ValidatorRec, uSubClass);
 #else
     return RTLOCKVAL_SUB_CLASS_INVALID;
 #endif
 }
 
-
-#undef RTSemMutexRequestNoResume
 RTDECL(int)  RTSemMutexRequestNoResume(RTSEMMUTEX hMutexSem, RTMSINTERVAL cMillies)
 {
     /*
      * Lock mutex semaphore.
      */
-    int rc = DosRequestMutexSem(SEM2HND(hMutexSem), cMillies == RT_INDEFINITE_WAIT ? SEM_INDEFINITE_WAIT : cMillies);
+    PRTSEMMUTEXINTERNAL pThis = (PRTSEMMUTEXINTERNAL)hMutexSem;
+
+    int rc = DosRequestMutexSem(pThis->hMtx, cMillies == RT_INDEFINITE_WAIT ? SEM_INDEFINITE_WAIT : cMillies);
+
     switch (rc)
     {
         case NO_ERROR:              return VINF_SUCCESS;
@@ -357,9 +591,13 @@ RTDECL(int)  RTSemMutexRelease(RTSEMMUTEX hMutexSem)
     /*
      * Unlock mutex semaphore.
      */
-    int rc = DosReleaseMutexSem(SEM2HND(hMutexSem));
+    PRTSEMMUTEXINTERNAL pThis = (PRTSEMMUTEXINTERNAL)hMutexSem;
+
+    int rc = DosReleaseMutexSem(pThis->hMtx);
+
     if (!rc)
         return VINF_SUCCESS;
+
     AssertMsgFailed(("Release hMutexSem %p failed, rc=%d\n", hMutexSem, rc));
     return RTErrConvertFromOS2(rc);
 }
@@ -373,9 +611,14 @@ RTDECL(bool) RTSemMutexIsOwned(RTSEMMUTEX hMutexSem)
     PID     pid;
     TID     tid;
     ULONG   cRecursions;
-    int rc = DosQueryMutexSem(SEM2HND(hMutexSem), &pid, &tid, &cRecursions);
+
+    PRTSEMMUTEXINTERNAL pThis = (PRTSEMMUTEXINTERNAL)hMutexSem;
+
+    int rc = DosQueryMutexSem(pThis->hMtx, &pid, &tid, &cRecursions);
+
     if (!rc)
         return cRecursions != 0;
+
     AssertMsgFailed(("DosQueryMutexSem %p failed, rc=%d\n", hMutexSem, rc));
     return rc == ERROR_SEM_OWNER_DIED;
 }
