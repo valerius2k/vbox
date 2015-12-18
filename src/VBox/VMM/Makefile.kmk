@@ -133,7 +133,8 @@ VBoxVMM_DEFS.darwin = VMM_R0_SWITCH_STACK
 VBoxVMM_INCS     = \
 	include \
 	$(if-expr defined(VBOX_WITH_RAW_MODE),PATM,)
-VBoxVMM_ASINCS   = .
+VBoxVMM_ASINCS   = . \
+	$(if-expr defined(VBOX_WITH_RAW_MODE),VMMR3,)
 
 VBoxVMM_SOURCES  = \
 	VBoxVMM.d \
@@ -284,9 +285,13 @@ ifdef VBOX_WITH_RAW_MODE
  	VMMSwitcher/AMD64To32Bit.asm \
  	VMMSwitcher/AMD64ToPAE.asm
 endif
+ifneq ($(KBUILD_TARGET),os2)
+# Disabled for now, requires a better nasm and VT-x (see #31)
 VBoxVMM_SOURCES.x86 += \
  	VMMSwitcher/32BitToAMD64.asm \
- 	VMMSwitcher/PAEToAMD64.asm \
+ 	VMMSwitcher/PAEToAMD64.asm
+endif
+VBoxVMM_SOURCES.x86 += \
 	VMMSwitcher/X86Stub.asm
 VBoxVMM_SOURCES.amd64 += \
 	VMMSwitcher/AMD64Stub.asm

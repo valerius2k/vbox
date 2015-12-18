@@ -101,10 +101,20 @@ static PVMMSWITCHERDEF g_apHmSwitchers[VMMSWITCHER_MAX] =
 #if HC_ARCH_BITS == 32
     NULL,   //&vmmR3Switcher32BitTo32Bit_Def,
     NULL,   //&vmmR3Switcher32BitToPAE_Def,
+#ifdef RT_OS_OS2
+    // Disabled for now, requires a better nasm and VT-x (see #31)
+    NULL,
+#else
     &vmmR3Switcher32BitToAMD64_Def,
+#endif
     NULL,   //&vmmR3SwitcherPAETo32Bit_Def,
     NULL,   //&vmmR3SwitcherPAEToPAE_Def,
+#ifdef RT_OS_OS2
+    // Disabled for now, requires a better nasm and VT-x (see #31)
+    NULL,
+#else
     &vmmR3SwitcherPAEToAMD64_Def,
+#endif
     NULL,   //&vmmR3SwitcherPAETo32Bit_Def,
     NULL,   //&vmmR3SwitcherAMD64ToPAE_Def,
     NULL,   //&vmmR3SwitcherAMD64ToAMD64_Def,
