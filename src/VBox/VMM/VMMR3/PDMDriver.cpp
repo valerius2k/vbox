@@ -1534,6 +1534,7 @@ static DECLCALLBACK(int) pdmR3DrvHlp_ThreadCreate(PPDMDRVINS pDrvIns, PPPDMTHREA
 }
 
 
+#ifdef VBOX_WITH_PDM_ASYNC_COMPLETION
 /** @interface_method_impl{PDMDRVHLP,pfnAsyncCompletionTemplateCreate} */
 static DECLCALLBACK(int) pdmR3DrvHlp_AsyncCompletionTemplateCreate(PPDMDRVINS pDrvIns, PPPDMASYNCCOMPLETIONTEMPLATE ppTemplate,
                                                                    PFNPDMASYNCCOMPLETEDRV pfnCompleted, void *pvTemplateUser,
@@ -1549,6 +1550,7 @@ static DECLCALLBACK(int) pdmR3DrvHlp_AsyncCompletionTemplateCreate(PPDMDRVINS pD
              pDrvIns->iInstance, rc, *ppTemplate));
     return rc;
 }
+#endif /* VBOX_WITH_PDM_ASYNC_COMPLETION */
 
 
 #ifdef VBOX_WITH_NETSHAPER
@@ -1813,7 +1815,9 @@ const PDMDRVHLPR3 g_pdmR3DrvHlp =
     pdmR3DrvHlp_SetAsyncNotification,
     pdmR3DrvHlp_AsyncNotificationCompleted,
     pdmR3DrvHlp_ThreadCreate,
+#ifdef VBOX_WITH_PDM_ASYNC_COMPLETION
     pdmR3DrvHlp_AsyncCompletionTemplateCreate,
+#endif /* VBOX_WITH_PDM_ASYNC_COMPLETION */
 #ifdef VBOX_WITH_NETSHAPER
     pdmR3DrvHlp_NetShaperAttach,
     pdmR3DrvHlp_NetShaperDetach,

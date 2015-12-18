@@ -1167,6 +1167,7 @@ typedef struct PDMDRVHLPR3
     DECLR3CALLBACKMEMBER(int, pfnThreadCreate,(PPDMDRVINS pDrvIns, PPPDMTHREAD ppThread, void *pvUser, PFNPDMTHREADDRV pfnThread,
                                                PFNPDMTHREADWAKEUPDRV pfnWakeup, size_t cbStack, RTTHREADTYPE enmType, const char *pszName));
 
+#ifdef VBOX_WITH_PDM_ASYNC_COMPLETION
     /**
      * Creates an async completion template for a driver instance.
      *
@@ -1182,6 +1183,7 @@ typedef struct PDMDRVHLPR3
     DECLR3CALLBACKMEMBER(int, pfnAsyncCompletionTemplateCreate,(PPDMDRVINS pDrvIns, PPPDMASYNCCOMPLETIONTEMPLATE ppTemplate,
                                                                 PFNPDMASYNCCOMPLETEDRV pfnCompleted, void *pvTemplateUser,
                                                                 const char *pszDesc));
+#endif /* VBOX_WITH_PDM_ASYNC_COMPLETION */
 
 #ifdef VBOX_WITH_NETSHAPER
     /**
