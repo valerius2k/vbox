@@ -748,7 +748,7 @@ PR_IMPLEMENT(PRStatus) PR_CreateProcessDetached(
 #ifndef _PR_MD_CREATE_PROCESS_DETACHED
     PRProcess *process;
     PRStatus rv;
-s
+
 #ifdef XP_OS2
     process = _PR_CreateOS2ProcessEx(path, argv, envp, attr, PR_TRUE);
 #else
