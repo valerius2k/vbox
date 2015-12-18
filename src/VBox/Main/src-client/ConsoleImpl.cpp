@@ -5555,14 +5555,17 @@ HRESULT Console::i_onBandwidthGroupChange(IBandwidthGroup *aBandwidthGroup)
             if (SUCCEEDED(rc))
             {
                 int vrc = VINF_SUCCESS;
+#ifdef VBOX_WITH_PDM_ASYNC_COMPLETION
                 if (enmType == BandwidthGroupType_Disk)
                     vrc = PDMR3AsyncCompletionBwMgrSetMaxForFile(ptrVM.rawUVM(), Utf8Str(strName).c_str(), (uint32_t)cMax);
+                else
+#endif
 #ifdef VBOX_WITH_NETSHAPER
-                else if (enmType == BandwidthGroupType_Network)
+                if (enmType == BandwidthGroupType_Network)
                     vrc = PDMR3NsBwGroupSetLimit(ptrVM.rawUVM(), Utf8Str(strName).c_str(), cMax);
                 else
-                    rc = E_NOTIMPL;
 #endif /* VBOX_WITH_NETSHAPER */
+                    rc = E_NOTIMPL;
                 AssertRC(vrc);
             }
         }
