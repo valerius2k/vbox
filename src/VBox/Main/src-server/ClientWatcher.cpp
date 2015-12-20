@@ -384,8 +384,8 @@ DECLCALLBACK(int) VirtualBox::ClientWatcher::worker(RTTHREAD /* thread */, void 
                     if (arc == NO_ERROR)
                     {
                         /* machine mutex is normally released */
-                        Assert(semId >= 0 && semId < cnt);
-                        if (semId >= 0 && semId < cnt)
+                        Assert(semId < cnt);
+                        if (semId < cnt)
                         {
 #if 0//def DEBUG
                             {
@@ -413,8 +413,8 @@ DECLCALLBACK(int) VirtualBox::ClientWatcher::worker(RTTHREAD /* thread */, void 
                                 /* close the dead mutex as asked by PMREF */
                                 ::DosCloseMutexSem((HMTX)handles[i].hsemCur);
 
-                                Assert(i >= 0 && i < cnt);
-                                if (i >= 0 && i < cnt)
+                                Assert(i < cnt);
+                                if (i < cnt)
                                 {
 #if 0//def DEBUG
                                     {
@@ -476,7 +476,7 @@ DECLCALLBACK(int) VirtualBox::ClientWatcher::worker(RTTHREAD /* thread */, void 
                             if (smCaller.isOk())
                             {
                                 AutoReadLock smLock(sm COMMA_LOCKVAL_SRC_POS);
-                                ClientToken *ct = sm->i_getClientToken();
+                                Machine::ClientToken *ct = sm->i_getClientToken();
                                 if (ct)
                                 {
                                     HMTX ipcSem = ct->getToken();

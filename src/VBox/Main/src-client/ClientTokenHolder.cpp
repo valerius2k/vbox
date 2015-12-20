@@ -284,10 +284,10 @@ DECLCALLBACK(int) ClientTokenHolderThread(RTTHREAD Thread, void *pvUser)
     Utf8Str sessionId = (BSTR)data[0];
     RTSEMEVENT finishSem = (RTSEMEVENT)data[1];
 
-    LogFlowFunc(("sessionId='%s', finishSem=%p\n", sessionId.raw(), finishSem));
+    LogFlowFunc(("sessionId='%s', finishSem=%p\n", sessionId.c_str(), finishSem));
 
     HMTX mutex = NULLHANDLE;
-    APIRET arc = ::DosOpenMutexSem((PSZ)sessionId.raw(), &mutex);
+    APIRET arc = ::DosOpenMutexSem((PSZ)sessionId.c_str(), &mutex);
     AssertMsg(arc == NO_ERROR, ("cannot open token, arc=%ld\n", arc));
 
     if (arc == NO_ERROR)

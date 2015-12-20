@@ -70,15 +70,21 @@ private:
     HRESULT getNominalState(MachineState_T *aNominalState);
 
     // Wrapped IInternalSessionControl methods
-#ifndef VBOX_WITH_GENERIC_SESSION_WATCHER
-    HRESULT assignMachine(const ComPtr<IMachine> &aMachine,
-                          LockType_T aLockType,
-                          const com::Utf8Str &aTokenId);
-#else
+#if !defined(VBOX_WITH_GENERIC_SESSION_WATCHER)
+# if defined(VBOX_WITH_XPCOM)
+#  define ASSIGN_MACHINE assignMachineWithTokenId
+# else
+#  define ASSIGN_MACHINE assignMachine
+# endif
+    HRESULT ASSIGN_MACHINE(const ComPtr<IMachine> &aMachine,
+                           LockType_T aLockType,
+                           const com::Utf8Str &aTokenId);
+#endif /* !VBOX_WITH_GENERIC_SESSION_WATCHER */
+#if defined(VBOX_WITH_GENERIC_SESSION_WATCHER) || defined(VBOX_WITH_XPCOM)
     HRESULT assignMachine(const ComPtr<IMachine> &aMachine,
                           LockType_T aLockType,
                           const ComPtr<IToken> &aToken);
-#endif /* !VBOX_WITH_GENERIC_SESSION_WATCHER */
+#endif /* VBOX_WITH_GENERIC_SESSION_WATCHER || VBOX_WITH_XPCOM */
     HRESULT assignRemoteMachine(const ComPtr<IMachine> &aMachine,
                                 const ComPtr<IConsole> &aConsole);
     HRESULT updateMachineState(MachineState_T aMachineState);

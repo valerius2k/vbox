@@ -95,6 +95,14 @@
 # define HOSTSUFF_EXE ""
 #endif /* !RT_OS_WINDOWS */
 
+#if !defined(VBOX_WITH_GENERIC_SESSION_WATCHER)
+# if defined(VBOX_WITH_XPCOM)
+#  define ASSIGN_MACHINE AssignMachineWithTokenId
+# else
+#  define ASSIGN_MACHINE AssignMachine
+# endif
+#endif
+
 // defines / prototypes
 /////////////////////////////////////////////////////////////////////////////
 
@@ -3397,7 +3405,7 @@ HRESULT Machine::lockMachine(const ComPtr<ISession> &aSession,
 
             LogFlowThisFunc(("Calling AssignMachine()...\n"));
 #ifndef VBOX_WITH_GENERIC_SESSION_WATCHER
-            rc = pSessionControl->AssignMachine(sessionMachine, aLockType, Bstr(strTokenId).raw());
+            rc = pSessionControl->ASSIGN_MACHINE(sessionMachine, aLockType, Bstr(strTokenId).raw());
 #else /* VBOX_WITH_GENERIC_SESSION_WATCHER */
             rc = pSessionControl->AssignMachine(sessionMachine, aLockType, pToken);
             /* Now the token is owned by the client process. */
@@ -7712,7 +7720,7 @@ HRESULT Machine::i_launchVMProcess(IInternalSessionControl *aControl,
         /* inform the session that it will be a remote one */
         LogFlowThisFunc(("Calling AssignMachine (NULL)...\n"));
 #ifndef VBOX_WITH_GENERIC_SESSION_WATCHER
-        HRESULT rc = aControl->AssignMachine(NULL, LockType_Write, Bstr::Empty.raw());
+        HRESULT rc = aControl->ASSIGN_MACHINE(NULL, LockType_Write, Bstr::Empty.raw());
 #else /* VBOX_WITH_GENERIC_SESSION_WATCHER */
         HRESULT rc = aControl->AssignMachine(NULL, LockType_Write, NULL);
 #endif /* VBOX_WITH_GENERIC_SESSION_WATCHER */

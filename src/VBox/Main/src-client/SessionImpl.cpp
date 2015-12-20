@@ -298,9 +298,9 @@ HRESULT Session::getNominalState(MachineState_T *aNominalState)
 }
 
 #ifndef VBOX_WITH_GENERIC_SESSION_WATCHER
-HRESULT Session::assignMachine(const ComPtr<IMachine> &aMachine,
-                               LockType_T aLockType,
-                               const com::Utf8Str &aTokenId)
+HRESULT Session::ASSIGN_MACHINE(const ComPtr<IMachine> &aMachine,
+                                LockType_T aLockType,
+                                const com::Utf8Str &aTokenId)
 #else
 HRESULT Session::assignMachine(const ComPtr<IMachine> &aMachine,
                                LockType_T aLockType,
@@ -401,6 +401,23 @@ HRESULT Session::assignMachine(const ComPtr<IMachine> &aMachine,
 
     return rc;
 }
+
+#ifdef VBOX_WITH_XPCOM
+# ifdef VBOX_WITH_GENERIC_SESSION_WATCHER
+HRESULT Session::assignMachineWithTokenId(const ComPtr<IMachine> &aMachine,
+                                          LockType_T aLockType,
+                                          const com::Utf8Str &aTokenId)
+# else
+HRESULT Session::assignMachine(const ComPtr<IMachine> &aMachine,
+                               LockType_T aLockType,
+                               const ComPtr<IToken> &aToken)
+# endif
+{
+    // This is a dummy method that must never be called
+    // (it exists only to satisfy the XPIDL interface definition)
+    AssertFailedReturn(E_NOTIMPL);
+}
+#endif
 
 HRESULT Session::assignRemoteMachine(const ComPtr<IMachine> &aMachine,
                                      const ComPtr<IConsole> &aConsole)
