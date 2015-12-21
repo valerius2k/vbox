@@ -5185,6 +5185,8 @@ int Console::i_configNetwork(const char *pszDevice,
 
 #elif defined(RT_OS_WINDOWS) /* not defined NetFlt */
             /* NOTHING TO DO HERE */
+#elif defined(RT_OS_OS2)
+            /* NOTHING TO DO HERE */
 #elif defined(RT_OS_LINUX)
 /// @todo aleksey: is there anything to be done here?
 #elif defined(RT_OS_FREEBSD)
