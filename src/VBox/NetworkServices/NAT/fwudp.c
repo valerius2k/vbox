@@ -29,6 +29,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <poll.h>
+#ifdef RT_OS_OS2
+typedef int socklen_t;
+#endif
 
 #include <err.h>                /* BSD'ism */
 #else
@@ -202,17 +205,22 @@ fwudp_create(struct fwspec *fwspec)
     fwudp->sock = sock;
     fwudp->fwspec = *fwspec;    /* struct copy */
 
+#ifdef IPv6
     /* XXX */
-    if (fwspec->sdom == PF_INET) {
+    if (fwspec->sdom == PF_INET)
+#endif
+    {
         struct sockaddr_in *dst4 = &fwspec->dst.sin;
         memcpy(&fwudp->dst_addr.ip4, &dst4->sin_addr, sizeof(ip_addr_t));
         fwudp->dst_port = htons(dst4->sin_port);
     }
+#ifdef IPv6
     else { /* PF_INET6 */
         struct sockaddr_in6 *dst6 = &fwspec->dst.sin6;
         memcpy(&fwudp->dst_addr.ip6, &dst6->sin6_addr, sizeof(ip6_addr_t));
         fwudp->dst_port = htons(dst6->sin6_port);
     }
+#endif
 
     fwudp->inbuf.bufsize = 256; /* elements  */
     fwudp->inbuf.buf
@@ -261,7 +269,11 @@ int
 fwudp_pmgr_pump(struct pollmgr_handler *handler, SOCKET fd, int revents)
 {
     struct fwudp *fwudp;
+#ifdef IPv6
     struct sockaddr_storage ss;
+#else
+    struct sockaddr_in ss;
+#endif
     socklen_t sslen = sizeof(ss);
     size_t beg, lim;
     struct fwudp_dgram *dgram;
@@ -308,14 +320,19 @@ fwudp_pmgr_pump(struct pollmgr_handler *handler, SOCKET fd, int revents)
         return POLLIN;
     }
 
-    if (ss.ss_family == AF_INET) {
+#ifdef IPv6
+    if (ss.ss_family == AF_INET)
+#endif
+    {
         const struct sockaddr_in *peer4 = (const struct sockaddr_in *)&ss;
         dgram->src_port = htons(peer4->sin_port);
     }
+#ifdef IPv6
     else { /* PF_INET6 */
         const struct sockaddr_in6 *peer6 = (const struct sockaddr_in6 *)&ss;
         dgram->src_port = htons(peer6->sin6_port);
     }
+#endif
 
     p = pbuf_alloc(PBUF_RAW, nread, PBUF_RAM);
     if (p == NULL) {
@@ -476,13 +493,18 @@ fwudp_pcb_forward_outbound(struct fwudp *fwudp, struct udp_pcb *pcb,
 {
     union {
         struct sockaddr_in sin;
+#ifdef IPv6
         struct sockaddr_in6 sin6;
+#endif
     } peer;
     socklen_t namelen;
 
     memset(&peer, 0, sizeof(peer)); /* XXX: shut up valgrind */
 
-    if (fwudp->fwspec.sdom == PF_INET) {
+#ifdef IPv6
+    if (fwudp->fwspec.sdom == PF_INET)
+#endif
+    {
         peer.sin.sin_family = AF_INET;
 #if HAVE_SA_LEN
         peer.sin.sin_len =
@@ -491,6 +513,7 @@ fwudp_pcb_forward_outbound(struct fwudp *fwudp, struct udp_pcb *pcb,
         pxremap_outbound_ip4((ip_addr_t *)&peer.sin.sin_addr, &pcb->local_ip.ip4);
         peer.sin.sin_port = htons(pcb->local_port);
     }
+#ifdef IPv6
     else {
         peer.sin6.sin6_family = AF_INET6;
 #if HAVE_SA_LEN
@@ -501,6 +524,7 @@ fwudp_pcb_forward_outbound(struct fwudp *fwudp, struct udp_pcb *pcb,
         pxremap_outbound_ip6((ip6_addr_t *)&peer.sin6.sin6_addr, &pcb->local_ip.ip6);
         peer.sin6.sin6_port = htons(pcb->local_port);
     }
+#endif
 
     proxy_sendto(fwudp->sock, p, &peer, namelen);
     pbuf_free(p);

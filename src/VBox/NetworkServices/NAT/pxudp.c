@@ -33,6 +33,9 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <poll.h>
+#ifdef RT_OS_OS2
+typedef int socklen_t;
+#endif
 
 #include <err.h>                /* BSD'ism */
 #else
@@ -657,6 +660,7 @@ pxudp_pcb_forward_outbound(struct pxudp *pxudp, struct pbuf *p,
             }
         }
     }
+#ifdef IPv6
     else { /* IPv6 */
         const struct ip6_hdr *iph = ip6_current_header();
         int ttl;
@@ -678,6 +682,7 @@ pxudp_pcb_forward_outbound(struct pxudp *pxudp, struct pbuf *p,
             }
         }
     }
+#endif
 
     if (pxudp->pcb->local_port == 53) {
         ++pxudp->count;

@@ -68,7 +68,9 @@
 # ifdef RT_OS_LINUX
 #  include <linux/icmp.h>       /* ICMP_FILTER */
 # endif
-# include <netinet/icmp6.h>
+# ifdef IPv6
+#  include <netinet/icmp6.h>
+# endif
 #endif
 
 #include <map>
@@ -153,7 +155,9 @@ class VBoxNetLwipNAT: public VBoxNetBaseService, public NATNetworkEventAdapter
    private:
     struct proxy_options m_ProxyOptions;
     struct sockaddr_in m_src4;
+#ifdef IPv6
     struct sockaddr_in6 m_src6;
+#endif
     /**
      * place for registered local interfaces.
      */
@@ -646,14 +650,18 @@ VBoxNetLwipNAT::VBoxNetLwipNAT(SOCKET icmpsock4, SOCKET icmpsock6) : VBoxNetBase
     m_ProxyOptions.icmpsock6 = icmpsock6;
     m_ProxyOptions.tftp_root = NULL;
     m_ProxyOptions.src4 = NULL;
-    m_ProxyOptions.src6 = NULL;
     RT_ZERO(m_src4);
-    RT_ZERO(m_src6);
     m_src4.sin_family = AF_INET;
+#ifdef IPv6
+    m_ProxyOptions.src6 = NULL;
+    RT_ZERO(m_src6);
     m_src6.sin6_family = AF_INET6;
+#endif
 #if HAVE_SA_LEN
     m_src4.sin_len = sizeof(m_src4);
+# ifdef IPv6
     m_src6.sin6_len = sizeof(m_src6);
+# endif
 #endif
     m_ProxyOptions.nameservers = NULL;
 
@@ -1085,7 +1093,7 @@ extern "C" DECLEXPORT(int) TrustedMain(int argc, char **argv, char **envp)
 
     SOCKET icmpsock4 = INVALID_SOCKET;
     SOCKET icmpsock6 = INVALID_SOCKET;
-#ifndef RT_OS_DARWIN
+#if !defined(RT_OS_DARWIN) && !defined(RT_OS_OS2)
     const int icmpstype = SOCK_RAW;
 #else
     /* on OS X it's not privileged */
@@ -1121,6 +1129,7 @@ extern "C" DECLEXPORT(int) TrustedMain(int argc, char **argv, char **envp)
 #endif
     }
 
+#ifdef IPv6
     icmpsock6 = socket(AF_INET6, icmpstype, IPPROTO_ICMPV6);
     if (icmpsock6 == INVALID_SOCKET)
     {
@@ -1155,6 +1164,7 @@ extern "C" DECLEXPORT(int) TrustedMain(int argc, char **argv, char **envp)
         }
 #endif
     }
+#endif
 
     HRESULT hrc = com::Initialize();
     if (FAILED(hrc))
@@ -1291,9 +1301,11 @@ static int fetchNatPortForwardRules(const ComNatPtr& nat, bool fIsIPv6, VECNATSE
 {
     HRESULT hrc;
     com::SafeArray<BSTR> rules;
+#ifdef IPv6
     if (fIsIPv6)
         hrc = nat->COMGETTER(PortForwardRules6)(ComSafeArrayAsOutParam(rules));
     else
+#endif
         hrc = nat->COMGETTER(PortForwardRules4)(ComSafeArrayAsOutParam(rules));
     AssertComRCReturn(hrc, VERR_INTERNAL_ERROR);
 

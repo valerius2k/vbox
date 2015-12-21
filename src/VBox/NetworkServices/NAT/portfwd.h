@@ -35,14 +35,18 @@ struct fwspec {
     union {
         struct sockaddr sa;
         struct sockaddr_in sin;   /* sdom == PF_INET  */
+#ifdef IPv6
         struct sockaddr_in6 sin6; /* sdom == PF_INET6 */
+#endif
     } src;
 
     /* forward to */
     union {
         struct sockaddr sa;
         struct sockaddr_in sin;   /* sdom == PF_INET  */
+#ifdef IPv6
         struct sockaddr_in6 sin6; /* sdom == PF_INET6 */
+#endif
     } dst;
 };
 

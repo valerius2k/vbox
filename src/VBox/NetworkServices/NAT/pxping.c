@@ -36,6 +36,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifdef RT_OS_OS2
+typedef int socklen_t;
+#endif
 #else
 #include <iprt/stdint.h>
 #include <stdio.h>
@@ -85,7 +88,7 @@ struct ping_pcb;
 struct pxping {
     SOCKET sock4;
 
-#if defined(RT_OS_DARWIN) || defined(RT_OS_SOLARIS)
+#if defined(RT_OS_DARWIN) || defined(RT_OS_SOLARIS) || defined(RT_OS_OS2)
 #   define DF_WITH_IP_HDRINCL
     int hdrincl;
 #else
@@ -159,7 +162,9 @@ struct ping_pcb {
 
     union {
         struct sockaddr_in sin;
+#ifdef IPv6
         struct sockaddr_in6 sin6;
+#endif
     } peer;
 };
 
@@ -197,7 +202,9 @@ struct ping6_msg {
 static int pxping_init_windows(struct pxping *pxping);
 #endif
 static void pxping_recv4(void *arg, struct pbuf *p);
+#ifdef IPv6
 static void pxping_recv6(void *arg, struct pbuf *p);
+#endif
 
 static void pxping_timer(void *arg);
 static void pxping_timer_needed(struct pxping *pxping);
@@ -224,6 +231,7 @@ static void pxping_pmgr_icmp4_echo(struct pxping *pxping,
                                    u16_t iplen, struct sockaddr_in *peer);
 static void pxping_pmgr_icmp4_error(struct pxping *pxping,
                                     u16_t iplen, struct sockaddr_in *peer);
+#ifdef IPv6
 static void pxping_pmgr_icmp6(struct pxping *pxping);
 static void pxping_pmgr_icmp6_echo(struct pxping *pxping,
                                    ip6_addr_t *src, ip6_addr_t *dst,
@@ -231,15 +239,18 @@ static void pxping_pmgr_icmp6_echo(struct pxping *pxping,
 static void pxping_pmgr_icmp6_error(struct pxping *pxping,
                                     ip6_addr_t *src, ip6_addr_t *dst,
                                     int hopl, int tclass, u16_t icmplen);
+#endif
 
 static void pxping_pmgr_forward_inbound(struct pxping *pxping, u16_t iplen);
 static void pxping_pcb_forward_inbound(void *arg);
 
+#ifdef IPv6
 static void pxping_pmgr_forward_inbound6(struct pxping *pxping,
                                          ip6_addr_t *src, ip6_addr_t *dst,
                                          u8_t hopl, u8_t tclass,
                                          u16_t icmplen);
 static void pxping_pcb_forward_inbound6(void *arg);
+#endif
 
 /*
  * NB: This is not documented except in RTFS.
@@ -300,6 +311,7 @@ pxping_init(struct netif *netif, SOCKET sock4, SOCKET sock6)
         ping_proxy_accept(pxping_recv4, &g_pxping);
     }
 
+#ifdef IPv6
     g_pxping.sock6 = sock6;
 #ifdef RT_OS_WINDOWS
     /* we need recvmsg */
@@ -344,6 +356,7 @@ pxping_init(struct netif *netif, SOCKET sock4, SOCKET sock6)
 
         ping6_proxy_accept(pxping_recv6, &g_pxping);
     }
+#endif
 
     status = RTStrFormatTypeRegister("ping_pcb", pxping_pcb_rtstrfmt, NULL);
     AssertRC(status);
@@ -663,6 +676,7 @@ pxping_recv4(void *arg, struct pbuf *p)
 }
 
 
+#ifdef IPv6
 /**
  * ICMPv6 Echo Request in pbuf "p" is to be proxied.
  */
@@ -767,6 +781,7 @@ pxping_recv6(void *arg, struct pbuf *p)
 
     pbuf_free(p);
 }
+#endif
 
 
 /**
@@ -792,6 +807,7 @@ pxping_pcb_rtstrfmt(PFNRTSTROUTPUT pfnOutput, void *pvArgOutput,
         return RTStrFormat(pfnOutput, pvArgOutput, NULL, NULL, "(null)");
     }
 
+#ifdef IPv6
     /* XXX: %RTnaipv4 takes the value, but %RTnaipv6 takes the pointer */
     if (pcb->is_ipv6) {
         cb += RTStrFormat(pfnOutput, pvArgOutput, NULL, NULL,
@@ -801,7 +817,9 @@ pxping_pcb_rtstrfmt(PFNRTSTROUTPUT pfnOutput, void *pvArgOutput,
                               " (%RTnaipv6)", &pcb->peer.sin6.sin6_addr);
         }
     }
-    else {
+    else
+#endif
+    {
         cb += RTStrFormat(pfnOutput, pvArgOutput, NULL, NULL,
                           "%RTnaipv4 -> %RTnaipv4",
                           ip4_addr_get_u32(ipX_2_ip(&pcb->src)),
@@ -949,6 +967,7 @@ pxping_pcb_for_request(struct pxping *pxping,
         pcb->pprev_timeout = NULL;
         pcb->next_timeout = NULL;
 
+#ifdef IPv6
         if (is_ipv6) {
             pcb->peer.sin6.sin6_family = AF_INET6;
 #if HAVE_SA_LEN
@@ -959,7 +978,9 @@ pxping_pcb_for_request(struct pxping *pxping,
             mapped = pxremap_outbound_ip6((ip6_addr_t *)&pcb->peer.sin6.sin6_addr,
                                           ipX_2_ip6(&pcb->dst));
         }
-        else {
+        else
+#endif
+        {
             pcb->peer.sin.sin_family = AF_INET;
 #if HAVE_SA_LEN
             pcb->peer.sin.sin_len = sizeof(pcb->peer.sin);
@@ -1115,12 +1136,16 @@ pxping_pmgr_pump(struct pollmgr_handler *handler, SOCKET fd, int revents)
         return POLLIN;
     }
 
+#ifdef IPv6
     if (fd == pxping->sock4) {
+#endif
         pxping_pmgr_icmp4(pxping);
+#ifdef IPv6
     }
     else /* fd == pxping->sock6 */ {
         pxping_pmgr_icmp6(pxping);
     }
+#endif
 
     return POLLIN;
 }
@@ -1493,6 +1518,7 @@ pxping_pmgr_icmp4_error(struct pxping *pxping,
 }
 
 
+#ifdef IPv6
 /**
  * Process incoming ICMPv6 message for the host.
  * NB: we will get a lot of spam here and have to sift through it.
@@ -1857,6 +1883,7 @@ pxping_pmgr_icmp6_error(struct pxping *pxping,
                                  &guest_ip, /* error dst */
                                  hopl, tclass, icmplen);
 }
+#endif
 
 
 /**
@@ -1927,6 +1954,7 @@ pxping_pcb_forward_inbound(void *arg)
 }
 
 
+#ifdef IPv6
 static void
 pxping_pmgr_forward_inbound6(struct pxping *pxping,
                              ip6_addr_t *src, ip6_addr_t *dst,
@@ -1995,3 +2023,4 @@ pxping_pcb_forward_inbound6(void *arg)
     pbuf_free(msg->p);
     free(msg);
 }
+#endif

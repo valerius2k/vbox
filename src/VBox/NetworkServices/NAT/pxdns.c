@@ -52,6 +52,9 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <netdb.h>
+#ifdef RT_OS_OS2
+typedef int socklen_t;
+#endif
 #else
 #include "winpoll.h"
 #endif
@@ -63,7 +66,9 @@
 union sockaddr_inet {
     struct sockaddr sa;
     struct sockaddr_in sin;
+#ifdef IPv6
     struct sockaddr_in6 sin6;
+#endif
 };
 
 
@@ -312,7 +317,9 @@ pxdns_set_nameservers(void *arg)
 static void
 pxdns_create_resolver_sockaddrs(struct pxdns *pxdns, const char **nameservers)
 {
+#ifdef IPv6
     struct addrinfo hints;
+#endif
     union sockaddr_inet *resolvers;
     size_t nnames, nresolvers;
     const char **p;
@@ -340,6 +347,7 @@ pxdns_create_resolver_sockaddrs(struct pxdns *pxdns, const char **nameservers)
         goto update_resolvers;
     }
 
+#ifdef IPv6
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_DGRAM;
@@ -376,6 +384,33 @@ pxdns_create_resolver_sockaddrs(struct pxdns *pxdns, const char **nameservers)
         freeaddrinfo(ai);
         ++nresolvers;
     }
+#else
+    for (p = nameservers; *p; ++p) {
+        const char *name = *p;
+        struct hostent *he = gethostbyname(name);
+
+        if (he == NULL) {
+            /* failed resolution */
+            continue;
+        }
+
+        if (he->h_addrtype != AF_INET) {
+            /* not AF_INET addr type */
+            free(he);
+            continue;
+        }
+
+        if ((size_t)he->h_length > sizeof(struct sockaddr_in)) {
+            /* IPv6 or other non-IPv4 addr length */
+            free(he);
+            continue;
+        }
+
+        memcpy(&resolvers[nresolvers], he->h_addr_list, he->h_length);
+        free(he);
+        ++nresolvers;
+    }
+#endif
 
     if (nresolvers == 0) {
         if (resolvers != NULL) {
@@ -698,6 +733,7 @@ pxdns_forward_outbound(struct pxdns *pxdns, struct request *req)
                        &resolver->sa, sizeof(resolver->sin));
 
     }
+#ifdef IPv6
     else if (resolver->sa.sa_family == AF_INET6) {
         if (pxdns->sock6 != INVALID_SOCKET) {
             nsent = sendto(pxdns->sock6, req->data, req->size, 0,
@@ -708,6 +744,7 @@ pxdns_forward_outbound(struct pxdns *pxdns, struct request *req)
             return 0;
         }
     }
+#endif
     else {
         /* shouldn't happen, we should have weeded out unsupported families */
         return 0;

@@ -38,6 +38,9 @@
 #include <iprt/string.h>
 #include <unistd.h>
 #include <err.h>
+#ifdef RT_OS_OS2
+typedef int socklen_t;
+#endif
 #else
 # include <iprt/string.h>
 #endif
@@ -407,7 +410,9 @@ SOCKET
 proxy_connected_socket(int sdom, int stype,
                        ipX_addr_t *dst_addr, u16_t dst_port)
 {
+#ifdef IPv6
     struct sockaddr_in6 dst_sin6;
+#endif
     struct sockaddr_in dst_sin;
     struct sockaddr *pdst_sa;
     socklen_t dst_sa_len;
@@ -422,6 +427,7 @@ proxy_connected_socket(int sdom, int stype,
     LWIP_ASSERT1(stype == SOCK_STREAM || stype == SOCK_DGRAM);
 
     DPRINTF(("---> %s ", stype == SOCK_STREAM ? "TCP" : "UDP"));
+#ifdef IPv6
     if (sdom == PF_INET6) {
         pdst_sa = (struct sockaddr *)&dst_sin6;
         pdst_addr = (void *)&dst_sin6.sin6_addr;
@@ -437,7 +443,9 @@ proxy_connected_socket(int sdom, int stype,
 
         DPRINTF(("[%RTnaipv6]:%d ", &dst_sin6.sin6_addr, dst_port));
     }
-    else { /* sdom = PF_INET */
+    else
+#endif
+    { /* sdom = PF_INET */
         pdst_sa = (struct sockaddr *)&dst_sin;
         pdst_addr = (void *)&dst_sin.sin_addr;
 
@@ -460,11 +468,14 @@ proxy_connected_socket(int sdom, int stype,
     DPRINTF(("socket %d\n", s));
 
     /* TODO: needs locking if dynamic modifyvm is allowed */
+#ifdef IPv6
     if (sdom == PF_INET6) {
         psrc_sa = (const struct sockaddr *)g_proxy_options->src6;
         src_sa_len = sizeof(struct sockaddr_in6);
     }
-    else {
+    else
+#endif
+    {
         psrc_sa = (const struct sockaddr *)g_proxy_options->src4;
         src_sa_len = sizeof(struct sockaddr_in);
     }
@@ -532,9 +543,13 @@ proxy_bound_socket(int sdom, int stype, struct sockaddr *src_addr)
     }
 
     status = bind(s, src_addr,
+#ifdef IPv6
                   sdom == PF_INET ?
                     sizeof(struct sockaddr_in)
                   : sizeof(struct sockaddr_in6));
+#else
+                  sizeof(struct sockaddr_in));
+#endif
     if (status == SOCKET_ERROR) {
         sockerr = SOCKERRNO();
         DPRINTF(("bind: %R[sockerr]\n", sockerr));

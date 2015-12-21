@@ -299,6 +299,7 @@ static enum RCP_TOKEN rcp_parse_nameserver(struct rcp_parser *parser)
                 }
 
                 break;
+#ifndef RT_OS_OS2
             case tok_ipv6:
             case tok_ipv6_port:
                 {
@@ -316,6 +317,7 @@ static enum RCP_TOKEN rcp_parse_nameserver(struct rcp_parser *parser)
                 }
 
                 break;
+#endif
             default: /* loop condition doesn't let enter enything */
                 AssertMsgFailed(("shouldn't ever happen tok:%d, %s", tok,
                                  isprint(tok) ? parser->rcpp_str_buffer : "#"));

@@ -29,6 +29,9 @@
 #include <arpa/inet.h>
 #include <stdio.h>
 #include <poll.h>
+#ifdef RT_OS_OS2
+typedef int socklen_t;
+#endif
 
 #include <err.h>                /* BSD'ism */
 #else
@@ -214,7 +217,11 @@ int
 fwtcp_pmgr_listen(struct pollmgr_handler *handler, SOCKET fd, int revents)
 {
     struct fwtcp *fwtcp;
+#ifdef IPv6
     struct sockaddr_storage ss;
+#else
+    struct sockaddr_in ss;
+#endif
     socklen_t sslen;
     struct pxtcp *pxtcp;
     SOCKET newsock;
@@ -239,16 +246,21 @@ fwtcp_pmgr_listen(struct pollmgr_handler *handler, SOCKET fd, int revents)
     }
 
 
-    if (ss.ss_family == PF_INET) {
+#ifdef IPv6
+    if (ss.ss_family == PF_INET)
+#endif
+    {
         struct sockaddr_in *peer4 = (struct sockaddr_in *)&ss;
         DPRINTF(("<--- TCP %RTnaipv4:%d\n",
                  peer4->sin_addr.s_addr, ntohs(peer4->sin_port)));
     }
+#ifdef IPv6
     else { /* PF_INET6 */
         struct sockaddr_in6 *peer6 = (struct sockaddr_in6 *)&ss;
         DPRINTF(("<--- TCP %RTnaipv6:%d\n",
                  &peer6->sin6_addr, ntohs(peer6->sin6_port)));
     }
+#endif
 
     pxtcp = pxtcp_create_forwarded(newsock);
     if (pxtcp == NULL) {

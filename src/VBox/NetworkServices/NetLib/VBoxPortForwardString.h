@@ -23,6 +23,10 @@
 
 RT_C_DECLS_BEGIN
 
+#ifdef RT_OS_OS2
+# define INET6_ADDRSTRLEN 65
+#endif
+
 #define PF_NAMELEN 64
 /*
  * TBD: Here is shared implementation of parsing port-forward string

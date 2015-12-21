@@ -149,16 +149,25 @@ fwspec_set(struct fwspec *fwspec, int sdom, int stype,
            const char *src_addr_str, uint16_t src_port,
            const char *dst_addr_str, uint16_t dst_port)
 {
+#ifdef IPv6
     struct addrinfo hints;
     struct addrinfo *ai;
+#else
+    struct hostent *he;
+#endif
     int status;
 
+#ifdef IPv6
     LWIP_ASSERT1(sdom == PF_INET || sdom == PF_INET6);
+#else
+    LWIP_ASSERT1(sdom == PF_INET);
+#endif
     LWIP_ASSERT1(stype == SOCK_STREAM || stype == SOCK_DGRAM);
 
     fwspec->sdom = sdom;
     fwspec->stype = stype;
 
+#ifdef IPv6
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = (sdom == PF_INET) ? AF_INET : AF_INET6;
     hints.ai_socktype = stype;
@@ -185,15 +194,32 @@ fwspec_set(struct fwspec *fwspec, int sdom, int stype,
     memcpy(&fwspec->dst, ai->ai_addr, ai->ai_addrlen);
     freeaddrinfo(ai);
     ai = NULL;
+#else
+    he = gethostbyname(src_addr_str);
 
+    if (he == NULL) {
+        LogRel(("\"%s\": %s\n", src_addr_str, hstrerror(h_errno)));
+        return -1;
+    }
+    LWIP_ASSERT1(he != NULL);
+    LWIP_ASSERT1(he->h_length <= sizeof(fwspec->src));
+    memcpy(&fwspec->src, he->h_addr_list, he->h_length);
+    free(he);
+    he = NULL;
+#endif
+
+#ifdef IPv6
     if (sdom == PF_INET) {
+#endif
         fwspec->src.sin.sin_port = htons(src_port);
         fwspec->dst.sin.sin_port = htons(dst_port);
+#ifdef IPv6
     }
     else { /* PF_INET6 */
         fwspec->src.sin6.sin6_port = htons(src_port);
         fwspec->dst.sin6.sin6_port = htons(dst_port);
     }
+#endif
 
     return 0;
 }
@@ -209,11 +235,14 @@ fwspec_equal(struct fwspec *a, struct fwspec *b)
         return 0;
     }
 
+#ifdef IPv6
     if (a->sdom == PF_INET) {
+#endif
         return a->src.sin.sin_port == b->src.sin.sin_port
             && a->dst.sin.sin_port == b->dst.sin.sin_port
             && a->src.sin.sin_addr.s_addr == b->src.sin.sin_addr.s_addr
             && a->dst.sin.sin_addr.s_addr == b->dst.sin.sin_addr.s_addr;
+#ifdef IPv6
     }
     else { /* PF_INET6 */
         return a->src.sin6.sin6_port == b->src.sin6.sin6_port
@@ -221,6 +250,7 @@ fwspec_equal(struct fwspec *a, struct fwspec *b)
             && IN6_ARE_ADDR_EQUAL(&a->src.sin6.sin6_addr, &b->src.sin6.sin6_addr)
             && IN6_ARE_ADDR_EQUAL(&a->dst.sin6.sin6_addr, &b->dst.sin6.sin6_addr);
     }
+#endif
 }
 
 
@@ -247,6 +277,7 @@ fwany_ipX_addr_set_src(ipX_addr_t *fwdsrc, const struct sockaddr *peer)
         peerip4.addr = peer4->sin_addr.s_addr;
         mapping = pxremap_inbound_ip4(&fwdsrc->ip4, &peerip4);
     }
+#ifdef IPv6
     else if (peer->sa_family == AF_INET6) {
         const struct sockaddr_in6 *peer6 = (const struct sockaddr_in6 *)peer;
         ip6_addr_t peerip6;
@@ -254,6 +285,7 @@ fwany_ipX_addr_set_src(ipX_addr_t *fwdsrc, const struct sockaddr *peer)
         memcpy(&peerip6, &peer6->sin6_addr, sizeof(ip6_addr_t));
         mapping = pxremap_inbound_ip6(&fwdsrc->ip6, &peerip6);
     }
+#endif
     else {
         mapping = PXREMAP_FAILED;
     }

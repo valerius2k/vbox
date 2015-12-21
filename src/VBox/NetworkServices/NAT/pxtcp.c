@@ -38,6 +38,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <poll.h>
+#ifdef RT_OS_OS2
+# define SHUT_RD SO_RCV_SHUTDOWN
+# define SHUT_WR SO_SND_SHUTDOWN
+# define SHUT_RDWR (SO_RCV_SHUTDOWN | SO_SND_SHUTDOWN)
+typedef int socklen_t;
+#endif
 
 #include <err.h>                /* BSD'ism */
 #else
@@ -1245,7 +1251,12 @@ pxtcp_pcb_accept_confirm(void *ctx)
 void
 pxtcp_pcb_connect(struct pxtcp *pxtcp, const struct fwspec *fwspec)
 {
+#ifdef IPv6
     struct sockaddr_storage ss;
+#else
+    struct sockaddr_in ss;
+#endif
+
     socklen_t sslen;
     struct tcp_pcb *pcb;
     ipX_addr_t src_addr, dst_addr;
@@ -1279,7 +1290,10 @@ pxtcp_pcb_connect(struct pxtcp *pxtcp, const struct fwspec *fwspec)
         goto reset;
     }
 
-    if (ss.ss_family == PF_INET) {
+#ifdef IPv6
+    if (ss.ss_family == PF_INET)
+#endif
+    {
         const struct sockaddr_in *peer4 = (const struct sockaddr_in *)&ss;
 
         src_port = peer4->sin_port;
@@ -1287,6 +1301,7 @@ pxtcp_pcb_connect(struct pxtcp *pxtcp, const struct fwspec *fwspec)
         memcpy(&dst_addr.ip4, &fwspec->dst.sin.sin_addr, sizeof(ip_addr_t));
         dst_port = fwspec->dst.sin.sin_port;
     }
+#ifdef IPv6
     else { /* PF_INET6 */
         const struct sockaddr_in6 *peer6 = (const struct sockaddr_in6 *)&ss;
         ip_set_v6(pcb, 1);
@@ -1296,6 +1311,7 @@ pxtcp_pcb_connect(struct pxtcp *pxtcp, const struct fwspec *fwspec)
         memcpy(&dst_addr.ip6, &fwspec->dst.sin6.sin6_addr, sizeof(ip6_addr_t));
         dst_port = fwspec->dst.sin6.sin6_port;
     }
+#endif
 
     /* lwip port arguments are in host order */
     src_port = ntohs(src_port);
