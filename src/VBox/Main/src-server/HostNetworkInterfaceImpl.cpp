@@ -27,7 +27,7 @@
 
 #include <iprt/cpp/utils.h>
 
-#ifdef RT_OS_FREEBSD
+#if defined(RT_OS_FREEBSD) || defined(RT_OS_OS2)
 # include <netinet/in.h> /* INADDR_NONE */
 #endif /* RT_OS_FREEBSD */
 
@@ -88,6 +88,11 @@ HRESULT HostNetworkInterface::init(Bstr aInterfaceName, Bstr aShortName, Guid aG
     autoInitSpan.setSucceeded();
 
     return S_OK;
+}
+
+Bstr HostNetworkInterface::i_composeNetworkName(const Utf8Str aShortName)
+{
+    return Utf8Str("HostInterfaceNetworking-").append(aShortName);
 }
 
 #ifdef VBOX_WITH_RESOURCE_USAGE_API
@@ -179,10 +184,6 @@ HRESULT HostNetworkInterface::updateConfig()
     return rc == VERR_NOT_IMPLEMENTED ? E_NOTIMPL : E_FAIL;
 }
 
-Bstr HostNetworkInterface::i_composeNetworkName(const Utf8Str aShortName)
-{
-    return Utf8Str("HostInterfaceNetworking-").append(aShortName);
-}
 /**
  * Initializes the host object.
  *
