@@ -47,6 +47,9 @@
 
 #else  /* VBOX */
 # ifndef _MSC_VER
+# ifdef RT_OS_OS2
+# include <sys/types.h>
+# endif
 # include <sys/resource.h>
 # include <unistd.h>
 # else

@@ -32,6 +32,9 @@
 # ifndef RT_OS_SOLARIS
 #  include <syslimits.h>    /* PATH_MAX */
 # endif
+# ifdef RT_OS_OS2
+#  include <sys/time.h>
+# endif
 # include <libgen.h>        /* basename */
 # include <unistd.h>
 # include <strings.h>       /* bzero & bcopy.*/
