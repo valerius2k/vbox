@@ -4502,7 +4502,7 @@ static int ataIOPortReadU8(PATACONTROLLER pCtl, uint32_t addr, uint32_t *pu32)
                 cBusy = 0;
                 PDMCritSectLeave(&pCtl->lock);
 
-#ifndef RT_OS_WINDOWS
+#if !defined(RT_OS_WINDOWS) && !defined(RT_OS_OS2)
                 /*
                  * The thread might be stuck in an I/O operation
                  * due to a high I/O load on the host. (see @bugref{3301})

@@ -51,7 +51,7 @@ extern "C" {
 # include <poll.h>
 # include <errno.h>
 #endif
-#ifdef RT_OS_FREEBSD
+#if defined(RT_OS_FREEBSD) || defined(RT_OS_OS2)
 # include <netinet/in.h>
 #endif
 #include <iprt/semaphore.h>

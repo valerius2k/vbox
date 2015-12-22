@@ -30,6 +30,7 @@ typedef int socklen_t;
 # include <sys/socket.h>
 # undef mbstat
 typedef int socklen_t;
+# undef MT_HEADER /* conflicts with the one in "mbuf.h" */
 #endif
 
 #define CONFIG_QEMU
