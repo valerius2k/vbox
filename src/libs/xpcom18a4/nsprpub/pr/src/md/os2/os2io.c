@@ -153,6 +153,12 @@ _PR_MD_OPEN(const char *name, PRIntn osflags, int mode)
 
     ULONG fattr;
 
+    /* DosOpen doesn't understand /dev/null but understands /dev/nul. Make
+     * the former a synonym for the latter (for symmetry with kLIBC and
+     * to satisfy dependent code in VirtualBox). */
+    if (strcmp(name, "/dev/null") == 0)
+        name = "/dev/nul";
+
     if (osflags & PR_SYNC) access |= OPEN_FLAGS_WRITE_THROUGH;
 
     /* we don't want to let children inherit file handles by default */
