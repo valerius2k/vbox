@@ -8,7 +8,9 @@
 #ifdef CONFIG_MACHINE_BSWAP_H
 #include <sys/endian.h>
 #include <sys/types.h>
+#ifndef CONFIG_OS2
 #include <machine/bswap.h>
+#endif
 #else
 
 #ifdef CONFIG_BYTESWAP_H

@@ -29,6 +29,7 @@
 #  define CONFIG_WIN32 1
 # elif defined(RT_OS_OS2)
 #  define CONFIG_OS2
+#  define CONFIG_MACHINE_BSWAP_H
 # elif defined(RT_OS_DARWIN)
 #  define CONFIG_DARWIN
 # elif defined(RT_OS_FREEBSD) || defined(RT_OS_NETBSD) || defined(RT_OS_OPENBSD)
