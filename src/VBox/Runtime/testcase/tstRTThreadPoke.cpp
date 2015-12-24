@@ -40,7 +40,7 @@
 static RTTEST g_hTest;
 
 
-#ifndef RT_OS_WINDOWS
+#if !defined(RT_OS_WINDOWS) && !defined(RT_OS_OS2)
 
 static DECLCALLBACK(int) test1Thread(RTTHREAD hSelf, void *pvUser)
 {
@@ -60,7 +60,7 @@ static void test1(void)
     RTTESTI_CHECK_RC(RTThreadWait(hThread, RT_INDEFINITE_WAIT, NULL), VINF_SUCCESS);
 }
 
-#endif /* !RT_OS_WINDOWS */
+#endif /* !RT_OS_WINDOWS && !RT_OS_OS2 */
 
 
 int main()
@@ -68,8 +68,8 @@ int main()
     RTEXITCODE rcExit = RTTestInitAndCreate("tstRTThreadPoke", &g_hTest);
     if (rcExit != RTEXITCODE_SUCCESS)
         return rcExit;
-#ifdef RT_OS_WINDOWS
-    return RTTestSkipAndDestroy(g_hTest, "No RTThreadPoke on Windows");
+#if defined(RT_OS_WINDOWS) || defined(RT_OS_OS2)
+    return RTTestSkipAndDestroy(g_hTest, "No RTThreadPoke on Windows and OS/2");
 
 #else
     test1();

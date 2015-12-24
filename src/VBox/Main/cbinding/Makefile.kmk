@@ -137,6 +137,8 @@ if !defined(VBOX_ONLY_SDK)
   	tstCAPIGlue.c
   tstCAPIGlue_LIBS = \
   	$(VBoxCAPIGlue_1_TARGET)
+  tstCAPIGlue_LIBS.os2 = \
+        pthread
  endif
 
 endif # ! VBOX_ONLY_SDK
