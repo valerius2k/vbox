@@ -3207,7 +3207,7 @@ endif
 
 SDK_VBOX_ZLIB_STATIC  = .
 SDK_VBOX_ZLIB_STATIC_EXTENDS ?= VBOX_ZLIB
-if1of ($(KBUILD_TARGET), os2 win) # Not required on solaris.
+if1of ($(KBUILD_TARGET), win) # Not required on solaris.
  SDK_VBOX_ZLIB_STATIC_LIBS ?= $(PATH_STAGE_LIB)/VBox-zlib-static$(VBOX_SUFF_LIB)
 endif
 
@@ -4257,7 +4257,7 @@ ifndef SDK_VBOX_LIBXML2_LIBS
  TEMPLATE_VBoxR3Static_LIBS        += \
  	$(PATH_STAGE_LIB)/VBox-libxml2-static$(VBOX_SUFF_LIB)
 endif
-if1of ($(KBUILD_TARGET),os2 win)
+if1of ($(KBUILD_TARGET),win)
  TEMPLATE_VBoxR3Static_LIBS        += \
  	$(PATH_STAGE_LIB)/VBox-liblzf-static$(VBOX_SUFF_LIB) \
  	$(PATH_STAGE_LIB)/VBox-zlib-static$(VBOX_SUFF_LIB)
