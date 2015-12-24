@@ -28,7 +28,7 @@
 
 #ifdef RT_OS_WINDOWS
 # include <Windows.h>
-#else
+#elif !defined(RT_OS_OS2)
 # ifdef RT_OS_DARWIN
 #  define _XOPEN_SOURCE
 # endif

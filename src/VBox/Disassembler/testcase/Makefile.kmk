@@ -30,6 +30,9 @@ tstDisasm-1_LIBS        = \
 	$(PATH_STAGE_LIB)/DisasmR3$(VBOX_SUFF_LIB) \
 	$(LIB_RUNTIME)
 
+# Fake yasm v1.2.0.0 on OS/2 (where nasm is actually used)
+tstDisasm-1_DEFS.os2    = __YASM_VERSION_ID__=00010000h
+
 
 PROGRAMS += tstDisasm-2
 tstDisasm-2_TEMPLATE    = VBOXR3TSTEXE

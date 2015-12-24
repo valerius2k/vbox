@@ -103,6 +103,9 @@ g_r80_Three:    dt 3.0
 g_r80_Ten:      dt 10.0
 g_r80_Eleven:   dt 11.0
 g_r80_ThirtyTwo:dt 32.0
+%ifndef __NASM__
+; @todo NASM doesn't understand integers in DT for some reason,
+; need to find a way to specify these constants using real form...
 g_r80_Min:      dt 000018000000000000000h
 g_r80_Max:      dt 07ffeffffffffffffffffh
 g_r80_Inf:      dt 07fff8000000000000000h
@@ -113,6 +116,7 @@ g_r80_SNaN:     dt 07fff8000000000000001h
 g_r80_SNaNMax:  dt 07fffbfffffffffffffffh
 g_r80_DnMin:    dt 000000000000000000001h
 g_r80_DnMax:    dt 000007fffffffffffffffh
+%endif
 
 g_r32V1:        dd 3.2
 g_r32V2:        dd -1.9
@@ -126,7 +130,9 @@ g_r32D0:        dd 000200000h
 ;; @name Upconverted Floating point constants
 ; @{
 ;g_r80_r32_0dot1:        dt 0.1
+%ifndef __NASM__
 g_r80_r32_3dot2:        dt 04000cccccd0000000000h
+%endif
 ;g_r80_r32_Zero:         dt 0.0
 ;g_r80_r32_One:          dt 1.0
 ;g_r80_r32_Two:          dt 2.0
@@ -3154,6 +3160,7 @@ BEGINPROC   x861_TestFPUInstr1
         FxSaveCheckStNValueConst xSP, 0, REF(g_r80_3dot2)
         FxSaveCheckStNValueConst xSP, 1, REF(g_r80_0dot1)
 
+%ifndef __NASM__
         ; Masked #IA caused by SNaN.
         fninit
         fld     tword [REF(g_r80_SNaN)]
@@ -3167,6 +3174,7 @@ BEGINPROC   x861_TestFPUInstr1
         FpuCheckOpcodeCsIp     { fstp dword [xBX] }
         FxSaveCheckFSW xSP, X86_FSW_UE | X86_FSW_PE, X86_FSW_C0 | X86_FSW_C2 | X86_FSW_C3
         CheckMemoryR32ValueConst xBX, REF(g_r32_Zero)
+%endif
 
         ; Masked #P caused by a decimal value.
         fninit
@@ -3197,6 +3205,7 @@ BEGINPROC   x861_TestFPUInstr1
         FxSaveCheckStNValueConst xSP, 1, REF(g_r80_3dot2)
         FxSaveCheckStNValueConst xSP, 2, REF(g_r80_0dot1)
 
+%ifndef __NASM__
         ; #IA caused by SNaN.
         FpuInitWithCW X86_FCW_PC_64 | X86_FCW_RC_NEAREST
         fld     tword [REF(g_r80_SNaN)]
@@ -3228,6 +3237,7 @@ BEGINPROC   x861_TestFPUInstr1
         FpuTrapOpcodeCsIp      { fstp dword [xBX] }
         FxSaveCheckFSW xSP, X86_FSW_OE | X86_FSW_ES | X86_FSW_B, X86_FSW_C0 | X86_FSW_C2 | X86_FSW_C3
         CheckMemoryValue dword, xBX, 0xffeeddcc
+%endif
 
         ; #P caused by a decimal value - rounded value is written just like if it was masked.
         FpuInitWithCW X86_FCW_PC_64 | X86_FCW_RC_NEAREST
