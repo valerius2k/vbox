@@ -2186,6 +2186,7 @@ RuntimeR0Drv_SOURCES.os2 = \
 	generic/RTMpCpuIdToSetIndex-generic.cpp \
 	generic/RTMpIsCpuPossible-generic.cpp \
 	generic/RTMpGetCount-generic.cpp \
+	generic/RTMpGetCoreCount-generic.cpp \
 	generic/RTMpGetMaxCpuId-generic.cpp \
 	generic/RTMpGetOnlineCount-generic.cpp \
 	generic/RTMpGetOnlineSet-generic.cpp \
@@ -2198,6 +2199,7 @@ RuntimeR0Drv_SOURCES.os2 = \
 	os2/sys0.asm \
 	r0drv/generic/RTMpIsCpuWorkPending-r0drv-generic.cpp \
 	r0drv/generic/RTMpOn-r0drv-generic.cpp \
+	r0drv/generic/RTMpPokeCpu-r0drv-generic.cpp \
 	r0drv/generic/mpnotification-r0drv-generic.cpp \
 	r0drv/generic/threadctxhooks-r0drv-generic.cpp \
 	r0drv/memobj-r0drv.cpp \
@@ -2206,6 +2208,7 @@ RuntimeR0Drv_SOURCES.os2 = \
 	r0drv/os2/assert-r0drv-os2.cpp \
 	r0drv/os2/assertA-r0drv-os2.asm \
 	r0drv/os2/initterm-r0drv-os2.cpp \
+	r0drv/os2/mp-r0drv-os2.cpp \
 	r0drv/os2/memobj-r0drv-os2.cpp \
 	r0drv/os2/memuserkernel-r0drv-os2.cpp \
 	r0drv/os2/os2imports.imp \
@@ -2216,6 +2219,7 @@ RuntimeR0Drv_SOURCES.os2 = \
 	r0drv/os2/semevent-r0drv-os2.cpp \
 	r0drv/os2/semeventmulti-r0drv-os2.cpp \
 	r0drv/os2/semfastmutex-r0drv-os2.cpp \
+	r0drv/os2/semmutex-r0drv-os2.cpp \
 	r0drv/os2/spinlock-r0drv-os2.cpp \
 	r0drv/os2/thread-r0drv-os2.cpp \
 	r0drv/os2/thread2-r0drv-os2.cpp \

@@ -461,7 +461,7 @@ typedef enum SUPGIPMODE
 #if defined(IN_SUP_R3) || defined(IN_SUP_R0)
 extern DECLEXPORT(PSUPGLOBALINFOPAGE)   g_pSUPGlobalInfoPage;
 
-#elif !defined(IN_RING0) || defined(RT_OS_WINDOWS) || defined(RT_OS_SOLARIS)
+#elif !defined(IN_RING0) || defined(RT_OS_WINDOWS) || defined(RT_OS_SOLARIS) || defined(RT_OS_OS2)
 extern DECLIMPORT(PSUPGLOBALINFOPAGE)   g_pSUPGlobalInfoPage;
 
 #else /* IN_RING0 && !RT_OS_WINDOWS */

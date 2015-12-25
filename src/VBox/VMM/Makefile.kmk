@@ -389,6 +389,7 @@ if1of ($(VBOX_LDR_FMT), pe lx)
 	$(SED) \
 		-e '/not-os2/d' \
 		-e '/not-amd64/d' \
+		-e '/not-x86/d' \
 		-e 's/^[ \t][ \t]*\([a-zA-Z]\)/    _\1/' \
 		-e 's/[ \t]DATA[ \t]*/ /'  \
 		--output $@ $<
