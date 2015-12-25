@@ -38,7 +38,7 @@
 #include <VBox/disopcode.h>
 #include <iprt/string.h>
 
-#if defined(IN_RING0) && !defined(RT_OS_WINDOWS) /* Too lazy to make import libs. */
+#if defined(IN_RING0) && !defined(RT_OS_WINDOWS) && !defined(RT_OS_OS2) /* Too lazy to make import libs. */
 extern "C" DECLIMPORT(int) MyPrintf(const char *pszFormat, ...);
 # define MY_PRINTF(a) MyPrintf a
 #else
