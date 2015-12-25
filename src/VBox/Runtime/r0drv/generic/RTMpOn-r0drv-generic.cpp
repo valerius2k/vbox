@@ -72,7 +72,7 @@ RTDECL(int) RTMpOnSpecific(RTCPUID idCpu, PFNRTMPWORKER pfnWorker, void *pvUser1
 RT_EXPORT_SYMBOL(RTMpOnSpecific);
 
 
-RTDECL(int) RTMpOnPair(RTCPUID idCpu1, RTCPUID idCpu2, PFNRTMPWORKER pfnWorker, void *pvUser1, void *pvUser2)
+RTDECL(int) RTMpOnPair(RTCPUID idCpu1, RTCPUID idCpu2, uint32_t fFlags, PFNRTMPWORKER pfnWorker, void *pvUser1, void *pvUser2)
 {
     NOREF(idCpu1);
     NOREF(idCpu2);
