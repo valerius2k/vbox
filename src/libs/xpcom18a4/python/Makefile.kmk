@@ -66,6 +66,7 @@ ifndef VBOX_ONLY_SDK
 VBoxPythonBase_TEMPLATE = XPCOM
 VBoxPythonBase_CXXFLAGS = -Wno-write-strings
 VBoxPythonBase_DLLSUFF.darwin = .so
+VBoxPythonBase_DLLSUFF.os2 = .pyd
 VBoxPythonBase_DEFS     = \
 	_IMPL_NS_COM \
 	_IMPL_NS_BASE \
@@ -102,8 +103,13 @@ VBoxPythonBase_SOURCES  = \
 	src/TypeObject.cpp \
 	src/VariantUtils.cpp
 VBoxPythonBase_LIBS     = \
-	$(PATH_STAGE_LIB)/VBoxCOM$(VBOX_SUFF_LIB) \
-	$(PATH_STAGE_BIN)/VBoxXPCOM$(VBOX_SUFF_DLL)
+	$(PATH_STAGE_LIB)/VBoxCOM$(VBOX_SUFF_LIB)
+
+ifeq ($(KBUILD_TARGET),os2)
+ VBoxPythonBase_LIBS	+= $(PATH_STAGE_BIN)/VBoxXCOM$(VBOX_SUFF_DLL)
+else
+ VBoxPythonBase_LIBS	+= $(PATH_STAGE_BIN)/VBoxXPCOM$(VBOX_SUFF_DLL)
+endif
 
 # 32-bit base.
 VBoxPythonBase_x86_TEMPLATE = XPCOM-x86
@@ -122,6 +128,7 @@ DLLS += VBoxPython2_3
 VBoxPython2_3_EXTENDS    = VBoxPythonBase
 VBoxPython2_3_EXTENDS_BY = appending
 VBoxPython2_3_TEMPLATE   = XPCOM$(if-expr "$(KBUILD_TARGET)" == "darwin",OSX104,)
+VBoxPython2_3_NAME.os2   = VBoxPy23
 VBoxPython2_3_INCS       = $(VBOX_PYTHON23_INC)
 VBoxPython2_3_LIBS       = $(VBOX_PYTHON23_LIB)
 
@@ -142,6 +149,7 @@ ifdef VBOX_PYTHON24_INC
 DLLS += VBoxPython2_4
 VBoxPython2_4_EXTENDS    = VBoxPythonBase
 VBoxPython2_4_EXTENDS_BY = appending
+VBoxPython2_4_NAME.os2   = VBoxPy24
 VBoxPython2_4_INCS       = $(VBOX_PYTHON24_INC)
 VBoxPython2_4_LIBS       = $(VBOX_PYTHON24_LIB)
 
@@ -161,6 +169,7 @@ ifdef VBOX_PYTHON25_INC
 DLLS += VBoxPython2_5
 VBoxPython2_5_EXTENDS    = VBoxPythonBase
 VBoxPython2_5_EXTENDS_BY = appending
+VBoxPython2_5_NAME.os2   = VBoxPy25
 VBoxPython2_5_INCS       = $(VBOX_PYTHON25_INC)
 VBoxPython2_5_LIBS       = $(VBOX_PYTHON25_LIB)
 
@@ -181,6 +190,7 @@ DLLS += VBoxPython2_6
 VBoxPython2_6_EXTENDS    = VBoxPythonBase
 VBoxPython2_6_EXTENDS_BY = appending
 VBoxPython2_6_TEMPLATE   = XPCOM$(if-expr "$(KBUILD_TARGET)" == "darwin" && "$(VBOX_DEF_MACOSX_VERSION_MIN)" <= "10.6",OSX106,)
+VBoxPython2_6_NAME.os2   = VBoxPy26
 VBoxPython2_6_INCS       = $(VBOX_PYTHON26_INC)
 VBoxPython2_6_LIBS       = $(VBOX_PYTHON26_LIB)
 
@@ -202,6 +212,7 @@ DLLS += VBoxPython2_7
 VBoxPython2_7_EXTENDS    = VBoxPythonBase
 VBoxPython2_7_EXTENDS_BY = appending
 VBoxPython2_7_TEMPLATE   = XPCOM$(if-expr "$(KBUILD_TARGET)" == "darwin" && "$(VBOX_DEF_MACOSX_VERSION_MIN)" <= "10.7",OSX107,)
+VBoxPython2_7_NAME.os2   = VBoxPy27
 VBoxPython2_7_INCS       = $(VBOX_PYTHON27_INC)
 VBoxPython2_7_LIBS       = $(VBOX_PYTHON27_LIB)
 
@@ -221,6 +232,7 @@ ifdef VBOX_PYTHONDEF_INC
 #
 DLLS += VBoxPython
 VBoxPython_EXTENDS      = VBoxPythonBase
+VBoxPython_NAME.os2     = VBoxPy
 VBoxPython_DEFS         = $(filter-out VBOX_PYXPCOM_VERSIONED,$(VBoxPythonBase_DEFS))
 VBoxPython_INCS         = $(VBoxPythonBase_INCS) $(VBOX_PYTHONDEF_INC)
 if "$(KBUILD_TARGET)" == "linux"

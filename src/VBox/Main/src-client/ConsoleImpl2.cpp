@@ -2871,7 +2871,7 @@ int Console::i_configConstructorInner(PUVM pUVM, PVM pVM, AutoWriteLock *pAlock)
             if (/* mode != ClipboardMode_Disabled */ true)
             {
                 /* Load the service */
-                rc = pVMMDev->hgcmLoadService("VBoxSharedClipboard", "VBoxSharedClipboard");
+                rc = pVMMDev->hgcmLoadService(DLL_NAME("VBoxSharedClipboard", "VBoxSClp"), "VBoxSharedClipboard");
                 if (RT_FAILURE(rc))
                 {
                     LogRel(("Shared clipboard is not available, rc=%Rrc\n", rc));
@@ -2905,7 +2905,7 @@ int Console::i_configConstructorInner(PUVM pUVM, PVM pVM, AutoWriteLock *pAlock)
             if (   hrc   == S_OK
                 && value == "1")
             {
-                rc = pVMMDev->hgcmLoadService("VBoxHostChannel", "VBoxHostChannel");
+                rc = pVMMDev->hgcmLoadService(DLL_NAME("VBoxHostChannel", "VBoxHChn"), "VBoxHostChannel");
                 if (RT_FAILURE(rc))
                 {
                     LogRel(("VBoxHostChannel is not available, rc=%Rrc\n", rc));
@@ -2924,7 +2924,7 @@ int Console::i_configConstructorInner(PUVM pUVM, PVM pVM, AutoWriteLock *pAlock)
             hrc = pMachine->COMGETTER(DnDMode)(&enmMode);                                   H();
 
             /* Load the service */
-            rc = pVMMDev->hgcmLoadService("VBoxDragAndDropSvc", "VBoxDragAndDropSvc");
+            rc = pVMMDev->hgcmLoadService(DLL_NAME ("VBoxDragAndDropSvc", "VBoxDnD"), "VBoxDragAndDropSvc");
             if (RT_FAILURE(rc))
             {
                 LogRel(("Drag and drop service is not available, rc=%Rrc\n", rc));
@@ -5646,7 +5646,7 @@ int configSetGlobalPropertyFlags(VMMDev * const pVMMDev,
     AssertReturn(pConsole->m_pVMMDev, VERR_INVALID_POINTER);
 
     /* Load the service */
-    int rc = pConsole->m_pVMMDev->hgcmLoadService("VBoxGuestPropSvc", "VBoxGuestPropSvc");
+    int rc = pConsole->m_pVMMDev->hgcmLoadService(DLL_NAME("VBoxGuestPropSvc", "VBoxSIS"), "VBoxGuestPropSvc");
 
     if (RT_FAILURE(rc))
     {
@@ -5802,7 +5802,7 @@ int configSetGlobalPropertyFlags(VMMDev * const pVMMDev,
     ComObjPtr<Console> pConsole = static_cast<Console *>(pvConsole);
 
     /* Load the service */
-    int rc = pConsole->m_pVMMDev->hgcmLoadService("VBoxGuestControlSvc", "VBoxGuestControlSvc");
+    int rc = pConsole->m_pVMMDev->hgcmLoadService(DLL_NAME("VBoxGuestControlSvc", "VBoxGCtl"), "VBoxGuestControlSvc");
 
     if (RT_FAILURE(rc))
     {

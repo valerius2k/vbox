@@ -2168,11 +2168,7 @@ static int remLoadProperObj(PVM pVM)
     /*
      * Load the VBoxREM32/64 object/DLL.
      */
-#ifdef RT_OS_OS2
-    const char *pszModule = remIs64bitEnabled(pVM) ? "VBoxRM64" : "VBoxRM32";
-#else
-    const char *pszModule = remIs64bitEnabled(pVM) ? "VBoxREM64" : "VBoxREM32";
-#endif
+    const char *pszModule = remIs64bitEnabled(pVM) ? DLL_NAME("VBoxREM64", "VBoxRM64") : DLL_NAME("VBoxREM32", "VBoxRM32");
     int rc = SUPR3HardenedLdrLoadAppPriv(pszModule, &g_ModREM2, RTLDRLOAD_FLAGS_LOCAL, NULL);
     if (RT_SUCCESS(rc))
     {

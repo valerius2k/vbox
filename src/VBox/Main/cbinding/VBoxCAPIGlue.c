@@ -54,9 +54,7 @@
 # define DYNLIB_NAME        "VBoxXPCOMC.so"
 #elif defined(__APPLE__)
 # define DYNLIB_NAME        "VBoxXPCOMC.dylib"
-#elif defined(__OS2__)
-# define DYNLIB_NAME        "VBoxXPCOMC.dll"
-#elif defined(WIN32)
+#elif defined(WIN32) || defined(__OS2__)
 # define DYNLIB_NAME        "VBoxCAPI.dll"
 #else
 # error "Port me"

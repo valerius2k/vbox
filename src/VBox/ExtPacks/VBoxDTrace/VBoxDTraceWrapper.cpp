@@ -111,7 +111,7 @@ int main(int argc, char **argv)
         if (RT_SUCCESS(rc))
             rc = RTPathAppend(szDTraceCmd, sizeof(szDTraceCmd), RTBldCfgTargetDotArch());
         if (RT_SUCCESS(rc))
-            rc = RTPathAppend(szDTraceCmd, sizeof(szDTraceCmd), "VBoxDTraceCmd");
+            rc = RTPathAppend(szDTraceCmd, sizeof(szDTraceCmd), DLL_NAME("VBoxDTraceCmd", "VBoxDTC"));
         if (RT_SUCCESS(rc))
             rc = RTStrCat(szDTraceCmd, sizeof(szDTraceCmd), RTLdrGetSuff());
         if (RT_FAILURE(rc))

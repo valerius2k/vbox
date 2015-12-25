@@ -91,6 +91,7 @@ if defined(VBOX_WITH_EXTPACK_VBOXDTRACE) && defined(VBOX_WITH_EXTPACK)
  #
  DLLS += VBoxDTraceMain
  VBoxDTraceMain_TEMPLATE = VBoxR3ExtPackDTrace
+ VBoxDTraceMain_NAME.os2 = VBoxDTrc
  VBoxDTraceMain_SOURCES = VBoxDTraceMain.cpp
  $(call VBOX_SET_VER_INFO_DLL,VBoxDTraceMain,VBoxDTrace Main module)
 
@@ -101,6 +102,7 @@ if defined(VBOX_WITH_EXTPACK_VBOXDTRACE) && defined(VBOX_WITH_EXTPACK)
  ifneq ($(KBUILD_TARGET),solaris) # Temporarily disabled on Solaris (not really needed)...
  DLLS += VBoxDTraceCmd
  VBoxDTraceCmd_TEMPLATE = VBoxR3ExtPackDTrace
+ VBoxDTraceCmd_NAME.os2 = VBoxDTC
  VBoxDTraceCmd_DEFS = RTMEM_WRAP_TO_EF_APIS
  #VBoxDTraceCmd_DEFS += YYDEBUG
  VBoxDTraceCmd_DEFS.linux = _XOPEN_SOURCE=700
@@ -299,7 +301,7 @@ if defined(VBOX_WITH_EXTPACK_VBOXDTRACE) && defined(VBOX_WITH_EXTPACK)
   VBOX_VBOXDTRACE_FILES += $(call VBOX_VBOXDTRACE_FILES_MACRO,linux.x86,bin,so)
  endif
  if1of (os2.x86, $(VBOX_WITH_EXTPACK_OS_ARCHS))
-  VBOX_VBOXDTRACE_FILES += $(call VBOX_VBOXDTRACE_FILES_MACRO,os2.x86,bin,so)
+  VBOX_VBOXDTRACE_FILES += $(call VBOX_VBOXDTRACE_FILES_MACRO,os2.x86,bin,dll)
  endif
  if1of (solaris.amd64, $(VBOX_WITH_EXTPACK_OS_ARCHS))
   VBOX_VBOXDTRACE_FILES += $(call VBOX_VBOXDTRACE_FILES_MACRO,solaris.amd64,bin,so)

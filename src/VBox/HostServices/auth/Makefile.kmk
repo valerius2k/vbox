@@ -43,6 +43,7 @@ ifndef VBOX_ONLY_SDK
  endif
 endif
 VBoxAuthSimple_TEMPLATE = VBOXMAINCLIENTDLL
+VBoxAuthSimple_NAME.os2 = VBoxAutS
 VBoxAuthSimple_SOURCES = simple/VBoxAuthSimple.cpp
 VBoxAuthSimple_SOURCES.win = simple/VBoxAuthSimple.rc
 

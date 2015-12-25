@@ -1200,6 +1200,19 @@
 #endif
 
 
+/** @def DLL_NAME
+ * Return a normal or a short DLL name literal, depending on the platform.
+ * Currently, returns @a short on OS/2 and @a name on all other platforms.
+ * @param   name    Normal DLL name literal.
+ * @param   short   Short DLL name literal.
+ */
+#if defined(RT_OS_OS2)
+# define DLL_NAME(name,short) short
+#else
+# define DLL_NAME(name,short) name
+#endif
+
+
 /** @def IN_RT_STATIC
  * Used to indicate whether we're linking against a static IPRT
  * or not. The IPRT symbols will be declared as hidden (if

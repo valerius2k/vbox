@@ -78,7 +78,9 @@ if !defined(VBOX_ONLY_SDK)
  VBoxCAPI_TEMPLATE = VBOXMAINCLIENTDLL
  ifdef VBOX_WITH_XPCOM
   # Keep old name on XPCOM so that legacy code is happy.
-  VBoxCAPI_INST = $(INST_BIN)VBoxXPCOMC$(VBOX_SUFF_DLL)
+  ifneq ($(KBUILD_TARGET),os2)
+   VBoxCAPI_INST = $(INST_BIN)VBoxXPCOMC$(VBOX_SUFF_DLL)
+  endif
  endif
  VBoxCAPI_DEFS = IN_VBOXCAPI
  VBoxCAPI_SOURCES = \

@@ -130,8 +130,8 @@ static SUPINSTFILE const    g_aSupInstallFiles[] =
     {   kSupIFT_Dll,  kSupID_AppSharedLib,      false, "VBoxVMM" SUPLIB_DLL_SUFF },
     {   kSupIFT_Dll,  kSupID_AppSharedLib,      false, "VBoxREM" SUPLIB_DLL_SUFF },
 #if HC_ARCH_BITS == 32
-    {   kSupIFT_Dll,  kSupID_AppSharedLib,       true, "VBoxREM32" SUPLIB_DLL_SUFF },
-    {   kSupIFT_Dll,  kSupID_AppSharedLib,       true, "VBoxREM64" SUPLIB_DLL_SUFF },
+    {   kSupIFT_Dll,  kSupID_AppSharedLib,       true, DLL_NAME("VBoxREM32", "VBoxRM32") SUPLIB_DLL_SUFF },
+    {   kSupIFT_Dll,  kSupID_AppSharedLib,       true, DLL_NAME("VBoxREM64", "VBoxRM64") SUPLIB_DLL_SUFF },
 #endif
     {   kSupIFT_Dll,  kSupID_AppSharedLib,      false, "VBoxDD" SUPLIB_DLL_SUFF },
     {   kSupIFT_Dll,  kSupID_AppSharedLib,      false, "VBoxDD2" SUPLIB_DLL_SUFF },
@@ -143,21 +143,21 @@ static SUPINSTFILE const    g_aSupInstallFiles[] =
 //#endif
 
 //#ifdef VBOX_WITH_SHARED_CLIPBOARD
-    {   kSupIFT_Dll,  kSupID_AppPrivArch,        true, "VBoxSharedClipboard" SUPLIB_DLL_SUFF },
+    {   kSupIFT_Dll,  kSupID_AppPrivArch,        true, DLL_NAME("VBoxSharedClipboard", "VBoxSClp") SUPLIB_DLL_SUFF },
 //#endif
 //#ifdef VBOX_WITH_SHARED_FOLDERS
-    {   kSupIFT_Dll,  kSupID_AppPrivArch,        true, "VBoxSharedFolders" SUPLIB_DLL_SUFF },
+    {   kSupIFT_Dll,  kSupID_AppPrivArch,        true, DLL_NAME("VBoxSharedFolders", "VBoxSFld") SUPLIB_DLL_SUFF },
 //#endif
 //#ifdef VBOX_WITH_DRAG_AND_DROP
-    {   kSupIFT_Dll,  kSupID_AppPrivArch,        true, "VBoxDragAndDropSvc" SUPLIB_DLL_SUFF },
+    {   kSupIFT_Dll,  kSupID_AppPrivArch,        true, DLL_NAME("VBoxDragAndDropSvc", "VBoxDnD") SUPLIB_DLL_SUFF },
 //#endif
 //#ifdef VBOX_WITH_GUEST_PROPS
-    {   kSupIFT_Dll,  kSupID_AppPrivArch,        true, "VBoxGuestPropSvc" SUPLIB_DLL_SUFF },
+    {   kSupIFT_Dll,  kSupID_AppPrivArch,        true, DLL_NAME("VBoxGuestPropSvc", "VBoxSIS") SUPLIB_DLL_SUFF },
 //#endif
 //#ifdef VBOX_WITH_GUEST_CONTROL
-    {   kSupIFT_Dll,  kSupID_AppPrivArch,        true, "VBoxGuestControlSvc" SUPLIB_DLL_SUFF },
+    {   kSupIFT_Dll,  kSupID_AppPrivArch,        true, DLL_NAME("VBoxGuestControlSvc", "VBoxGCtl") SUPLIB_DLL_SUFF },
 //#endif
-    {   kSupIFT_Dll,  kSupID_AppPrivArch,        true, "VBoxHostChannel" SUPLIB_DLL_SUFF },
+    {   kSupIFT_Dll,  kSupID_AppPrivArch,        true, DLL_NAME("VBoxHostChannel", "VBoxHChn") SUPLIB_DLL_SUFF },
     {   kSupIFT_Dll,  kSupID_AppPrivArch,        true, "VBoxSharedCrOpenGL" SUPLIB_DLL_SUFF },
     {   kSupIFT_Dll,  kSupID_AppPrivArch,        true, "VBoxOGLhostcrutil" SUPLIB_DLL_SUFF },
     {   kSupIFT_Dll,  kSupID_AppPrivArch,        true, "VBoxOGLhosterrorspu" SUPLIB_DLL_SUFF },

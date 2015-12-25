@@ -26,7 +26,7 @@ include $(PATH_SUB_CURRENT)/testcase/Makefile.kmk
 #
 DLLS += VBoxGuestControlSvc
 VBoxGuestControlSvc_TEMPLATE  = VBOXR3
-VBoxGuestControlSvc_NAME.os2  = VBoxGCTL
+VBoxGuestControlSvc_NAME.os2  = VBoxGCtl
 VBoxGuestControlSvc_DEFS      = VBOX_WITH_HGCM
 VBoxGuestControlSvc_INCS      = $(PATH_ROOT)/src/VBox/Main/include
 VBoxGuestControlSvc_INCS.win  = \

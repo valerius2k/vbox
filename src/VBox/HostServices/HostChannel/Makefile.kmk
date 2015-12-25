@@ -23,6 +23,7 @@ include $(KBUILD_PATH)/subheader.kmk
 #
 DLLS += VBoxHostChannel
 VBoxHostChannel_TEMPLATE  = VBOXR3
+VBoxHostChannel_NAME.os2  = VBoxHChn
 VBoxHostChannel_DEFS      = VBOX_WITH_HGCM
 VBoxHostChannel_INCS.win  = \
 	$(VBOX_PATH_SDK)
