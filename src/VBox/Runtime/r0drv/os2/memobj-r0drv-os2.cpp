@@ -514,8 +514,10 @@ DECLHIDDEN(RTHCPHYS) rtR0MemObjNativeGetPagePhysAddr(PRTR0MEMOBJINTERNAL pMem, s
         case RTR0MEMOBJTYPE_PHYS:
             return pMemOs2->Core.u.Phys.PhysBase + (iPage << PAGE_SHIFT);
 
-        case RTR0MEMOBJTYPE_RES_VIRT:
         case RTR0MEMOBJTYPE_MAPPING:
+            return rtR0MemObjNativeGetPagePhysAddr(pMemOs2->Core.uRel.Child.pParent, iPage);
+
+        case RTR0MEMOBJTYPE_RES_VIRT:
         default:
             return NIL_RTHCPHYS;
     }
