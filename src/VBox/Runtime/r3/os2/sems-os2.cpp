@@ -479,6 +479,7 @@ RTDECL(void) RTSemEventMultiRemoveSignaller(RTSEMEVENTMULTI hEventMultiSem, RTTH
 }
 
 
+#undef RTSemMutexCreate
 RTDECL(int)  RTSemMutexCreate(PRTSEMMUTEX phMutexSem)
 {
     return RTSemMutexCreateEx(phMutexSem, 0 /*fFlags*/, NIL_RTLOCKVALCLASS, RTLOCKVAL_SUB_CLASS_NONE, NULL);
@@ -554,6 +555,7 @@ RTDECL(uint32_t) RTSemMutexSetSubClass(RTSEMMUTEX hMutexSem, uint32_t uSubClass)
 #endif
 }
 
+#undef RTSemMutexRequestNoResume
 RTDECL(int)  RTSemMutexRequestNoResume(RTSEMMUTEX hMutexSem, RTMSINTERVAL cMillies)
 {
     /*
