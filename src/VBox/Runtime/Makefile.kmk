@@ -2198,7 +2198,6 @@ RuntimeR0Drv_SOURCES.os2 = \
 	os2/rtSemWaitOs2ConvertTimeout.cpp \
 	os2/sys0.asm \
 	r0drv/generic/RTMpIsCpuWorkPending-r0drv-generic.cpp \
-	r0drv/generic/RTMpOn-r0drv-generic.cpp \
 	r0drv/generic/RTMpPokeCpu-r0drv-generic.cpp \
 	r0drv/generic/mpnotification-r0drv-generic.cpp \
 	r0drv/generic/threadctxhooks-r0drv-generic.cpp \
