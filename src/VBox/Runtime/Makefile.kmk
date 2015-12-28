@@ -2177,6 +2177,8 @@ RuntimeR0Drv_SOURCES.os2 = \
 	common/string/strncmp.cpp \
 	common/string/strpbrk.cpp \
 	\
+	generic/RTMpOnPair-generic.cpp \
+	\
 	common/misc/thread.cpp \
 	generic/RTAssertShouldPanic-generic.cpp \
 	generic/RTLogWriteDebugger-generic.cpp \
