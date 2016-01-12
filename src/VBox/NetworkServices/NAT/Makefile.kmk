@@ -61,7 +61,6 @@ VBoxNetLwipNAT_SOURCES += VBoxNetLwipNAT.cpp	\
 VBoxNetLwipNAT_LIBS = \
 	$(LIB_RUNTIME)
 VBoxNetLwipNAT_LIBS.solaris += socket nsl
-VBoxNetLwipNAT_LIBS.os2 += poll
 VBoxNetLwipNAT_LDFLAGS.win = /SUBSYSTEM:windows
 
 # Convince Solaris headers to expose socket stuff we need.

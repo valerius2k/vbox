@@ -766,8 +766,6 @@ if !defined(VBOX_ONLY_EXTPACKS)         # Goes on almost to the end of the file.
  VBoxDD_LIBS.darwin     += \
  	$(LIB_REM)
 
- VBoxDD_LIBS.os2        += poll
-
 
  ifdef VBOX_WITH_DYNAMIC_DSDT
   VBoxDD_CLEAN          += $(VBoxDD_0_OUTDIR)/vboxdsl.hex
