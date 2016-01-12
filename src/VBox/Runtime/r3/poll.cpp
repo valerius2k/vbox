@@ -32,7 +32,11 @@
 #ifdef RT_OS_WINDOWS
 # include <Windows.h>
 
-#elif defined(RT_OS_OS2)
+#elif defined(RT_OS_OS2) && defined(VBOX_USE_DOSPIPES)
+// VBOX_USE_DOSPIPES makes use of Dos Named pipes
+// for RTPoll, otherwise local sockets and
+// pipe-posix.cpp will be used instead of
+// pipes and pipe-os2.cpp.
 # define INCL_BASE
 # include <os2.h>
 # include <limits.h>
@@ -42,6 +46,9 @@
 # include <limits.h>
 # include <errno.h>
 # include <sys/poll.h>
+# ifdef RT_OS_OS2
+#  include <sys/socket.h>
+# endif
 #endif
 
 #include <iprt/poll.h>
@@ -117,7 +124,7 @@ typedef struct RTPOLLSETINTERNAL
 #ifdef RT_OS_WINDOWS
     /** Pointer to an array of native handles. */
     HANDLE             *pahNative;
-#elif defined(RT_OS_OS2)
+#elif defined(RT_OS_OS2) && defined(VBOX_USE_DOSPIPES)
     /** The semaphore records. */
     PSEMRECORD          paSemRecs;
     /** The multiple wait semaphore used for non-socket waits. */
@@ -167,7 +174,7 @@ static int rtPollNoResumeWorker(RTPOLLSETINTERNAL *pThis, uint64_t MsStart, RTMS
         return rc;
     }
 
-#if defined(RT_OS_WINDOWS) || defined(RT_OS_OS2)
+#if defined(RT_OS_WINDOWS) || (defined(RT_OS_OS2) && defined(VBOX_USE_DOSPIPES))
     /*
      * Check + prepare the handles before waiting.
      */
@@ -506,7 +513,7 @@ RTDECL(int) RTPollSetCreate(PRTPOLLSET phPollSet)
     pThis->cHandlesAllocated    = 0;
 #ifdef RT_OS_WINDOWS
     pThis->pahNative            = NULL;
-#elif defined(RT_OS_OS2)
+#elif defined(RT_OS_OS2) && defined(VBOX_USE_DOSPIPES)
     pThis->hmux                 = NULLHANDLE;
     APIRET orc = DosCreateMuxWaitSem(NULL, &pThis->hmux, 0, NULL, DCMW_WAIT_ANY);
     if (orc != NO_ERROR)
@@ -544,7 +551,7 @@ RTDECL(int) RTPollSetDestroy(RTPOLLSET hPollSet)
 #ifdef RT_OS_WINDOWS
     RTMemFree(pThis->pahNative);
     pThis->pahNative = NULL;
-#elif defined(RT_OS_OS2)
+#elif defined(RT_OS_OS2) && defined(VBOX_USE_DOSPIPES)
     DosCloseMuxWaitSem(pThis->hmux);
     pThis->hmux = NULLHANDLE;
     RTMemFree(pThis->pafdSelect);
@@ -562,7 +569,7 @@ RTDECL(int) RTPollSetDestroy(RTPOLLSET hPollSet)
     return VINF_SUCCESS;
 }
 
-#ifdef RT_OS_OS2
+#if defined(RT_OS_OS2) && defined(VBOX_USE_DOSPIPES)
 
 /**
  * Checks if @a fd is in the specific socket subset.
@@ -705,7 +712,7 @@ static int rtPollSetGrow(RTPOLLSETINTERNAL *pThis, uint32_t cHandlesNew)
         return VERR_NO_MEMORY;
     pThis->pahNative  = (HANDLE *)pvNew;
 
-#elif defined(RT_OS_OS2)
+#elif defined(RT_OS_OS2) && defined(VBOX_USE_DOSPIPES)
     pvNew = RTMemRealloc(pThis->pahNative, cHandlesNew * sizeof(pThis->pahNative[0]));
     if (!pvNew)
         return VERR_NO_MEMORY;
@@ -823,7 +830,7 @@ RTDECL(int) RTPollSetAdd(RTPOLLSET hPollSet, PCRTHANDLE pHandle, uint32_t fEvent
              */
 #ifdef RT_OS_WINDOWS
             pThis->pahNative[i]             = (HANDLE)hNative;
-#elif defined(RT_OS_OS2)
+#elif defined(RT_OS_OS2) && defined(VBOX_USE_DOSPIPES)
             pThis->pahNative[i]             = hNative;
 #else
             pThis->paPollFds[i].fd          = (int)hNative;
@@ -853,7 +860,7 @@ RTDECL(int) RTPollSetAdd(RTPOLLSET hPollSet, PCRTHANDLE pHandle, uint32_t fEvent
              */
 #ifdef RT_OS_WINDOWS
             /* none */
-#elif defined(RT_OS_OS2)
+#elif defined(RT_OS_OS2) && defined(VBOX_USE_DOSPIPES)
             rc = rtPollSetOs2Add(pThis, i, fEvents);
 #else  /* POSIX */
             if (poll(&pThis->paPollFds[i], 1, 0) < 0)
@@ -903,7 +910,7 @@ RTDECL(int) RTPollSetRemove(RTPOLLSET hPollSet, uint32_t id)
             bool const          fFinalEntry     = pThis->paHandles[i].fFinalEntry;
             RTHANDLETYPE const  enmType         = pThis->paHandles[i].enmType;
             RTHANDLEUNION const uh              = pThis->paHandles[i].u;
-#ifdef RT_OS_OS2
+#if defined(RT_OS_OS2) && defined(VBOX_USE_DOSPIPES)
             uint32_t            fRemovedEvents  = pThis->paHandles[i].fEvents;
             RTHCINTPTR const    hNative         = pThis->pahNative[i];
 #endif
@@ -914,7 +921,7 @@ RTDECL(int) RTPollSetRemove(RTPOLLSET hPollSet, uint32_t id)
             if (cToMove)
             {
                 memmove(&pThis->paHandles[i], &pThis->paHandles[i + 1], cToMove * sizeof(pThis->paHandles[i]));
-#if defined(RT_OS_WINDOWS) || defined(RT_OS_OS2)
+#if defined(RT_OS_WINDOWS) || (defined(RT_OS_OS2) && defined(VBOX_USE_DOSPIPES))
                 memmove(&pThis->pahNative[i], &pThis->pahNative[i + 1], cToMove * sizeof(pThis->pahNative[i]));
 #else
                 memmove(&pThis->paPollFds[i], &pThis->paPollFds[i + 1], cToMove * sizeof(pThis->paPollFds[i]));
@@ -932,7 +939,7 @@ RTDECL(int) RTPollSetRemove(RTPOLLSET hPollSet, uint32_t id)
                         break;
                     }
 
-#ifdef RT_OS_OS2
+#if defined(RT_OS_OS2) && defined(VBOX_USE_DOSPIPES)
             /*
              * Update OS/2 wait structures.
              */
@@ -1052,7 +1059,7 @@ RTDECL(int) RTPollSetEventsChange(RTPOLLSET hPollSet, uint32_t id, uint32_t fEve
             {
 #if defined(RT_OS_WINDOWS)
                 /*nothing*/
-#elif defined(RT_OS_OS2)
+#elif defined(RT_OS_OS2) && defined(VBOX_USE_DOSPIPES)
                 if (pThis->paHandles[i].enmType == RTHANDLETYPE_SOCKET)
                 {
                     uint32_t fOldEvents = 0;

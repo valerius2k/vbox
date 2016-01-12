@@ -54,6 +54,9 @@
 #ifdef RT_OS_SOLARIS
 # include <sys/filio.h>
 #endif
+#ifdef RT_OS_OS2
+# include <sys/socket.h>
+#endif
 
 #include "internal/pipe.h"
 
@@ -119,7 +122,15 @@ static int my_pipe_wrapper(int *paFds, int *piNewPipeSyscall)
         *piNewPipeSyscall = -1;
     }
 
+#if defined(RT_OS_OS2) && !defined(VBOX_USE_DOSPIPES)
+    // Use local sockets + pipe-posix.cpp instead of pipes +
+    // pipe-os2.cpp in code using poll(), as a workaround for 
+    // OS/2 select() and poll() implementation where select / poll
+    // can be used on sockets only, not files or pipes.
+    return socketpair(AF_LOCAL, SOCK_STREAM, 0, paFds);
+#else
     return pipe(paFds);
+#endif
 }
 
 

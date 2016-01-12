@@ -912,7 +912,6 @@ RuntimeR3_SOURCES.os2   = \
 	r3/os2/fileaio-os2.cpp \
 	r3/os2/filelock-os2.cpp \
 	r3/os2/mp-os2.cpp \
-	r3/os2/pipe-os2.cpp \
 	r3/os2/rtProcInitExePath-os2.cpp \
 	r3/os2/sched-os2.cpp \
 	r3/os2/sems-os2.cpp \
@@ -945,6 +944,15 @@ RuntimeR3_SOURCES.os2   = \
 	r3/posix/symlink-posix.cpp \
 	r3/posix/timelocal-posix.cpp \
 	r3/posix/utf8-posix.cpp
+
+ifdef VBOX_USE_DOSPIPES
+ RuntimeR3_DEFS.os2      += VBOX_USE_DOSPIPES
+ RuntimeR3_SOURCES.os2   += \
+	r3/os2/pipe-os2.cpp
+else
+ RuntimeR3_SOURCES.os2   += \
+	r3/posix/pipe-posix.cpp
+endif
 
 RuntimeR3_SOURCES.darwin = \
 	darwin/RTErrConvertFromDarwin.cpp \
