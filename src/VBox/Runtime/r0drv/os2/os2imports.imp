@@ -15,6 +15,7 @@ DOS16FSCTL DOSCALL1 183 ?
 ;
 ; KEE
 ;
+KernPrintf              KEE       3 ?
 KernAllocSpinLock       KEE       10 ?
 KernFreeSpinLock        KEE       11 ?
 KernAcquireSpinLock     KEE       12 ?

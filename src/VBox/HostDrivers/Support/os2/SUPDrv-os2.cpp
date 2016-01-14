@@ -74,6 +74,10 @@ extern char                 g_szLog[];
 extern char                 g_szInitText[];
 extern uint16_t             g_cchInitText;
 extern uint16_t             g_cchInitTextMax;
+/* Defined in RTLogWriteDebugger-r0drv-os2.cpp */
+extern int                  (*g_pfnR0Printf)(const char *pszFormat, ...);
+/* KEE */
+extern uint32_t             KernKEEVersion;
 RT_C_DECLS_END
 
 
@@ -98,6 +102,12 @@ DECLASM(int) VBoxDrvInit(const char *pszArgs)
     if (RT_SUCCESS(rc))
     {
         Log(("VBoxDrvInit: pszArgs=%s\n", pszArgs));
+
+        /*
+         * Initialize the pointer to our logging function.
+         */
+        if (!g_pfnR0Printf)
+            g_pfnR0Printf = SUPR0Printf;
 
         /*
          * Initialize the device extension.
@@ -502,9 +512,24 @@ static DECLCALLBACK(size_t) VBoxDrvLogOutput(void *pvArg, const char *pachChars,
     return cchWritten;
 }
 
+/**
+ * Callback for writing to the log buffer via KernPrinf.
+ *
+ * @returns number of bytes written.
+ * @param   pvArg       Unused.
+ * @param   pachChars   Pointer to an array of utf-8 characters.
+ * @param   cbChars     Number of bytes in the character array pointed to by pachChars.
+ */
+static DECLCALLBACK(size_t) VBoxDrvLogOutput2(void *pvArg, const char *pachChars, size_t cbChars)
+{
+    /* RTLogWriteDebugger will write using KernPrintf when it's available */
+    RTLogWriteDebugger(pachChars, cbChars);
+    return cbChars;
+}
 
 SUPR0DECL(int) SUPR0Printf(const char *pszFormat, ...)
 {
+    PFNRTSTROUTPUT pfnLogFunc = VBoxDrvLogOutput;
     va_list va;
 
 #if 0 //def DEBUG_bird
@@ -512,9 +537,16 @@ SUPR0DECL(int) SUPR0Printf(const char *pszFormat, ...)
     RTLogComPrintfV(pszFormat, va);
     va_end(va);
 #endif
+    /*
+     * NOTE: Only use RTLogWriteDebugger when KernPrintf is available as otherwise it
+     * will call SUPR0Printf back creating an infinite recursion. We prefer KernPrinf
+     * as it provides a much bigger buffer (7 MB) instead of VBoxDrv's own 16 KB.
+     */
+    if ((uint32_t)&KernKEEVersion > 0x00010002)
+        pfnLogFunc = VBoxDrvLogOutput2;
 
     va_start(va, pszFormat);
-    int cch = RTLogFormatV(VBoxDrvLogOutput, NULL, pszFormat, va);
+    int cch = RTLogFormatV(pfnLogFunc, NULL, pszFormat, va);
     va_end(va);
 
     return cch;
@@ -525,4 +557,3 @@ SUPR0DECL(uint32_t) SUPR0GetKernelFeatures(void)
 {
     return 0;
 }
-

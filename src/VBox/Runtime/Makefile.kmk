@@ -2189,7 +2189,6 @@ RuntimeR0Drv_SOURCES.os2 = \
 	\
 	common/misc/thread.cpp \
 	generic/RTAssertShouldPanic-generic.cpp \
-	generic/RTLogWriteDebugger-generic.cpp \
 	generic/RTLogWriteStdOut-stub-generic.cpp \
 	generic/RTMpCpuId-generic.cpp \
 	generic/RTMpCpuIdFromSetIndex-generic.cpp \
@@ -2222,6 +2221,7 @@ RuntimeR0Drv_SOURCES.os2 = \
 	r0drv/os2/memuserkernel-r0drv-os2.cpp \
 	r0drv/os2/os2imports.imp \
 	r0drv/os2/process-r0drv-os2.cpp \
+	r0drv/os2/RTLogWriteDebugger-r0drv-os2.c \
 	r0drv/os2/RTR0AssertPanicSystem-r0drv-os2.asm \
 	r0drv/os2/RTR0Os2DHQueryDOSVar.asm \
 	r0drv/os2/RTR0Os2DHVMGlobalToProcess.asm \
