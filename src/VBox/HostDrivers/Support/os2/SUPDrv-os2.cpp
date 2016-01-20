@@ -248,16 +248,14 @@ DECLASM(int) VBoxDrvIOCtlFast(uint16_t sfn, uint8_t iFunction)
 
     RTSpinlockAcquire(g_Spinlock);
     pSession = g_apSessionHashTab[iHash];
-    if (pSession && pSession->Process != Process)
-    {
-        do pSession = pSession->pNextHash;
-        while (     pSession
-               &&   (   pSession->sfn != sfn
-                     || pSession->Process != Process));
+    while (     pSession
+           &&   (   pSession->sfn != sfn
+                 || pSession->Process != Process))
+        pSession = pSession->pNextHash;
 
-        if (RT_LIKELY(pSession))
-            supdrvSessionRetain(pSession);
-    }
+    if (RT_LIKELY(pSession))
+        supdrvSessionRetain(pSession);
+
     RTSpinlockRelease(g_Spinlock);
     if (RT_UNLIKELY(!pSession))
     {
@@ -286,16 +284,14 @@ DECLASM(int) VBoxDrvIOCtl(uint16_t sfn, uint8_t iCat, uint8_t iFunction, void *p
 
     RTSpinlockAcquire(g_Spinlock);
     pSession = g_apSessionHashTab[iHash];
-    if (pSession && pSession->Process != Process)
-    {
-        do pSession = pSession->pNextHash;
-        while (     pSession
-               &&   (   pSession->sfn != sfn
-                     || pSession->Process != Process));
+    while (     pSession
+           &&   (pSession->sfn != sfn 
+                || pSession->Process != Process))
+        pSession = pSession->pNextHash;
 
-        if (RT_LIKELY(pSession))
-            supdrvSessionRetain(pSession);
-    }
+    if (RT_LIKELY(pSession))
+        supdrvSessionRetain(pSession);
+        
     RTSpinlockRelease(g_Spinlock);
     if (!pSession)
     {
