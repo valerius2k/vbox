@@ -66,7 +66,7 @@ RTDECL(int) RTMpCurSetIndexAndId(PRTCPUID pidCpu)
 RTDECL(void) rtmpOnAllOS2Wrapper(void *pvArg)
 {
     PRTMPARGS pArgs = (PRTMPARGS)pvArg;
-    pArgs->pfnWorker(0, pArgs->pvUser1, pArgs->pvUser2);
+    pArgs->pfnWorker(RTMpCpuId(), pArgs->pvUser1, pArgs->pvUser2);
 }
 
 
