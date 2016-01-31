@@ -4047,6 +4047,7 @@ TEMPLATE_VBOXR3EXE_LIBS                = pthread m rt dl
  else ifeq ($(KBUILD_TARGET),os2)
 TEMPLATE_VBOXR3EXE_TOOL                = GXX3OMF
 TEMPLATE_VBOXR3EXE_LIBS                = socket iconv poll
+TEMPLATE_VBOXR3EXE_LDFLAGS.os2         = -Zhigh-mem
  else ifeq ($(KBUILD_TARGET),darwin)
 TEMPLATE_VBOXR3EXE_TOOL                = GXX4MACHO
 TEMPLATE_VBOXR3EXE_LIBS                =
