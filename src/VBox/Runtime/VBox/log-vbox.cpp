@@ -146,6 +146,8 @@
 #  include <unistd.h>
 # elif defined(RT_OS_OS2)
 #  include <stdlib.h>
+#  define  INCL_BASE
+#  include <os2.h>
 # endif
 #endif
 
@@ -422,7 +424,24 @@ RTDECL(PRTLOGGER) RTLogDefaultInit(void)
             }
         }
 
-#  elif defined(RT_OS_OS2) || defined(RT_OS_DARWIN)
+#  elif defined(RT_OS_OS2)
+        PPIB ppib; PTIB ptib;
+        DosGetInfoBlocks(&ptib, &ppib);
+
+        char *pszArgFileBuf = ppib->pib_pchcmd;
+        int  off  = 0;
+
+        while (pszArgFileBuf[off] != NULL)
+        {
+            int cchArg = strlen(&pszArgFileBuf[off]);
+            RTLogLoggerEx(pLogger, 0, ~0U, "%s ", &pszArgFileBuf[off]);
+
+            /* advance */
+            off += cchArg + 1;
+        }
+        RTLogLoggerEx(pLogger, 0, ~0U, "\n");
+
+#  elif defined(RT_OS_DARWIN)
         /* commandline? */
 #  else
 #   error needs porting.
@@ -495,7 +514,7 @@ RTDECL(PRTLOGGER) RTLogDefaultInit(void)
         RTLogFlags(pLogger, "enabled unbuffered");
         pLogger->fDestFlags |= RTLOGDEST_DEBUGGER | RTLOGDEST_STDOUT;
 # endif
-# if 0 /* vboxdrv logging - ATTENTION: this is what we're referring to guys! Change to '# if 1'. */
+# if 1 /* vboxdrv logging - ATTENTION: this is what we're referring to guys! Change to '# if 1'. */
         RTLogGroupSettings(pLogger, "all=~0 -default.l6.l5.l4.l3");
         RTLogFlags(pLogger, "enabled unbuffered tid");
         pLogger->fDestFlags |= RTLOGDEST_DEBUGGER | RTLOGDEST_STDOUT;
