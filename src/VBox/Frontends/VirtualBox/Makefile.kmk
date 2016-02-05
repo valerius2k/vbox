@@ -173,9 +173,6 @@ VBOX_GUI_INC_DIRS = \
 	./src/medium \
 	./src/objects \
 	./src/platform \
-	./src/platform/darwin \
-	./src/platform/win \
-	./src/platform/x11 \
 	./src/runtime \
 	./src/runtime/fullscreen \
 	./src/runtime/normal \
@@ -197,6 +194,20 @@ VBOX_GUI_INC_DIRS = \
 	./src/wizards/exportappliance \
 	./src/wizards/importappliance \
 	./src/wizards/firstrun
+
+ifeq ($(KBUILD_TARGET),win)
+ VBOX_GUI_INC_DIRS += \
+	./src/platform/win
+else ifeq ($(KBUILD_TARGET),os2)
+ VBOX_GUI_INC_DIRS += \
+	./src/platform/os2
+else ifeq ($(KBUILD_TARGET),darwin)
+ VBOX_GUI_INC_DIRS += \
+	./src/platform/darwin
+else
+ VBOX_GUI_INC_DIRS += \
+	./src/platform/x11
+endif
 
 ifdef VBOX_GUI_WITH_NETWORK_MANAGER
 VBOX_GUI_INC_DIRS += \
@@ -250,6 +261,7 @@ VirtualBox_LIBS.win       = \
 	$(PATH_SDK_$(VBOX_WINPSDK)_LIB)/Htmlhelp.Lib \
 	$(PATH_SDK_$(VBOX_WINDDK)_LIB)/ddraw.lib \
 	$(PATH_SDK_$(VBOX_WINDDK)_LIB)/dxguid.lib
+VirtualBox_LIBS.os2      += $(PATH_STAGE_DLL)/VBoxHlp$(VBOX_SUFF_DLL)
 if1of ($(KBUILD_TARGET), freebsd linux netbsd openbsd solaris) # X11
  VirtualBox_LIBS         += $(PATH_STAGE_DLL)/VBoxKeyboard$(VBOX_SUFF_DLL)
 endif
@@ -265,6 +277,22 @@ ifdef VBOX_WITH_CROGL
  VirtualBox_LIBS += $(PATH_STAGE_LIB)/VBoxOGLTest$(VBOX_SUFF_LIB)
 endif
 
+ifeq ($(BUILD_TARGET),os2)
+#
+# VBoxHlp - helper DLL for OS/2.
+#
+ DLLS += VBoxHlp
+ VBoxHlp_INST        = $(INST_BIN)
+ VBoxHlp_ASTOOL      = NASM
+ VBoxHlp_ASFLAGS     = -f obj
+ VBoxHlp_DEFS        = IN_RING3 IN_VBOXHLP
+ VBoxHlp_CXXFLAGS    = -fno-exceptions
+ VBoxHlp_LDFLAGS     = -nostdlib -los2 \
+                       -Zlinker option -Zlinker manyautodata
+ VBoxHlp_SOURCES     = \
+	src/platform/os2/VBoxHlp.asm \
+	src/platform/os2/VBoxHlp.cpp
+endif
 
 # Headers containing definitions of classes that use the Q_OBJECT macro.
 VirtualBox_QT_MOCHDRS = \
@@ -793,6 +821,9 @@ VirtualBox_SOURCES.win += \
 	src/platform/win/UIDesktopServices_win.cpp \
 	src/platform/win/VBoxUtils-win.cpp \
 	src/platform/win/WinKeyboard.cpp
+
+VirtualBox_SOURCES.os2 = \
+	src/platform/os2/UIDesktopServices_os2.cpp
 
 VirtualBox_DEFS.darwin += VBOX_DARWIN_USE_NATIVE_CONTROLS
 VirtualBox_SOURCES.darwin += \
