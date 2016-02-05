@@ -52,6 +52,13 @@
 # undef FALSE
 # undef TRUE
 
+#if defined(QT_VERSION)
+
+/* Qt mimics OS/2 Toolkit by defining some LONG/ULONG, so pull it too. */
+#include <QtGui/qwindowdefs_pm.h>
+
+#endif /* QT_VERSION */
+
 /* */
 # undef RT_MAX
 # ifdef REDEFINE_RT_MAX
