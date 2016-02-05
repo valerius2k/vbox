@@ -238,7 +238,7 @@ UIMachineSettingsUSB::UIMachineSettingsUSB()
     retranslateUi();
 
 #ifndef VBOX_WITH_EHCI
-    mCbUSB2->setHidden(true);
+    mGbUSB->setHidden(true);
 #endif /* VBOX_WITH_EHCI */
 }
 
