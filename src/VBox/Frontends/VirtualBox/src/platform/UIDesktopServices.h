@@ -26,6 +26,9 @@ class UIDesktopServices
 public:
     static bool createMachineShortcut(const QString &strSrcFile, const QString &strDstPath, const QString &strName, const QString &strUuid);
     static bool openInFileManager(const QString &strFile);
+#ifdef RT_OS_OS2 // Q_WS_PM
+    static bool openObject(const QString &strFile);
+#endif
 };
 
 #endif /* !___UIDesktopServices_h___ */
