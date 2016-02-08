@@ -2462,6 +2462,9 @@ QString VBoxGlobal::helpFile() const
 #if defined (Q_WS_WIN32)
     const QString name = "VirtualBox";
     const QString suffix = "chm";
+#elif defined (Q_WS_PM)
+    const QString name = "VirtualBox";
+    const QString suffix = "pdf";
 #elif defined (Q_WS_MAC)
     const QString name = "UserManual";
     const QString suffix = "pdf";
