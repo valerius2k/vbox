@@ -21,7 +21,6 @@
 *********************************************************************************************************************************/
 #define LOG_GROUP LOG_GROUP_DBGG
 #define VBOX_COM_NO_ATL
-#include <VBox/com/defs.h>
 #include <VBox/vmm/vm.h>
 #include <VBox/err.h>
 
@@ -29,6 +28,7 @@
 #include <QDesktopWidget>
 #include <QApplication>
 
+#include <VBox/com/defs.h>
 
 
 VBoxDbgGui::VBoxDbgGui() :
