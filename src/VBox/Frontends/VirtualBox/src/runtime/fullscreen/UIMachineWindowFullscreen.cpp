@@ -31,7 +31,7 @@
 # include "UIMachineLogicFullscreen.h"
 # include "UIMachineWindowFullscreen.h"
 # include "UIMachineView.h"
-# if   defined(Q_WS_WIN) || defined(Q_WS_X11)
+# if   defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
 #  include "UIMachineDefs.h"
 #  include "UIMiniToolBar.h"
 # elif defined(Q_WS_MAC)
@@ -48,9 +48,9 @@
 
 UIMachineWindowFullscreen::UIMachineWindowFullscreen(UIMachineLogic *pMachineLogic, ulong uScreenId)
     : UIMachineWindow(pMachineLogic, uScreenId)
-#if defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
     , m_pMiniToolBar(0)
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
 #ifdef Q_WS_MAC
     , m_fIsInFullscreenTransition(false)
 #endif /* Q_WS_MAC */
@@ -111,7 +111,7 @@ void UIMachineWindowFullscreen::handleNativeNotification(const QString &strNativ
 }
 #endif /* Q_WS_MAC */
 
-#if defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
 void UIMachineWindowFullscreen::sltMachineStateChanged()
 {
     /* Call to base-class: */
@@ -133,7 +133,7 @@ void UIMachineWindowFullscreen::sltRevokeWindowActivation()
 #endif /* Q_WS_X11 */
     activateWindow();
 }
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
 
 #ifdef Q_WS_MAC
 void UIMachineWindowFullscreen::sltEnterNativeFullscreen(UIMachineWindow *pMachineWindow)
@@ -198,10 +198,10 @@ void UIMachineWindowFullscreen::prepareVisualState()
     centralWidget()->setAutoFillBackground(true);
     setAutoFillBackground(true);
 
-#if defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
     /* Prepare mini-toolbar: */
     prepareMiniToolbar();
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
 
 #ifdef Q_WS_MAC
     /* Native fullscreen stuff on ML and next: */
@@ -231,7 +231,7 @@ void UIMachineWindowFullscreen::prepareVisualState()
 #endif /* Q_WS_MAC */
 }
 
-#if defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
 void UIMachineWindowFullscreen::prepareMiniToolbar()
 {
     /* Make sure mini-toolbar is not restricted: */
@@ -265,9 +265,9 @@ void UIMachineWindowFullscreen::prepareMiniToolbar()
 # endif /* Q_WS_X11 */
     }
 }
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
 
-#if defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
 void UIMachineWindowFullscreen::cleanupMiniToolbar()
 {
     /* Make sure mini-toolbar was created: */
@@ -280,7 +280,7 @@ void UIMachineWindowFullscreen::cleanupMiniToolbar()
     delete m_pMiniToolBar;
     m_pMiniToolBar = 0;
 }
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
 
 void UIMachineWindowFullscreen::cleanupVisualState()
 {
@@ -297,10 +297,10 @@ void UIMachineWindowFullscreen::cleanupVisualState()
     }
 #endif /* Q_WS_MAC */
 
-#if defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
     /* Cleanup mini-toolbar: */
     cleanupMiniToolbar();
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
 
     /* Call to base-class: */
     UIMachineWindow::cleanupVisualState();
@@ -313,7 +313,7 @@ void UIMachineWindowFullscreen::placeOnScreen()
     /* And corresponding working area: */
     const QRect workingArea = vboxGlobal().screenGeometry(iHostScreen);
 
-#if   defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if   defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
     /* Set appropriate geometry for window: */
     resize(workingArea.size());
     move(workingArea.topLeft());
@@ -370,14 +370,14 @@ void UIMachineWindowFullscreen::showInNecessaryMode()
     if (!uisession()->isScreenVisible(m_uScreenId) ||
         !pFullscreenLogic->hasHostScreenForGuestScreen(m_uScreenId))
     {
-#if defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
         /* If there is a mini-toolbar: */
         if (m_pMiniToolBar)
         {
             /* Hide mini-toolbar: */
             m_pMiniToolBar->hide();
         }
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
 
         /* Hide window: */
         hide();
@@ -416,7 +416,7 @@ void UIMachineWindowFullscreen::showInNecessaryMode()
             /* Show window in fullscreen mode: */
             showFullScreen();
         }
-#elif defined(Q_WS_WIN) || defined(Q_WS_X11)
+#elif defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
         /* Show window in fullscreen mode: */
         showFullScreen();
 
@@ -426,7 +426,7 @@ void UIMachineWindowFullscreen::showInNecessaryMode()
             /* Show mini-toolbar in full-screen mode: */
             m_pMiniToolBar->showFullScreen();
         }
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
 
 #ifdef Q_WS_X11
         /* If WM supports native stuff, we need to map window to corresponding host-screen. */
@@ -452,7 +452,7 @@ void UIMachineWindowFullscreen::showInNecessaryMode()
     }
 }
 
-#if defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
 void UIMachineWindowFullscreen::updateAppearanceOf(int iElement)
 {
     /* Call to base-class: */
@@ -476,5 +476,5 @@ void UIMachineWindowFullscreen::updateAppearanceOf(int iElement)
         }
     }
 }
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
 

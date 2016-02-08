@@ -1019,9 +1019,9 @@ void UIMenuBarEditorWidget::paintEvent(QPaintEvent*)
     QColor color1 = pal.color(QPalette::Window).lighter(110);
     color1.setAlpha(0);
     QColor color2 = pal.color(QPalette::Window).darker(200);
-#if defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
     QColor color3 = pal.color(QPalette::Window).darker(120);
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
 
     /* Left corner: */
     QRadialGradient grad1(QPointF(5, height() - 5), 5);
@@ -1062,7 +1062,7 @@ void UIMenuBarEditorWidget::paintEvent(QPaintEvent*)
     painter.fillRect(QRect(0,           0, 5, height() - 5), grad4); // left line
     painter.fillRect(QRect(width() - 5, 0, 5, height() - 5), grad5); // right line
 
-#if defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
     /* Paint frames: */
     painter.save();
     painter.setPen(color3);
@@ -1072,7 +1072,7 @@ void UIMenuBarEditorWidget::paintEvent(QPaintEvent*)
     if (m_fStartedFromVMSettings)
         painter.drawLine(QLine(QPoint(width() - 1 - 5 - 1, 0), QPoint(5 + 1, 0)));
     painter.restore();
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
 }
 
 

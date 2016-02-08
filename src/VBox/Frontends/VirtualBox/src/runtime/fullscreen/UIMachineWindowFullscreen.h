@@ -21,10 +21,10 @@
 /* GUI includes: */
 #include "UIMachineWindow.h"
 
-#if defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
 /* Forward declarations: */
 class UIMiniToolBar;
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
 
 /** UIMachineWindow reimplementation,
   * providing GUI with machine-window for the full-screen mode. */
@@ -60,13 +60,13 @@ protected:
 
 private slots:
 
-#if defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
     /** Handles machine state change event. */
     void sltMachineStateChanged();
 
     /** Revokes window activation. */
     void sltRevokeWindowActivation();
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
 
 #ifdef RT_OS_DARWIN
     /** Mac OS X: Commands @a pMachineWindow to enter native 'fullscreen' mode if possible. */
@@ -79,15 +79,15 @@ private:
 
     /** Prepare visual-state routine. */
     void prepareVisualState();
-#if defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
     /** Prepare mini-toolbar routine. */
     void prepareMiniToolbar();
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
 
-#if defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
     /** Cleanup mini-toolbar routine. */
     void cleanupMiniToolbar();
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
     /** Cleanup visual-state routine. */
     void cleanupVisualState();
 
@@ -96,15 +96,15 @@ private:
     /** Updates visibility according to visual-state. */
     void showInNecessaryMode();
 
-#if defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
     /** Common update routine. */
     void updateAppearanceOf(int iElement);
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
 
-#if defined(Q_WS_WIN) || defined(Q_WS_X11)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
     /** Holds the mini-toolbar instance. */
     UIMiniToolBar *m_pMiniToolBar;
-#endif /* Q_WS_WIN || Q_WS_X11 */
+#endif /* Q_WS_WIN || Q_WS_PM || Q_WS_X11 */
 
 #ifdef Q_WS_MAC
     /** Mac OS X: Reflects whether window is in 'fullscreen' transition. */
