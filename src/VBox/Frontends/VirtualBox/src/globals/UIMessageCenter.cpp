@@ -54,6 +54,9 @@
 # ifdef Q_WS_WIN
 #  include <Htmlhelp.h>
 # endif /* Q_WS_WIN */
+# ifdef Q_WS_PM
+# include <UIDesktopServices.h>
+# endif /* Q_WS_PM  */
 
 /* COM includes: */
 # include "CConsole.h"
@@ -2687,6 +2690,8 @@ void UIMessageCenter::sltShowUserManual(const QString &strLocation)
 # endif /* #ifdef VBOX_OSE */
 #elif defined (Q_WS_MAC)
     vboxGlobal().openURL("file://" + strLocation);
+#elif defined (Q_WS_PM)
+    UIDesktopServices::openObject(strLocation);
 #endif
 }
 

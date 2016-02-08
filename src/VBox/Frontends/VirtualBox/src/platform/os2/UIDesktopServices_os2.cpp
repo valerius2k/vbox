@@ -77,3 +77,16 @@ bool UIDesktopServices::openInFileManager(const QString &strFile)
 
     return false;
 }
+
+/* Open a WPS object (needed by UIMessageCenter::sltShowUserManual) */
+bool UIDesktopServices::openObject(const QString &strFile)
+{
+    QFileInfo fi(strFile);
+    QString str  = QDir::toNativeSeparators(fi.absoluteFilePath());
+    HOBJECT hObj;
+
+    if ((hObj = WinQueryObject((PCSZ)str.toLocal8Bit().constData())) != NULL)
+        return WinOpenObject(hObj, OPEN_DEFAULT, TRUE);
+
+    return false;
+}
