@@ -44,6 +44,7 @@
 
 /* Make sure OS/2 Toolkit headers are pulled in to have BOOL/ULONG/etc. typedefs
  * already defined in order to be able to redefine them using #define. */
+# define OS2EMX_PLAIN_CHAR
 # define INCL_BASE
 # define INCL_PM
 # include <os2.h>
@@ -64,6 +65,10 @@
 # ifdef REDEFINE_RT_MAX
 #  define RT_MAX(Value1, Value2)                  ( (Value1) >= (Value2) ? (Value1) : (Value2) )
 # endif
+
+# undef ULONG
+# undef LONG
+# undef USHORT
 
 #endif /* defined(RT_OS_OS2) */
 

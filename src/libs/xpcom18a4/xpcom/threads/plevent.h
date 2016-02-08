@@ -195,6 +195,7 @@ and to ensure that no more events will be delivered for that owner.
 #if defined(XP_WIN32)
 #include <windef.h>
 #elif defined(XP_OS2)
+#define OS2EMX_PLAIN_CHAR
 #define INCL_DOSMISC
 #define INCL_DOSPROCESS
 #define INCL_DOSERRORS
