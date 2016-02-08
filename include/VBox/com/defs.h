@@ -66,10 +66,6 @@
 #  define RT_MAX(Value1, Value2)                  ( (Value1) >= (Value2) ? (Value1) : (Value2) )
 # endif
 
-# undef ULONG
-# undef LONG
-# undef USHORT
-
 #endif /* defined(RT_OS_OS2) */
 
 /* Include iprt/types.h (which also includes iprt/types.h) now to make sure iprt
