@@ -3291,6 +3291,15 @@ bool VBoxGlobal::activateWindow (WId aWId, bool aSwitchDesktop /* = true */)
 
     result &= !!SetForegroundWindow (aWId);
 
+#elif defined(Q_WS_PM)
+
+    if (!WinIsWindowVisible (aWId))
+        result &= !!WinShowWindow (aWId, TRUE);
+    else if (!WinIsWindowShowing (aWId))
+        result &= !!WinShowWindow (aWId, TRUE);
+
+    result &= !!WinSetFocus(HWND_DESKTOP, aWId);
+
 #elif defined (Q_WS_X11)
 
     Display *dpy = QX11Info::display();
@@ -4651,7 +4660,7 @@ bool VBoxGlobal::switchToMachine(CMachine &machine)
     if (id == 0)
         return true;
 
-#if defined (Q_WS_WIN32) || defined (Q_WS_X11)
+#if defined (Q_WS_WIN32) || defined (Q_WS_PM) || defined (Q_WS_X11)
 
     return vboxGlobal().activateWindow(id, true);
 
