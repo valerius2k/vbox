@@ -53,6 +53,8 @@ VBoxGlobalSettingsData::VBoxGlobalSettingsData()
     /* default settings */
 #if defined (Q_WS_WIN)
     hostCombo = "163"; // VK_RCONTROL
+#elif defined (Q_WS_PM)
+    hostCombo = "10";  // VK_CTRL (?), 10
 #elif defined (Q_WS_X11)
     hostCombo = "65508"; // XK_Control_R
 #elif defined (Q_WS_MAC)
