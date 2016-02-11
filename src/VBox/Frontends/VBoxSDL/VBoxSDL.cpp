@@ -45,6 +45,20 @@ using namespace com;
 # include <unistd.h>
 #endif
 
+#ifdef RT_OS_OS2
+# define  INCL_BASE
+# define  INCL_GPI
+# define  INCL_WIN
+# include <os2.h>
+
+struct WMcursor
+{
+  HBITMAP        hbm;
+  HPOINTER       hptr;
+  PCHAR          pchData;
+};
+#endif
+
 #ifndef RT_OS_DARWIN
 #include <SDL_syswm.h>           /* for SDL_GetWMInfo() */
 #endif
@@ -230,7 +244,7 @@ static SDL_SysWMinfo gSdlInfo;
 #endif
 
 #ifdef VBOX_SECURELABEL
-#ifdef RT_OS_WINDOWS
+#if defined(RT_OS_WINDOWS) || defined(RT_OS_OS2)
 #define LIBSDL_TTF_NAME "SDL_ttf"
 #else
 #define LIBSDL_TTF_NAME "libSDL_ttf-2.0.so.0"
@@ -3027,6 +3041,8 @@ leave:
         {
 # if defined(RT_OS_WINDOWS)
             ::DestroyCursor(*(HCURSOR *)pCustomTempWMCursor);
+# elif defined(RT_OS_OS2)
+            ::WinDestroyPointer(((struct WMcursor *)pCustomTempWMCursor)->hptr);
 # elif defined(VBOXSDL_WITH_X11) && !defined(VBOX_WITHOUT_XCURSOR)
             if (gfXCursorEnabled)
                 XFreeCursor(gSdlInfo.info.x11.display, *(Cursor *)pCustomTempWMCursor);
@@ -4699,6 +4715,205 @@ static void SetPointerShape(const PointerShapeChangeData *data)
             ::DeleteObject(hMonoBitmap);
         if (hBitmap)
             ::DeleteObject(hBitmap);
+
+#elif defined(RT_OS_OS2)
+
+    uint uAlpha = data->alpha;
+    uint uHotX  = data->xHot;
+    uint uHotY  = data->yHot;
+
+    uint uX  = data->width;
+    uint uY  = data->height;
+
+    uint mxX = WinQuerySysValue(HWND_DESKTOP, SV_CXPOINTER);
+    uint mxY = WinQuerySysValue(HWND_DESKTOP, SV_CYPOINTER);
+
+    if (uX <= mxX)
+        mxX = uX;
+
+    if (uY <= mxY)
+        mxY = uY;
+
+    /* Width in bytes of the original AND mask scan line. */
+    uint32_t cbAndMaskScan     = (uX  + 7) / 8;
+    uint32_t cbAndMaskScanMx   = (mxX + 7) / 8;
+
+    BITMAPINFOHEADER2 bmih2;
+    PBITMAPINFO2      pbi2         = NULL;
+    HBITMAP           hBitmap      = NULLHANDLE;
+    HBITMAP           hMonoBitmap  = NULLHANDLE;
+    void              *lpBits      = NULL;
+
+    memset(&bmih2, 0, sizeof(BITMAPINFOHEADER2));
+    bmih2.cbFix        = sizeof(BITMAPINFOHEADER2);
+    bmih2.cx           = mxX;
+    bmih2.cy           = mxY;
+    bmih2.cPlanes      = 1;
+    bmih2.cBitCount    = 32;
+
+    HPS hps = WinGetPS(HWND_DESKTOP);
+
+    pbi2 = (PBITMAPINFO2)RTMemAllocZ(sizeof(BITMAPINFOHEADER2) + mxX * mxY * 4);
+
+    if (pbi2)
+    {
+        memcpy((void *)pbi2, (void *)&bmih2, sizeof(BITMAPINFOHEADER2));
+        lpBits = (char *)pbi2 + sizeof(BITMAPINFOHEADER2);
+
+        ULONG *srcshp = (ULONG *) srcShapePtr;
+        ULONG *dstshp = (ULONG *) lpBits + mxX * (mxY - 1);
+
+        for (uint y = 0; y < mxY; y++)
+        {
+            // scaling the pointer
+            for (uint x = 0; x < mxX; x++)
+            {
+                uint x_old = x * (uX / mxX);
+                uint y_old = y * (uY / mxY);
+
+                dstshp[x - y * mxX] = srcshp[x_old + y_old * uX];
+            }
+        }
+
+        // Create the main bitmap: pointer pixels
+        hBitmap = GpiCreateBitmap(hps, &bmih2, CBM_INIT, (PBYTE)lpBits, pbi2);
+    }
+
+    hMonoBitmap = NULL;
+
+    BITMAPINFOHEADER2 bmih;
+    memset(&bmih, 0, sizeof(BITMAPINFOHEADER2));
+    bmih.cbFix        = sizeof(BITMAPINFOHEADER2);
+    bmih.cx           = mxX;
+    bmih.cy           = mxY * 2;
+    bmih.cPlanes      = 1;
+    bmih.cBitCount    = 1;
+
+    /* Original AND mask is not word aligned. */
+    /* Allocate memory for aligned AND mask. */
+    PBITMAPINFO2 pbi = (PBITMAPINFO2)RTMemTmpAllocZ(sizeof(BITMAPINFOHEADER2)
+                     + (cbAndMaskScanMx + 1) * (mxY * 2 - 1));
+    void *pBits = NULL;
+
+    if (pbi)
+    {
+        memcpy((void *)pbi, (void *)&bmih, sizeof(BITMAPINFOHEADER2));
+
+        /* Word aligned AND mask. Will be allocated and created if necessary. */
+        uint8_t  *pu8AndMaskWordAligned = (uint8_t *)pbi + sizeof(BITMAPINFOHEADER2);
+
+        uint8_t  *dst = pu8AndMaskWordAligned + cbAndMaskScanMx * (mxY * 2 - 1);
+        uint8_t  *src = (uint8_t *)srcAndMaskPtr;
+ 
+        ULONG *dstshp = (ULONG *) lpBits + mxX * (mxY - 1);
+
+        uint32_t u32PaddingBits;
+        uint8_t  u8LastBytesPaddingMask;
+
+        if (cbAndMaskScanMx & 1)
+        {
+            /* According to MSDN the padding bits must be 0.
+             * Compute the bit mask to set padding bits to 0 in the last byte of original AND mask. */
+            u32PaddingBits = cbAndMaskScanMx * 8 - mxX;
+            Assert(u32PaddingBits < 8);
+
+            u8LastBytesPaddingMask = (uint8_t)(0xFF << u32PaddingBits);
+
+            Log(("u8LastBytesPaddingMask = %02X, aligned w = %d, width = %d, cbAndMaskScan = %d\n",
+                  u8LastBytesPaddingMask, (cbAndMaskScanMx + 1) * 8, mxX, cbAndMaskScanMx));
+
+            pu8AndMaskWordAligned += mxY * 2 - 1;
+        }
+
+        pBits = (void *)pu8AndMaskWordAligned;
+        uint8_t byte  = 0;
+
+        for (uint y = 0; y < mxY; y++)
+        {
+            for (uint x = 0; x < cbAndMaskScanMx; x++)
+            {
+                // scaling the pointer
+                uint x_old = x * (uX / mxX);
+                uint y_old = y * (uY / mxY);
+
+                byte = src[x_old + cbAndMaskScan * y_old];
+
+                if (uAlpha)
+                {
+                    // convert alpha channel to AND mask: set AND
+                    // mask bit to 1 if alpha is 0 for this pel
+                    for (uint i = 0; i < 8; i++)
+                    {
+                        uint8_t alpha = dstshp[8 * (x - cbAndMaskScanMx * y) + i] >> 24;
+
+                        if (alpha < 128) // transparent pel
+                            byte |= (1 << (7 - i));
+                        else // non-transparent pel
+                            byte &= ~(1 << (7 - i));
+                    }
+                }
+
+                dst[x - cbAndMaskScanMx * y] = byte;
+            }
+
+            if (cbAndMaskScanMx & 1)
+            {
+                dst[cbAndMaskScanMx - 1] &= u8LastBytesPaddingMask;
+                dst++;
+            }
+        }
+            
+        // Create the Mono Bitmap: AND/XOR masks
+        hMonoBitmap = GpiCreateBitmap(hps, &bmih, CBM_INIT, (PBYTE)pBits, pbi);
+        RTMemFree(pbi);
+    }
+
+    WinReleasePS(hps);
+    RTMemFree(pbi2);
+
+    Assert(hBitmap);
+    Assert(hMonoBitmap);
+
+    if (hBitmap && hMonoBitmap)
+    {
+        POINTERINFO ptri;
+        memset(&ptri, 0, sizeof(POINTERINFO));
+        ptri.fPointer   = TRUE;                        /* size indicator */
+        ptri.xHotspot   = uHotX * mxX / uX;            /* hotspot X      */
+        ptri.yHotspot   = mxY - uHotY * mxY / uY;      /* hotspot Y      */
+        ptri.hbmPointer = hMonoBitmap;                 /* and/xor        */
+        ptri.hbmColor   = hBitmap;                     /* color          */
+
+        HPOINTER hAlphaCursor = WinCreatePointerIndirect(HWND_DESKTOP, &ptri);
+        Assert(hAlphaCursor);
+
+        if (hAlphaCursor)
+        {
+            // here we do a dirty trick by substituting a Window Manager's
+            // cursor handle with the handle we created
+            struct WMcursor *pCustomTempWMCursor = (struct WMcursor *)gpCustomCursor->wm_cursor;
+
+            // see SDL12/src/video/wincommon/SDL_sysmouse.c
+            struct WMcursor *wm_cursor = (struct WMcursor *)malloc(sizeof(struct WMcursor));
+            wm_cursor->hptr = hAlphaCursor;
+
+            gpCustomCursor->wm_cursor = wm_cursor;
+            SDL_SetCursor(gpCustomCursor);
+            SDL_ShowCursor(SDL_ENABLE);
+
+            if (pCustomTempWMCursor)
+            {
+                ::WinDestroyPointer(pCustomTempWMCursor->hptr);
+                free(pCustomTempWMCursor);
+            }
+            ok = true;
+        }
+    }
+
+    if (hMonoBitmap)
+        GpiDeleteBitmap(hMonoBitmap);
+    if (hBitmap)
+        GpiDeleteBitmap(hBitmap);
 
 #elif defined(VBOXSDL_WITH_X11) && !defined(VBOX_WITHOUT_XCURSOR)
 

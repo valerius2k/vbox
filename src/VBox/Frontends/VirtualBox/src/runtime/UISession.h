@@ -447,6 +447,9 @@ private:
 #if defined(Q_WS_WIN)
     HCURSOR m_alphaCursor;
 #endif
+#if defined(Q_WS_PM)
+    HPOINTER m_alphaCursor;
+#endif
 
     /** @name Host-screen configuration variables.
      * @{ */
