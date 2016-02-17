@@ -36,6 +36,7 @@
 #include <iprt/semaphore.h>
 #include <iprt/alloc.h>
 #include <iprt/assert.h>
+#include <iprt/time.h>
 #include <iprt/asm.h>
 #include <iprt/err.h>
 #include <iprt/mem.h>
@@ -95,8 +96,10 @@ RTDECL(int) RTSemMutexDestroy(RTSEMMUTEX hMutexSem)
      * Validate input.
      */
     PRTSEMMUTEXINTERNAL pThis = (PRTSEMMUTEXINTERNAL)hMutexSem;
+
     if (pThis == NIL_RTSEMMUTEX)
         return VINF_SUCCESS;
+
     AssertPtrReturn(pThis, VERR_INVALID_HANDLE);
     AssertReturn(pThis->u32Magic == RTSEMMUTEX_MAGIC, VERR_INVALID_HANDLE);
 
@@ -104,7 +107,8 @@ RTDECL(int) RTSemMutexDestroy(RTSEMMUTEX hMutexSem)
      * Invalidate it and signal the object just in case.
      */
     AssertReturn(ASMAtomicCmpXchgU32(&pThis->u32Magic, RTSEMMUTEX_MAGIC_DEAD, RTSEMMUTEX_MAGIC), VERR_INVALID_HANDLE);
-    KernFreeMutexLock(&pThis->Mutex); // ???
+    KernFreeMutexLock(&pThis->Mutex);
+    /* Owned by someone flag */
     pThis->fOwned = 0;
     RTMemFree(pThis);
     return VINF_SUCCESS;
@@ -138,50 +142,65 @@ static int rtR0SemMutexRequest(RTSEMMUTEX hMutexSem, RTMSINTERVAL cMillies, BOOL
      * Get the mutex.
      */
     int       rc;
-    ULONG     ulTimeout = 0;
-    ULONG     fBlock  = BLOCK_EXCLUSIVE_MUTEX;
-
-    if (! fInterruptible)
-        fBlock |= BLOCK_UNINTERRUPTABLE;
 
     if (cMillies == RT_INDEFINITE_WAIT)
-        cMillies = SEM_INDEFINITE_WAIT;
+    {
+        KernRequestExclusiveMutex(&pThis->Mutex);
+        rc = VINF_SUCCESS;
+    }
+    else if (! cMillies)
+    {
+        if (KernTryRequestExclusiveMutex(&pThis->Mutex))
+            rc = VINF_SUCCESS;
+        else
+            rc = VERR_TIMEOUT;
+    }
+    /*
+     * GROSS HACK: poll implementation of timeout.
+     */
+    /** @todo Implement timeouts and interrupt checks in
+     *        rtR0SemMutexRequest. */
+    else if (KernTryRequestExclusiveMutex(&pThis->Mutex))
+        rc = VINF_SUCCESS;
     else
-        ulTimeout = (ULONG)cMillies;
+    {
+        uint64_t StartTS = RTTimeSystemMilliTS();
+        rc = VERR_TIMEOUT;
+        do
+        {
+            RTThreadSleep(1);
+            if (KernTryRequestExclusiveMutex(&pThis->Mutex))
+            {
+                rc = VINF_SUCCESS;
+                break;
+            }
+        } while (RTTimeSystemMilliTS() - StartTS < cMillies);
+    }
 
-    ULONG ulData = (ULONG)VERR_INTERNAL_ERROR;
-
-    rc = KernBlock((ULONG)pThis, ulTimeout, fBlock,
-                    &pThis->Mutex,
-                    &ulData);
     switch (rc)
     {
-        case NO_ERROR:
-            rc = (int)ulData;
-            Assert(rc == VINF_SUCCESS || rc == VERR_SEM_DESTROYED);
-
-	    if (pThis->u32Magic == RTSEMMUTEX_MAGIC)
-	    {
-	        pThis->fOwned = 1;
-                rc = VINF_SUCCESS;
-	    }
-
-            rc = VERR_SEM_DESTROYED;
+        case VINF_SUCCESS:
+            if (pThis->u32Magic == RTSEMMUTEX_MAGIC)
+                pThis->fOwned = 1;
+            else
+                rc = VERR_SEM_DESTROYED;
             break;
 
-        case ERROR_TIMEOUT:
-            Assert(Timeout != SEM_INDEFINITE_WAIT);
+        case VERR_TIMEOUT:
+            Assert(cMillies != RT_INDEFINITE_WAIT);
             rc = VERR_TIMEOUT;
             break;
 
-        case ERROR_INTERRUPT:
+        case VERR_INTERRUPTED:
             Assert(fInterruptible == RTSEMWAIT_FLAGS_INTERRUPTIBLE);
-            rc = VERR_INTERRUPTED;
             break;
 
         default:
             AssertMsgFailed(("rc=%d\n", rc));
             rc = VERR_GENERAL_FAILURE;
+            // different platforms use different return codes here
+            // rc = VERR_NO_TRANSLATION; -- FreeBSD
+            // rc = VERR_INTERNAL_ERROR; -- NT
             break;
     }
     return rc;
