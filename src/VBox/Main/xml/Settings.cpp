@@ -5560,7 +5560,11 @@ AudioDriverType_T MachineConfigFile::getHostDefaultAudioDriver()
 #elif defined(RT_OS_DARWIN)
     return AudioDriverType_CoreAudio;
 #elif defined(RT_OS_OS2)
-    return AudioDriverType_MMPM;
+    // @todo implement AudioDriverType_MMPM, it is not
+    // implemented yet (so null pointer to pHostDrvAudio->pfnShutdown
+    // in vboxdd.dll and we got a trap) so we use Null driver for the time being
+    // return AudioDriverType_MMPM;
+    return AudioDriverType_Null;
 #elif defined(RT_OS_FREEBSD)
     return AudioDriverType_OSS;
 #else
