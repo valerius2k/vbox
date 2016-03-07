@@ -84,6 +84,11 @@ private:
     HRESULT assignMachine(const ComPtr<IMachine> &aMachine,
                           LockType_T aLockType,
                           const ComPtr<IToken> &aToken);
+#ifdef VBOX_WITH_GENERIC_SESSION_WATCHER
+    HRESULT assignMachineWithTokenId(const ComPtr<IMachine> &aMachine,
+                                     LockType_T aLockType,
+                                     const com::Utf8Str &aTokenId);
+#endif
 #endif /* VBOX_WITH_GENERIC_SESSION_WATCHER || VBOX_WITH_XPCOM */
     HRESULT assignRemoteMachine(const ComPtr<IMachine> &aMachine,
                                 const ComPtr<IConsole> &aConsole);
