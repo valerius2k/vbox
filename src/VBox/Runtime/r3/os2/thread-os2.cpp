@@ -318,3 +318,15 @@ RTR3DECL(int) RTThreadGetExecutionTimeMilli(uint64_t *pKernelTime, uint64_t *pUs
 {
     return VERR_NOT_IMPLEMENTED;
 }
+
+
+/* Just a dummy to make fileaio-posix.cpp happy */
+RTDECL(int) RTThreadPoke(RTTHREAD hThread)
+{
+    AssertReturn(hThread != RTThreadSelf(), VERR_INVALID_PARAMETER);
+    PRTTHREADINT pThread = rtThreadGet(hThread);
+    AssertReturn(pThread, VERR_INVALID_HANDLE);
+
+    rtThreadRelease(pThread);
+    return VINF_SUCCESS;
+}

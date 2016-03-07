@@ -960,7 +960,6 @@ ifeq ($(KBUILD_TARGET),os2)
  VBOX_WITH_USB=
  VBOX_WITH_EHCI=
  VBOX_WITH_DOCS=
- VBOX_WITH_PDM_ASYNC_COMPLETION=
  VBOX_WITH_KCHMVIEWER=
  VBOX_WITH_HARDENING=
 endif
@@ -4045,7 +4044,7 @@ TEMPLATE_VBOXR3EXE_LDFLAGS.solaris     = -Wl,-z,ignore # same as VBOX_LD_as_need
 TEMPLATE_VBOXR3EXE_LIBS                = pthread m rt dl
  else ifeq ($(KBUILD_TARGET),os2)
 TEMPLATE_VBOXR3EXE_TOOL                = GXX3OMF
-TEMPLATE_VBOXR3EXE_LIBS                = socket iconv poll
+TEMPLATE_VBOXR3EXE_LIBS                = socket iconv poll pthread
 TEMPLATE_VBOXR3EXE_LDFLAGS.os2         = -Zhigh-mem
  else ifeq ($(KBUILD_TARGET),darwin)
 TEMPLATE_VBOXR3EXE_TOOL                = GXX4MACHO
@@ -4272,7 +4271,7 @@ else
  else ifeq ($(KBUILD_TARGET),solaris)
   TEMPLATE_VBoxR3Static_LIBS       += kstat
  else ifeq ($(KBUILD_TARGET),os2)
-  TEMPLATE_VBoxR3Static_LIBS       += poll
+  TEMPLATE_VBoxR3Static_LIBS       += poll pthread
  endif
 endif
 
@@ -4798,7 +4797,7 @@ TEMPLATE_VBOXMAINEXE_LIBS                = pthread m rt $(LIB_RUNTIME) dl
 TEMPLATE_VBOXMAINEXE_LDFLAGS.linux       = -Wl,-z,noexecstack,-z,relro $(VBOX_LD_as_needed)
  else ifeq ($(KBUILD_TARGET),os2)
 TEMPLATE_VBOXMAINEXE_TOOL                = GXX3OMF
-TEMPLATE_VBOXMAINEXE_LIBS                = $(LIB_RUNTIME) poll
+TEMPLATE_VBOXMAINEXE_LIBS                = $(LIB_RUNTIME) poll pthread
  else ifeq ($(KBUILD_TARGET),darwin)
 TEMPLATE_VBOXMAINEXE_TOOL                = GXX4MACHO
 TEMPLATE_VBOXMAINEXE_DEFS               += $(VBOX_DARWIN_DEF_SDK_DEFS)
@@ -5463,7 +5462,7 @@ TEMPLATE_VBoxBldProg_LDFLAGS.sparc64     = -m64
 TEMPLATE_VBoxBldProg_LIBS                = pthread m rt dl
  else ifeq ($(KBUILD_HOST),os2)
 TEMPLATE_VBoxBldProg_TOOL                = GXX3OMF
-TEMPLATE_VBoxBldProg_LIBS                = socket iconv poll
+TEMPLATE_VBoxBldProg_LIBS                = socket iconv poll pthread
  else ifeq ($(KBUILD_HOST),darwin)
 TEMPLATE_VBoxBldProg_TOOL                = GXX4MACHO
   if "$(VBOX_DEF_MACOSX_VERSION_MIN)" == "10.7" || "$(VBOX_DARWIN_HOST_VERSION_MAJOR)" == "7"

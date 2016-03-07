@@ -909,7 +909,6 @@ RuntimeR3_SOURCES.os2   = \
 	generic/RTThreadGetNativeState-generic.cpp \
 	os2/RTErrConvertFromOS2.cpp \
 	r3/generic/allocex-r3-generic.cpp \
-	r3/os2/fileaio-os2.cpp \
 	r3/os2/filelock-os2.cpp \
 	r3/os2/mp-os2.cpp \
 	r3/os2/rtProcInitExePath-os2.cpp \
@@ -918,6 +917,7 @@ RuntimeR3_SOURCES.os2   = \
 	r3/os2/systemmem-os2.cpp \
 	r3/os2/thread-os2.cpp \
 	r3/os2/time-os2.cpp \
+	r3/posix/fileaio-posix.cpp \
 	r3/posix/RTFileQueryFsSizes-posix.cpp \
 	r3/posix/RTHandleGetStandard-posix.cpp \
 	r3/posix/RTMemProtect-posix.cpp \
@@ -1447,6 +1447,9 @@ VBoxRT_LIBS.win                = \
 	$(PATH_SDK_$(VBOX_WINDDK)_LIB)/vccomsup.lib \
 	$(PATH_SDK_$(VBOX_WINDDK)_LIB)/wbemuuid.lib \
 	$(PATH_TOOL_$(VBOX_VCC_TOOL)_LIB)/delayimp.lib
+VBoxRT_LIBS.os2                = \
+	aio \
+	pthread
 VBoxRT_LDFLAGS.darwin          = \
 	-framework IOKit \
 	-framework CoreFoundation \
