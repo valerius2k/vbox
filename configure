@@ -2467,7 +2467,6 @@ elif [ "$OS" = "os2" ]; then
   WITH_PULSE=0
   WITH_DBUS=0
   WITH_KMODS=0
-  WITH_LIBVPX=0
 fi
 
 # scan command line options
