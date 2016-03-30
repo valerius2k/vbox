@@ -643,9 +643,9 @@ endif
 # Enable S3 support (requires libcurl)
 VBOX_WITH_S3 = 1
 # Enable Host=>Guest Drag'n'Drop
-if1of ($(KBUILD_TARGET), darwin linux solaris win)
+if1of ($(KBUILD_TARGET), darwin linux solaris win os2)
  VBOX_WITH_DRAG_AND_DROP = 1
- if1of ($(KBUILD_TARGET), darwin linux solaris win)
+ if1of ($(KBUILD_TARGET), darwin linux solaris win os2)
   VBOX_WITH_DRAG_AND_DROP_GH = $(VBOX_WITH_DRAG_AND_DROP)
  endif
  ifdef VBOX_WITH_DRAG_AND_DROP_GH
@@ -951,7 +951,6 @@ endif
 
 
 ifeq ($(KBUILD_TARGET),os2)
- VBOX_WITH_WEBSERVICES=
  VBOX_WITH_INSTALLER=
  VBOX_WITH_SECURELABEL=
  VBOX_WITH_VRDP_AUTHMOD=
