@@ -174,7 +174,7 @@ static int usbProxyOs2GlobalInit(void)
  */
 static PUSBPROXYURBOS2 usbProxyOs2UrbAlloc(PUSBPROXYDEV pProxyDev)
 {
-    PUSBPROXYDEVOS2 pDevOs2 = (PUSBPROXYDEVOS2)pProxyDev->Backend.pv;
+    PUSBPROXYDEVOS2 pDevOs2 = USBPROXYDEV_2_DATA(pProxyDev, PUSBPROXYDEVOS2);
     PUSBPROXYURBOS2 pUrbOs2;
 
     RTCritSectEnter(&pDevOs2->CritSect);
@@ -216,7 +216,7 @@ static PUSBPROXYURBOS2 usbProxyOs2UrbAlloc(PUSBPROXYDEV pProxyDev)
  */
 static void usbProxyOs2UrbFree(PUSBPROXYDEV pProxyDev, PUSBPROXYURBOS2 pUrbOs2)
 {
-    PUSBPROXYDEVOS2 pDevOs2 = (PUSBPROXYDEVOS2)pProxyDev->Backend.pv;
+    PUSBPROXYDEVOS2 pDevOs2 = USBPROXYDEV_2_DATA(pProxyDev, PUSBPROXYDEVOS2);
 
     RTCritSectEnter(&pDevOs2->CritSect);
 
@@ -260,7 +260,7 @@ static void usbProxyOs2UrbFree(PUSBPROXYDEV pProxyDev, PUSBPROXYURBOS2 pUrbOs2)
 static DECLCALLBACK(int) usbProxyOs2AsyncThread(RTTHREAD Thread, void *pvProxyDev)
 {
     PUSBPROXYDEV pProxyDev = (PUSBPROXYDEV)pvProxyDev;
-    PUSBPROXYDEVOS2 pDevOs2 = (PUSBPROXYDEVOS2)pProxyDev->Backend.pv;
+    PUSBPROXYDEVOS2 pDevOs2 = USBPROXYDEV_2_DATA(pProxyDev, PUSBPROXYDEVOS2);
     size_t cbLow = 0;
     void *pvLow = NULL;
 
@@ -429,7 +429,7 @@ static DECLCALLBACK(int) usbProxyOs2AsyncThread(RTTHREAD Thread, void *pvProxyDe
  * @param   pszAddress      The path to the device.
  * @param   pvBackend       Backend specific pointer, unused for the linux backend.
  */
-static int usbProxyOs2Open(PUSBPROXYDEV pProxyDev, const char *pszAddress, void *pvBackend)
+static DECLCALLBACK(int) usbProxyOs2Open(PUSBPROXYDEV pProxyDev, const char *pszAddress, void *pvBackend)
 {
     LogFlow(("usbProxyOs2Open: pProxyDev=%p pszAddress=%s\n", pProxyDev, pszAddress));
     int rc;
@@ -468,7 +468,7 @@ static bool g_fInitialized = false;
         const char chValue = *psz;
         AssertReleaseReturn(psz[1] == '=', VERR_INTERNAL_ERROR);
         uint64_t u64Value;
-        int rc = RTStrToUInt64Ex(psz + 2, (char **)&psz, 0, &u64Value);
+        rc = RTStrToUInt64Ex(psz + 2, (char **)&psz, 0, &u64Value);
         AssertReleaseRCReturn(rc, rc);
         AssertReleaseReturn(!*psz || *psz == ';', rc);
         switch (chValue)
@@ -506,7 +506,7 @@ static bool g_fInitialized = false;
                 rc = RTSemEventCreate(&pDevOs2->EventSyncWait);
                 if (RT_SUCCESS(rc))
                 {
-                    pProxyDev->Backend.pv = pDevOs2;
+                    pProxyDev->pvInstanceDataR3 = pDevOs2;
 
                     /** @todo
                      * Determine the active configuration.
@@ -542,7 +542,7 @@ static bool g_fInitialized = false;
         rc = VERR_VUSB_USBFS_PERMISSION; /** @todo fix me */
 
     Log(("usbProxyOs2Open(%p, %s) failed, rc=%Rrc! urc=%d\n", pProxyDev, pszAddress, rc, urc)); NOREF(urc);
-    pProxyDev->Backend.pv = NULL;
+    pProxyDev->pvInstanceDataR3 = NULL;
 
     NOREF(pvBackend);
     return rc;
@@ -552,10 +552,10 @@ static bool g_fInitialized = false;
 /**
  * Closes the proxy device.
  */
-static void usbProxyOs2Close(PUSBPROXYDEV pProxyDev)
+static DECLCALLBACK(void) usbProxyOs2Close(PUSBPROXYDEV pProxyDev)
 {
     LogFlow(("usbProxyOs2Close: pProxyDev=%s\n", pProxyDev->pUsbIns->pszName));
-    PUSBPROXYDEVOS2 pDevOs2 = (PUSBPROXYDEVOS2)pProxyDev->Backend.pv;
+    PUSBPROXYDEVOS2 pDevOs2 = USBPROXYDEV_2_DATA(pProxyDev, PUSBPROXYDEVOS2);
     Assert(pDevOs2);
     if (!pDevOs2)
         return;
@@ -590,7 +590,7 @@ static void usbProxyOs2Close(PUSBPROXYDEV pProxyDev)
     pDevOs2->hDevice = 0;
 
     RTMemFree(pDevOs2);
-    pProxyDev->Backend.pv = NULL;
+    pProxyDev->pvInstanceDataR3 = NULL;
     LogFlow(("usbProxyOs2Close: returns\n"));
 }
 
@@ -601,7 +601,7 @@ static void usbProxyOs2Close(PUSBPROXYDEV pProxyDev)
  * @returns VBox status code.
  * @param   pDev    The device to reset.
  */
-static int usbProxyOs2Reset(PUSBPROXYDEV pProxyDev, bool fResetOnLinux)
+static DECLCALLBACK(int) usbProxyOs2Reset(PUSBPROXYDEV pProxyDev, bool fResetOnLinux)
 {
     return VINF_SUCCESS;
 }
@@ -617,9 +617,9 @@ static int usbProxyOs2Reset(PUSBPROXYDEV pProxyDev, bool fResetOnLinux)
  * @param   pProxyDev       The device instance data.
  * @param   iCfg            The configuration to set.
  */
-static int usbProxyOs2SetConfig(PUSBPROXYDEV pProxyDev, int iCfg)
+static DECLCALLBACK(int) usbProxyOs2SetConfig(PUSBPROXYDEV pProxyDev, int iCfg)
 {
-    PUSBPROXYDEVOS2 pDevOs2 = (PUSBPROXYDEVOS2)pProxyDev->Backend.pv;
+    PUSBPROXYDEVOS2 pDevOs2 = USBPROXYDEV_2_DATA(pProxyDev, PUSBPROXYDEVOS2);
     LogFlow(("usbProxyOs2SetConfig: pProxyDev=%s cfg=%#x\n",
              pProxyDev->pUsbIns->pszName, iCfg));
 
@@ -644,7 +644,7 @@ static int usbProxyOs2SetConfig(PUSBPROXYDEV pProxyDev, int iCfg)
  * Claims an interface.
  * @returns success indicator.
  */
-static int usbProxyOs2ClaimInterface(PUSBPROXYDEV pProxyDev, int iIf)
+static DECLCALLBACK(int) usbProxyOs2ClaimInterface(PUSBPROXYDEV pProxyDev, int iIf)
 {
     LogFlow(("usbProxyOs2ClaimInterface: pProxyDev=%s ifnum=%#x\n", pProxyDev->pUsbIns->pszName, iIf));
     return true;
@@ -655,7 +655,7 @@ static int usbProxyOs2ClaimInterface(PUSBPROXYDEV pProxyDev, int iIf)
  * Releases an interface.
  * @returns success indicator.
  */
-static int usbProxyOs2ReleaseInterface(PUSBPROXYDEV pProxyDev, int iIf)
+static DECLCALLBACK(int) usbProxyOs2ReleaseInterface(PUSBPROXYDEV pProxyDev, int iIf)
 {
     LogFlow(("usbProxyOs2ReleaseInterface: pProxyDev=%s ifnum=%#x\n", pProxyDev->pUsbIns->pszName, iIf));
     return true;
@@ -667,7 +667,7 @@ static int usbProxyOs2ReleaseInterface(PUSBPROXYDEV pProxyDev, int iIf)
  *
  * @returns success indicator.
  */
-static int usbProxyOs2SetInterface(PUSBPROXYDEV pProxyDev, int iIf, int iAlt)
+static DECLCALLBACK(int) usbProxyOs2SetInterface(PUSBPROXYDEV pProxyDev, int iIf, int iAlt)
 {
     LogFlow(("usbProxyOs2SetInterface: pProxyDev=%p iIf=%#x iAlt=%#x\n", pProxyDev, iIf, iAlt));
     return true;
@@ -677,9 +677,9 @@ static int usbProxyOs2SetInterface(PUSBPROXYDEV pProxyDev, int iIf, int iAlt)
 /**
  * Clears the halted endpoint 'EndPt'.
  */
-static bool usbProxyOs2ClearHaltedEp(PUSBPROXYDEV pProxyDev, unsigned int EndPt)
+static DECLCALLBACK(int) usbProxyOs2ClearHaltedEp(PUSBPROXYDEV pProxyDev, unsigned int EndPt)
 {
-    PUSBPROXYDEVOS2 pDevOs2 = (PUSBPROXYDEVOS2)pProxyDev->Backend.pv;
+    PUSBPROXYDEVOS2 pDevOs2 = USBPROXYDEV_2_DATA(pProxyDev, PUSBPROXYDEVOS2);
     LogFlow(("usbProxyOs2ClearHaltedEp: pProxyDev=%s EndPt=%x\n", pProxyDev->pUsbIns->pszName, EndPt));
 
     /*
@@ -702,10 +702,9 @@ static bool usbProxyOs2ClearHaltedEp(PUSBPROXYDEV pProxyDev, unsigned int EndPt)
 /**
  * @copydoc USBPROXYBACK::pfnUrbQueue
  */
-static int usbProxyOs2UrbQueue(PVUSBURB pUrb)
+static DECLCALLBACK(int) usbProxyOs2UrbQueue(PUSBPROXYDEV pProxyDev, PVUSBURB pUrb)
 {
-    PUSBPROXYDEV    pProxyDev = (PUSBPROXYDEV)pUrb->pDev;
-    PUSBPROXYDEVOS2 pDevOs2 = (PUSBPROXYDEVOS2)pProxyDev->Backend.pv;
+    PUSBPROXYDEVOS2 pDevOs2 = USBPROXYDEV_2_DATA(pProxyDev, PUSBPROXYDEVOS2);
     LogFlow(("usbProxyOs2UrbQueue: pProxyDev=%s pUrb=%p EndPt=%d cbData=%d\n",
              pProxyDev->pUsbIns->pszName, pUrb, pUrb->EndPt, pUrb->cbData));
 
@@ -771,10 +770,10 @@ static int usbProxyOs2UrbQueue(PVUSBURB pUrb)
  * @param   pProxyDev   The device.
  * @param   cMillies    Number of milliseconds to wait. Use 0 to not wait at all.
  */
-static PVUSBURB usbProxyOs2UrbReap(PUSBPROXYDEV pProxyDev, RTMSINTERVAL cMillies)
+static DECLCALLBACK(PVUSBURB) usbProxyOs2UrbReap(PUSBPROXYDEV pProxyDev, RTMSINTERVAL cMillies)
 {
     PVUSBURB pUrb = NULL;
-    PUSBPROXYDEVOS2 pDevOs2 = (PUSBPROXYDEVOS2)pProxyDev->Backend.pv;
+    PUSBPROXYDEVOS2 pDevOs2 = USBPROXYDEV_2_DATA(pProxyDev, PUSBPROXYDEVOS2);
 
     RTCritSectEnter(&pDevOs2->CritSect);
     for (;;)
@@ -818,10 +817,9 @@ static PVUSBURB usbProxyOs2UrbReap(PUSBPROXYDEV pProxyDev, RTMSINTERVAL cMillies
  * Cancels the URB.
  * The URB requires reaping, so we don't change its state.
  */
-static void usbProxyOs2UrbCancel(PVUSBURB pUrb)
+static DECLCALLBACK(int) usbProxyOs2UrbCancel(PUSBPROXYDEV pProxyDev, PVUSBURB pUrb)
 {
 #if 0
-    PUSBPROXYDEV pProxyDev = (PUSBPROXYDEV)pUrb->pDev;
     PUSBPROXYURBOS2 pUrbOs2 = (PUSBPROXYURBOS2)pUrb->Dev.pvProxyUrb;
     if (pUrbOs2->pSplitHead)
     {
@@ -850,17 +848,23 @@ static void usbProxyOs2UrbCancel(PVUSBURB pUrb)
                  pUrb, errno, pProxyDev->pUsbIns->pszName));
     }
 #endif
+    return 0;
 }
 
+static DECLCALLBACK(int) usbProxyOs2Wakeup(PUSBPROXYDEV pProxyDev)
+{
+    return 1; // (???)
+}
 
 /**
  * The Linux USB Proxy Backend.
  */
 extern const USBPROXYBACK g_USBProxyDeviceHost =
 {
-    "host",
+    "host", /* pszName */
+    sizeof(USBPROXYDEVOS2), /* cbBackend */
     usbProxyOs2Open,
-    NULL,
+    NULL, /* usbProxyOs2Init */
     usbProxyOs2Close,
     usbProxyOs2Reset,
     usbProxyOs2SetConfig,
@@ -871,6 +875,6 @@ extern const USBPROXYBACK g_USBProxyDeviceHost =
     usbProxyOs2UrbQueue,
     usbProxyOs2UrbCancel,
     usbProxyOs2UrbReap,
+    NULL, /* usbProxyOs2Wakeup */
     0
 };
-

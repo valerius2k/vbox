@@ -21,6 +21,7 @@
 *********************************************************************************************************************************/
 #define INCL_BASE
 #define INCL_ERRORS
+#define VBOX_USB_H_INCL_DESCRIPTORS
 #include "USBProxyService.h"
 #include "Logging.h"
 
@@ -33,6 +34,8 @@
 #include <iprt/file.h>
 #include <iprt/err.h>
 
+#define LOG_ENABLE_FLOW
+#define LOG_ENABLED
 
 /**
  * Initialize data members.
@@ -133,12 +136,12 @@ int USBProxyServiceOs2::captureDevice(HostUSBDevice *aDevice)
     AssertReturn(!aDevice->isWriteLockOnCurrentThread(), VERR_GENERAL_FAILURE);
 
     AutoReadLock devLock(aDevice COMMA_LOCKVAL_SRC_POS);
-    LogFlowThisFunc(("aDevice=%s\n", aDevice->getName().c_str()));
+    LogFlowThisFunc(("aDevice=%s\n", aDevice->i_getName().c_str()));
 
     /*
      * Don't think we need to do anything when the device is held... fake it.
      */
-    Assert(aDevice->isStatePending());
+    //Assert(aDevice->isStatePending());
     devLock.release();
     interruptWait();
 
@@ -152,12 +155,12 @@ int USBProxyServiceOs2::releaseDevice(HostUSBDevice *aDevice)
     AssertReturn(!aDevice->isWriteLockOnCurrentThread(), VERR_GENERAL_FAILURE);
 
     AutoReadLock devLock(aDevice COMMA_LOCKVAL_SRC_POS);
-    LogFlowThisFunc(("aDevice=%s\n", aDevice->getName().c_str()));
+    LogFlowThisFunc(("aDevice=%s\n", aDevice->i_getName().c_str()));
 
     /*
      * We're not really holding it atm., just fake it.
      */
-    Assert(aDevice->isStatePending());
+    //Assert(aDevice->isStatePending());
     devLock.release();
     interruptWait();
 
@@ -249,9 +252,8 @@ PUSBDEVICE USBProxyServiceOs2::getDevices(void)
         pCur->pszProduct = RTStrDup("");
         pCur->pszSerialNumber = NULL;
         pCur->u64SerialHash = 0;
-        //pCur->bNumConfigurations = pDevDesc->bNumConfigurations;
-        pCur->bNumConfigurations = 0;
-        pCur->paConfigurations = NULL;
+        pCur->bNumConfigurations = pDevDesc->bNumConfigurations;
+        //pCur->paConfigurations = NULL; // vs: Now USBDEVICE format has changed
         pCur->enmState = USBDEVICESTATE_USED_BY_HOST_CAPTURABLE;
         pCur->enmSpeed = USBDEVICESPEED_UNKNOWN;
         pCur->pszAddress = NULL;
@@ -259,12 +261,12 @@ PUSBDEVICE USBProxyServiceOs2::getDevices(void)
                      pDevDesc->idProduct, pDevDesc->idVendor, pDevDesc->bcdDevice, i);
 
         pCur->bBus = 0;
-        pCur->bLevel = 0;
+        //pCur->bLevel = 0;
         pCur->bDevNum = 0;
-        pCur->bDevNumParent = 0;
+        //pCur->bDevNumParent = 0;
         pCur->bPort = 0;
-        pCur->bNumDevices = 0;
-        pCur->bMaxChildren = 0;
+        //pCur->bNumDevices = 0;
+        //pCur->bMaxChildren = 0;
 
         /* link it */
         pCur->pNext = NULL;
