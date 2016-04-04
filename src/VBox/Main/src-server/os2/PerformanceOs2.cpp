@@ -299,6 +299,7 @@ int CollectorOS2::getRawHostNetworkLoad(const char *name, uint64_t *rx, uint64_t
 {
     int sock = -1;
     struct ifmib ifmib;
+    int i;
 
     sock = socket( AF_INET, SOCK_RAW, 0 );
 
@@ -309,8 +310,54 @@ int CollectorOS2::getRawHostNetworkLoad(const char *name, uint64_t *rx, uint64_t
                   sizeof(struct ifmib) ) == -1 )
         return VERR_INTERNAL_ERROR;
 
-    *rx = ifmib.iftable[0].iftInOctets;
-    *tx = ifmib.iftable[0].iftOutOctets;
+    for (i = 0; i < ifmib.ifNumber; i++)
+    {
+        int ifindex = ifmib.iftable[i].iftIndex;
+
+        if (ifindex >=0 && ifindex <= 9)
+        {
+            // lanX
+            strcpy(pszName, "lan");
+            itoa(ifindex, pszName + strlen(pszName), 10);
+        }
+        else if (strstr(ifmib.iftable[i].iftDescr, "back"))
+        {
+            // loopback
+            strcpy(pszName, "lo");
+        }
+        else if (strstr(ifmib.iftable[i].iftDescr, "ace ppp"))
+        {
+            // pppX
+            strcpy(pszName, "ppp");
+            itoa(ifindex, pszName + strlen(pszName), 10);
+        }
+        else if (strstr(ifmib.iftable[i].iftDescr,"ace sl"))
+        {
+            // slX
+            strcpy(pszName, "sl");
+            itoa(ifindex, pszName + strlen(pszName), 10);
+        }
+        else if (strstr(ifmib.iftable[i].iftDescr,"ace dod"))
+        {
+            // dodX
+            strcpy(pszName, "dod");
+            itoa(ifindex, pszName + strlen(pszName), 10);
+        }
+        else
+        {
+            // unknown
+            strcpy(pszName, "unk");
+            itoa(ifindex, pszName + strlen(pszName), 10);
+        }
+
+
+        if (strcmp(pszName, name))
+        {
+            *rx = ifmib.iftable[i].iftInOctets;
+            *tx = ifmib.iftable[i].iftOutOctets;
+            break;
+        }
+    }
 
     soclose(sock);
 
