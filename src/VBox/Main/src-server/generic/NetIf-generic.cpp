@@ -21,6 +21,9 @@
 #include <iprt/env.h>
 #include <iprt/path.h>
 #include <iprt/param.h>
+#if defined(RT_OS_OS2)
+# include <sys/socket.h>
+#endif
 #include <sys/ioctl.h>
 #include <netinet/in.h>
 #include <net/if.h>
@@ -184,7 +187,7 @@ int NetIfCreateHostOnlyNetworkInterface(VirtualBox *pVirtualBox,
                                         IProgress **aProgress,
                                         const char *pcszName)
 {
-#if defined(RT_OS_LINUX) || defined(RT_OS_DARWIN) || defined(RT_OS_FREEBSD)
+#if defined(RT_OS_LINUX) || defined(RT_OS_DARWIN) || defined(RT_OS_FREEBSD) || defined(RT_OS_OS2)
     /* create a progress object */
     ComObjPtr<Progress> progress;
     progress.createObject();
@@ -311,7 +314,7 @@ int NetIfCreateHostOnlyNetworkInterface(VirtualBox *pVirtualBox,
 int NetIfRemoveHostOnlyNetworkInterface(VirtualBox *pVirtualBox, IN_GUID aId,
                                         IProgress **aProgress)
 {
-#if defined(RT_OS_LINUX) || defined(RT_OS_DARWIN) || defined(RT_OS_FREEBSD)
+#if defined(RT_OS_LINUX) || defined(RT_OS_DARWIN) || defined(RT_OS_FREEBSD) || defined(RT_OS_OS2)
     /* create a progress object */
     ComObjPtr<Progress> progress;
     progress.createObject();
