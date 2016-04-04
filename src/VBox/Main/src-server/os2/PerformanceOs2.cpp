@@ -27,6 +27,9 @@
 #include <net/if.h>
 #include <malloc.h>
 
+#undef __STRICT_ANSI__
+#include <stdlib.h>
+
 #define CMD_KI_RDCNT 0x63
 
 static __inline__ unsigned long long rdtsc(void)
@@ -299,6 +302,7 @@ int CollectorOS2::getRawHostNetworkLoad(const char *name, uint64_t *rx, uint64_t
 {
     int sock = -1;
     struct ifmib ifmib;
+    char pszName[20];
     int i;
 
     sock = socket( AF_INET, SOCK_RAW, 0 );
