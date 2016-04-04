@@ -42,6 +42,10 @@ typedef __uint8_t u8;
 #ifdef RT_OS_SOLARIS
 # include <sys/ioccom.h>
 #endif
+#ifdef RT_OS_OS2
+# define  INCL_BASE
+# include <os2.h>
+#endif
 
 /** @todo Error codes must be moved to some header file */
 #define ADPCTLERR_BAD_NAME         2
@@ -50,9 +54,17 @@ typedef __uint8_t u8;
 #define ADPCTLERR_SOCKET_FAILED    5
 
 /** @todo These are duplicates from src/VBox/HostDrivers/VBoxNetAdp/VBoxNetAdpInternal.h */
+#if defined(RT_OS_OS2)
+#define VBOXNETADP_CTL_DEV_NAME    "/dev/vboxnet$"
+#else
 #define VBOXNETADP_CTL_DEV_NAME    "/dev/vboxnetctl"
+#endif
 #define VBOXNETADP_MAX_INSTANCES   128
+#if defined(RT_OS_OS2)
+#define VBOXNETADP_NAME            "lan"
+#else
 #define VBOXNETADP_NAME            "vboxnet"
+#endif
 #define VBOXNETADP_MAX_NAME_LEN    32
 #define VBOXNETADP_CTL_ADD   _IOWR('v', 1, VBOXNETADPREQ)
 #define VBOXNETADP_CTL_REMOVE _IOW('v', 2, VBOXNETADPREQ)
@@ -62,8 +74,12 @@ typedef struct VBoxNetAdpReq
 } VBOXNETADPREQ;
 typedef VBOXNETADPREQ *PVBOXNETADPREQ;
 
+#if !defined(RT_OS_OS2)
 #define VBOXADPCTL_IFCONFIG_PATH1 "/sbin/ifconfig"
 #define VBOXADPCTL_IFCONFIG_PATH2 "/bin/ifconfig"
+#else
+static char VBOXADPCTL_IFCONFIG_PATH[] = "d:/mptn/bin/ifconfig.exe";
+#endif
 static char *g_pszIfConfig;
 
 #if defined(RT_OS_LINUX)
@@ -84,6 +100,17 @@ static void showUsage(void)
     fprintf(stderr, "     | VBoxNetAdpCtl <adapter> remove\n");
 }
 
+#if defined(RT_OS_OS2)
+static void setPathIfConfig(void)
+{
+    ULONG bootdrv;
+
+    DosQuerySysInfo(QSV_BOOT_DRIVE, QSV_BOOT_DRIVE, &bootdrv, sizeof(bootdrv));
+    g_pszIfConfig  = (char *)VBOXADPCTL_IFCONFIG_PATH;
+    // fix the boot drive letter
+    *g_pszIfConfig = (char)('a' + bootdrv - 1);
+}
+#else
 static void setPathIfConfig(void)
 {
     struct stat s;
@@ -93,6 +120,7 @@ static void setPathIfConfig(void)
     else
         g_pszIfConfig = (char*)VBOXADPCTL_IFCONFIG_PATH2;
 }
+#endif
 
 static int executeIfconfig(const char *pcszAdapterName, const char *pcszArg1,
                            const char *pcszArg2 = NULL,
@@ -235,13 +263,21 @@ static int checkAdapterName(const char *pcszNameIn, char *pszNameOut)
     int iAdapterIndex = -1;
 
     if (   strlen(pcszNameIn) >= VBOXNETADP_MAX_NAME_LEN
+#if defined(RT_OS_OS2)
+        || sscanf(pcszNameIn, "lan%d", &iAdapterIndex) != 1
+#else
         || sscanf(pcszNameIn, "vboxnet%d", &iAdapterIndex) != 1
+#endif
         || iAdapterIndex < 0 || iAdapterIndex >= VBOXNETADP_MAX_INSTANCES )
     {
         fprintf(stderr, "VBoxNetAdpCtl: Setting configuration for '%s' is not supported.\n", pcszNameIn);
         return ADPCTLERR_BAD_NAME;
     }
+#if defined(RT_OS_OS2)
+    sprintf(pszNameOut, "lan%d", iAdapterIndex);
+#else
     sprintf(pszNameOut, "vboxnet%d", iAdapterIndex);
+#endif
     if (strcmp(pszNameOut, pcszNameIn))
     {
         fprintf(stderr, "VBoxNetAdpCtl: Invalid adapter name '%s'.\n", pcszNameIn);
