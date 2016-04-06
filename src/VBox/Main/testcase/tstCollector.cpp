@@ -150,8 +150,10 @@ void measurePerformance(pm::CollectorHAL *collector, const char *pszName, int cV
     shutdownProcessList(processes);
 }
 
-#ifdef RT_OS_SOLARIS
+#if defined(RT_OS_SOLARIS)
 #define NETIFNAME "net0"
+#elif defined(RT_OS_OS2)
+#define NETIFNAME "lan0"
 #else
 #define NETIFNAME "eth0"
 #endif
