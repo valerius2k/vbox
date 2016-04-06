@@ -27,7 +27,7 @@
 struct NETIFINFO;
 #endif
 
-#ifdef RT_OS_WINDOWS
+#if defined(RT_OS_WINDOWS) || defined(RT_OS_OS2)
 # define DHCP_EXECUTABLE_NAME "VBoxNetDHCP.exe"
 #else
 # define DHCP_EXECUTABLE_NAME "VBoxNetDHCP"

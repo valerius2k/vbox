@@ -30,7 +30,7 @@ namespace settings
     struct NATRule;
 }
 
-#ifdef RT_OS_WINDOWS
+#if defined(RT_OS_WINDOWS) || defined(RT_OS_OS2)
 # define NATSR_EXECUTABLE_NAME "VBoxNetNAT.exe"
 #else
 # define NATSR_EXECUTABLE_NAME "VBoxNetNAT"
