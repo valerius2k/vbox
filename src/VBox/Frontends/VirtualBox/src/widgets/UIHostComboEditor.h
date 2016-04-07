@@ -27,6 +27,17 @@
 /* GUI includes: */
 #include "QIWithRetranslateUI.h"
 
+#if defined(Q_WS_PM)
+/* Extra virtual keys returned by QIHotKeyEdit::virtualKey() */
+#define VK_LSHIFT   VK_USERFIRST + 0
+#define VK_LCTRL    VK_USERFIRST + 1
+#define VK_LWIN     VK_USERFIRST + 2
+#define VK_RWIN     VK_USERFIRST + 3
+#define VK_WINMENU  VK_USERFIRST + 4
+#define VK_FORWARD  VK_USERFIRST + 5
+#define VK_BACKWARD VK_USERFIRST + 6
+#endif
+
 /* Forward declarations: */
 class UIHostComboEditorPrivate;
 class QIToolButton;
@@ -43,9 +54,12 @@ namespace UINativeHotKey
 #ifdef Q_WS_WIN
     int distinguishModifierVKey(int wParam, int lParam);
 #endif /* Q_WS_WIN */
-#ifdef Q_WS_X11
+#if defined (Q_WS_PM)
+    int virtualKey (QMSG *aMsg);
+#endif /* Q_WS_PM */
+#if defined(Q_WS_PM) || defined(Q_WS_X11)
     void retranslateKeyNames();
-#endif /* Q_WS_X11 */
+#endif /* Q_WS_PM || Q_WS_X11 */
 }
 
 /* Host-combo namespace to unify
@@ -145,6 +159,9 @@ protected:
 #ifdef Q_WS_WIN
     bool winEvent(MSG *pMsg, long *pResult);
 #endif /* Q_WS_WIN */
+#ifdef Q_WS_PM
+    bool pmEvent (QMSG *aMsg, MRESULT *result);
+#endif
 #ifdef Q_WS_X11
     bool x11Event(XEvent *pEvent);
 #endif /* Q_WS_X11 */

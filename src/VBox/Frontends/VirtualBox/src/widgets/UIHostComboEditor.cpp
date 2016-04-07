@@ -44,6 +44,10 @@
 # include "WinKeyboard.h"
 #endif /* Q_WS_WIN */
 
+#ifdef Q_WS_PM
+# include "os2_defs.h"
+#endif
+
 #ifdef Q_WS_X11
 # include <X11/Xlib.h>
 # include <X11/Xutil.h>
@@ -68,6 +72,12 @@
 /* Namespaces: */
 using namespace UIExtraDataDefs;
 
+#ifdef Q_WS_PM
+namespace UINativeHotKey
+{
+    QMap<int, QString> m_keyNames;
+}
+#endif
 
 #ifdef Q_WS_X11
 namespace UINativeHotKey
@@ -112,6 +122,15 @@ QString UINativeHotKey::toString(int iKeyCode)
     }
     delete[] pKeyName;
 #endif /* Q_WS_WIN */
+
+#ifdef Q_WS_PM
+        strKeyName = m_keyNames [iKeyCode];
+        if (strKeyName.isNull())
+        {
+            AssertFailed();
+            strKeyName = QString (UIHostComboEditor::tr ("<key_%1>")).arg (iKeyCode);
+        }
+#endif
 
 #ifdef Q_WS_X11
     if (char *pNativeKeyName = ::XKeysymToString((KeySym)iKeyCode))
@@ -180,6 +199,15 @@ bool UINativeHotKey::isValidKey(int iKeyCode)
             iKeyCode == VK_APPS ||
             iKeyCode == VK_PRINT);
 #endif /* Q_WS_WIN */
+
+#ifdef Q_WS_PM
+    return (
+        (iKeyCode >= VK_SHIFT && iKeyCode <= VK_CAPSLOCK) ||
+        iKeyCode == VK_PRINTSCRN ||
+        (iKeyCode >= VK_F1 && iKeyCode <= VK_F24) ||
+        iKeyCode == VK_NUMLOCK || iKeyCode == VK_SCRLLOCK ||
+        (iKeyCode >= VK_LSHIFT && iKeyCode <= VK_BACKWARD));
+#endif
 
 #ifdef Q_WS_X11
     return (IsModifierKey(iKeyCode) /* allow modifiers */ ||
@@ -251,6 +279,109 @@ int UINativeHotKey::distinguishModifierVKey(int wParam, int lParam)
     return iKeyCode;
 }
 #endif /* Q_WS_WIN */
+
+#if defined (Q_WS_PM)
+/** 
+ *  Returns the virtual key extracted from the QMSG structure.
+ *
+ *  This function tries to detect some extra virtual keys definitions missing
+ *  in PM (like Left Shift, Left Ctrl, Win keys). In all other cases it simply
+ *  returns SHORT2FROMMP (aMsg->mp2).
+ * 
+ *  @param aMsg  Pointer to the QMSG structure to extract the virtual key from.
+ *  @return The extracted virtual key code or zero if there is no virtual key.
+ */
+/* static */
+int UINativeHotKey::virtualKey (QMSG *aMsg)
+{
+    USHORT f = SHORT1FROMMP (aMsg->mp1);
+    CHAR scan = CHAR4FROMMP (aMsg->mp1);
+    USHORT ch = SHORT1FROMMP (aMsg->mp2);
+    int vkey = (unsigned int) SHORT2FROMMP (aMsg->mp2);
+
+    if (f & KC_VIRTUALKEY)
+    {
+        /* distinguish Left Shift from Right Shift) */
+        if (vkey == VK_SHIFT && scan == 0x2A)
+            vkey = VK_LSHIFT;
+        /* distinguish Left Ctrl from Right Ctrl */
+        else if (vkey == VK_CTRL && scan == 0x1D)
+            vkey = VK_LCTRL;
+        /* distinguish Ctrl+ScrLock from Ctrl+Break */
+        else if (vkey == VK_BREAK && scan == 0x46 && f & KC_CTRL)
+            vkey = VK_SCRLLOCK;
+    }
+    else if (!(f & KC_CHAR))
+    {
+        /* detect some special keys that have a pseudo char code in the high
+         * byte of ch (probably this is less device-dependent than
+         * scancode) */
+        switch (ch)
+        {
+            case 0xEC00: vkey = VK_LWIN; break;
+            case 0xED00: vkey = VK_RWIN; break;
+            case 0xEE00: vkey = VK_WINMENU; break;
+            case 0xF900: vkey = VK_FORWARD; break;
+            case 0xFA00: vkey = VK_BACKWARD; break;
+            default: vkey = 0;
+        }
+    }
+
+    return vkey;
+}
+#endif
+
+#ifdef Q_WS_PM
+void UINativeHotKey::retranslateKeyNames()
+{
+    /* Note: strings for the same key must match strings in retranslateUi()
+     * versions for all platforms, to keep translators happy. */
+
+    m_keyNames [VK_LSHIFT]        = UIHostComboEditor::tr ("Left Shift");
+    m_keyNames [VK_SHIFT]         = UIHostComboEditor::tr ("Right Shift");
+    m_keyNames [VK_LCTRL]         = UIHostComboEditor::tr ("Left Ctrl");
+    m_keyNames [VK_CTRL]          = UIHostComboEditor::tr ("Right Ctrl");
+    m_keyNames [VK_ALT]           = UIHostComboEditor::tr ("Left Alt");
+    m_keyNames [VK_ALTGRAF]       = UIHostComboEditor::tr ("Right Alt");
+    m_keyNames [VK_LWIN]          = UIHostComboEditor::tr ("Left WinKey");
+    m_keyNames [VK_RWIN]          = UIHostComboEditor::tr ("Right WinKey");
+    m_keyNames [VK_WINMENU]       = UIHostComboEditor::tr ("Menu key");
+    m_keyNames [VK_CAPSLOCK]      = UIHostComboEditor::tr ("Caps Lock");
+    m_keyNames [VK_SCRLLOCK]      = UIHostComboEditor::tr ("Scroll Lock");
+
+    m_keyNames [VK_PAUSE]         = UIHostComboEditor::tr ("Pause");
+    m_keyNames [VK_PRINTSCRN]     = UIHostComboEditor::tr ("Print Screen");
+
+    m_keyNames [VK_F1]            = UIHostComboEditor::tr ("F1");
+    m_keyNames [VK_F2]            = UIHostComboEditor::tr ("F2");
+    m_keyNames [VK_F3]            = UIHostComboEditor::tr ("F3");
+    m_keyNames [VK_F4]            = UIHostComboEditor::tr ("F4");
+    m_keyNames [VK_F5]            = UIHostComboEditor::tr ("F5");
+    m_keyNames [VK_F6]            = UIHostComboEditor::tr ("F6");
+    m_keyNames [VK_F7]            = UIHostComboEditor::tr ("F7");
+    m_keyNames [VK_F8]            = UIHostComboEditor::tr ("F8");
+    m_keyNames [VK_F9]            = UIHostComboEditor::tr ("F9");
+    m_keyNames [VK_F10]           = UIHostComboEditor::tr ("F10");
+    m_keyNames [VK_F11]           = UIHostComboEditor::tr ("F11");
+    m_keyNames [VK_F12]           = UIHostComboEditor::tr ("F12");
+    m_keyNames [VK_F13]           = UIHostComboEditor::tr ("F13");
+    m_keyNames [VK_F14]           = UIHostComboEditor::tr ("F14");
+    m_keyNames [VK_F15]           = UIHostComboEditor::tr ("F15");
+    m_keyNames [VK_F16]           = UIHostComboEditor::tr ("F16");
+    m_keyNames [VK_F17]           = UIHostComboEditor::tr ("F17");
+    m_keyNames [VK_F18]           = UIHostComboEditor::tr ("F18");
+    m_keyNames [VK_F19]           = UIHostComboEditor::tr ("F19");
+    m_keyNames [VK_F20]           = UIHostComboEditor::tr ("F20");
+    m_keyNames [VK_F21]           = UIHostComboEditor::tr ("F21");
+    m_keyNames [VK_F22]           = UIHostComboEditor::tr ("F22");
+    m_keyNames [VK_F23]           = UIHostComboEditor::tr ("F23");
+    m_keyNames [VK_F24]           = UIHostComboEditor::tr ("F24");
+
+    m_keyNames [VK_NUMLOCK]       = UIHostComboEditor::tr ("Num Lock");
+    m_keyNames [VK_FORWARD]       = UIHostComboEditor::tr ("Forward");
+    m_keyNames [VK_BACKWARD]      = UIHostComboEditor::tr ("Back");
+}
+#endif
 
 #ifdef Q_WS_X11
 void UINativeHotKey::retranslateKeyNames()
@@ -515,6 +646,36 @@ bool UIHostComboEditorPrivate::winEvent(MSG *pMsg, long* /* pResult */)
     return false;
 }
 #endif /* Q_WS_WIN */
+
+#ifdef Q_WS_PM
+bool UIHostComboEditorPrivate::pmEvent (QMSG *aMsg, MRESULT *result)
+{
+    if (aMsg->msg != WM_CHAR)
+        return false;
+
+    USHORT f = SHORT1FROMMP (aMsg->mp1);
+
+    int vkey = UINativeHotKey::virtualKey (aMsg);
+
+    /* ignore if not a valid hot key */
+    if (!UINativeHotKey::isValidKey (vkey))
+        return false;
+
+    if (!(f & KC_KEYUP))
+    {
+        /* determine platform-dependent key */
+        //mKeyVal = vkey;
+        /* determine symbolic name */
+        //mSymbName = UINativeHotKey::toString (mKeyVal);
+        /* update the display */
+        //updateText();
+
+        return processKeyEvent(vkey, aMsg->msg == WM_KEYDOWN || aMsg->msg == WM_SYSKEYDOWN);
+    }
+
+    return true;
+}
+#endif
 
 #ifdef Q_WS_X11
 #pragma GCC diagnostic push
