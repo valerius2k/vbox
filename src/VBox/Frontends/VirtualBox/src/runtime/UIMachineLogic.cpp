@@ -110,6 +110,10 @@
 #ifdef Q_WS_WIN
 # include "WinKeyboard.h"
 #endif /* Q_WS_WIN */
+#ifdef Q_WS_PM
+# include "VBoxHlp.h"
+# include "os2_defs.h"
+#endif /* Q_WS_PM */
 #ifdef Q_WS_X11
 # include <XKeyboard.h>
 #endif /* Q_WS_X11 */
@@ -199,6 +203,12 @@ void UIMachineLogic::prepare()
     prepareDock();
 #endif /* Q_WS_MAC */
 
+#if defined (Q_WS_PM)
+    bool ok = VBoxHlpInstallKbdHook (0, mainMachineWindow()->machineView()->winId(), UM_PREACCEL_CHAR);
+    Assert (ok);
+    NOREF (ok);
+#endif
+
 #if 0 /* To early! The debugger needs a VM handle to work. So, must be done after power on.  Moved to initializePostPowerUp. */
 #ifdef VBOX_WITH_DEBUGGER_GUI
     /* Prepare debugger: */
@@ -222,6 +232,12 @@ void UIMachineLogic::cleanup()
     /* Cleanup debugger: */
     cleanupDebugger();
 #endif /* VBOX_WITH_DEBUGGER_GUI */
+
+#if defined (Q_WS_PM)
+    bool ok = VBoxHlpUninstallKbdHook (0, mainMachineWindow()->machineView()->winId(), UM_PREACCEL_CHAR);
+    Assert (ok);
+    NOREF (ok);
+#endif
 
 #ifdef Q_WS_MAC
     /* Cleanup dock: */

@@ -26,6 +26,8 @@
 # define VBOXHLPDECL(type) DECLIMPORT(type) RTCALL
 #endif
 
+typedef unsigned long HAB;
+
 VBOXHLPDECL(bool) VBoxHlpInstallKbdHook (HAB aHab, HWND aHwnd,
                                            unsigned long aMsg);
 

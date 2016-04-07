@@ -75,6 +75,10 @@
 # include "UIIconPool.h"
 # include "UIVirtualBoxEventHandler.h"
 
+# ifdef Q_WS_PM
+#  include "UIHostComboEditor.h"
+# endif
+
 # ifdef Q_WS_X11
 #  include "UIHostComboEditor.h"
 #  include "UIDesktopWidgetWatchdog.h"
@@ -2241,7 +2245,7 @@ void VBoxGlobal::retranslateUi()
     if (mValid)
         startMediumEnumeration();
 
-#ifdef Q_WS_X11
+#if defined(Q_WS_PM) || defined(Q_WS_X11)
     /* As X11 do not have functionality for providing human readable key names,
      * we keep a table of them, which must be updated when the language is changed. */
     UINativeHotKey::retranslateKeyNames();

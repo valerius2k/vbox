@@ -30,6 +30,7 @@
 # include "UIMessageCenter.h"
 # include "UIPopupCenter.h"
 # include "UIActionPool.h"
+# include "UIHostComboEditor.h"
 # include "UIKeyboardHandlerNormal.h"
 # include "UIKeyboardHandlerFullscreen.h"
 # include "UIKeyboardHandlerSeamless.h"
@@ -70,6 +71,10 @@ const int XKeyRelease = KeyRelease;
 # include "UICocoaApplication.h"
 # include <Carbon/Carbon.h>
 #endif /* Q_WS_MAC */
+
+#ifdef Q_WS_PM
+# include "os2_defs.h"
+#endif /* Q_WS_PM */
 
 #ifdef Q_WS_WIN
 # include "WinKeyboard.h"
@@ -219,7 +224,7 @@ void UIKeyboardHandler::captureKeyboard(ulong uScreenId)
         /* Remember which screen had captured keyboard: */
         m_iKeyboardCaptureViewIndex = uScreenId;
 
-#if defined(Q_WS_WIN)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM)
         /* On Win, keyboard grabbing is ineffective, a low-level keyboard hook is used instead. */
 #elif defined(Q_WS_X11)
         /* On X11, we are using passive XGrabKey for normal (windowed) mode
@@ -287,7 +292,7 @@ void UIKeyboardHandler::releaseKeyboard()
         /* Store new keyboard-captured state value: */
         m_fIsKeyboardCaptured = false;
 
-#if defined(Q_WS_WIN)
+#if defined(Q_WS_WIN) || defined(Q_WS_PM)
         /* On Win, keyboard grabbing is ineffective, a low-level keyboard hook is used instead. */
 #elif defined(Q_WS_X11)
         /* On X11, we are using passive XGrabKey for normal (windowed) mode
@@ -564,6 +569,120 @@ bool UIKeyboardHandler::winEventFilter(MSG *pMsg, ulong uScreenId)
     }
     /* Return result: */
     return fResult;
+}
+
+#elif defined(Q_WS_PM)
+
+/**
+ *  Get PM messages before they are passed to Qt. This allows us to get
+ *  the keyboard events directly and bypass the harmful Qt translation. A
+ *  return value of @c true indicates to Qt that the event has been handled.
+ */
+bool UIKeyboardHandler::pmEventFilter(QMSG *aMsg, ulong uScreenId)
+{
+    if (aMsg->msg == UM_PREACCEL_CHAR)
+    {
+        /* we are inside the input hook */
+
+        /* let the message go through the normal system pipeline */
+        if (!m_fIsKeyboardCaptured)
+            return false;
+    }
+
+    if (aMsg->msg != WM_CHAR &&
+        aMsg->msg != UM_PREACCEL_CHAR)
+        return false;
+
+    /* check for the special flag possibly set at the end of this function */
+    if (SHORT2FROMMP (aMsg->mp2) & 0x8000)
+    {
+        aMsg->mp2 = MPFROM2SHORT (SHORT1FROMMP (aMsg->mp2),
+                                  SHORT2FROMMP (aMsg->mp2) & ~0x8000);
+        return false;
+    }
+
+#if 0
+    {
+        char buf [256];
+        sprintf (buf, "*** %s: f=%04X rep=%03d scan=%02X ch=%04X vk=%04X",
+                 (aMsg->msg == WM_CHAR ? "WM_CHAR" : "UM_PREACCEL_CHAR"),
+                 SHORT1FROMMP (aMsg->mp1), CHAR3FROMMP (aMsg->mp1),
+                 CHAR4FROMMP (aMsg->mp1), SHORT1FROMMP (aMsg->mp2),
+                 SHORT2FROMMP (aMsg->mp2));
+        mMainWnd->statusBar()->message (buf);
+        LogFlow (("%s\n", buf));
+    }
+#endif
+
+    USHORT ch = SHORT1FROMMP (aMsg->mp2);
+    USHORT f = SHORT1FROMMP (aMsg->mp1);
+
+    int scan = (unsigned int) CHAR4FROMMP (aMsg->mp1);
+    if (!scan || scan > 0x7F)
+        return true;
+
+    int vkey = UINativeHotKey::virtualKey (aMsg);
+
+    int flags = 0;
+
+    if ((ch & 0xFF) == 0xE0)
+    {
+        flags |= KeyExtended;
+        scan = ch >> 8;
+    }
+    else if (scan == 0x5C && (ch & 0xFF) == '/')
+    {
+        /* this is the '/' key on the keypad */
+        scan = 0x35;
+        flags |= KeyExtended;
+    }
+    else
+    {
+        /* For some keys, the scan code passed in QMSG is a pseudo scan
+         * code. We replace it with a real hardware scan code, according to
+         * http://www.computer-engineering.org/ps2keyboard/scancodes1.html.
+         * Also detect Pause and PrtScn and set flags. */
+        switch (vkey)
+        {
+            case VK_ENTER:     scan = 0x1C; flags |= KeyExtended; break;
+            case VK_CTRL:      scan = 0x1D; flags |= KeyExtended; break;
+            case VK_ALTGRAF:   scan = 0x38; flags |= KeyExtended; break;
+            case VK_LWIN:      scan = 0x5B; flags |= KeyExtended; break;
+            case VK_RWIN:      scan = 0x5C; flags |= KeyExtended; break;
+            case VK_WINMENU:   scan = 0x5D; flags |= KeyExtended; break;
+            case VK_FORWARD:   scan = 0x69; flags |= KeyExtended; break;
+            case VK_BACKWARD:  scan = 0x6A; flags |= KeyExtended; break;
+#if 0
+            /// @todo this would send 0xE0 0x46 0xE0 0xC6. It's not fully
+            // clear what is more correct
+            case VK_BREAK:     scan = 0x46; flags |= KeyExtended; break;
+#else
+            case VK_BREAK:     scan = 0;    flags |= KeyPause; break;
+#endif
+            case VK_PAUSE:     scan = 0;    flags |= KeyPause;    break;
+            case VK_PRINTSCRN: scan = 0;    flags |= KeyPrint;    break;
+            default:;
+        }
+    }
+
+    if (!(f & KC_KEYUP))
+        flags |= KeyPressed;
+
+    bool result = keyEvent (vkey, scan, flags, uScreenId);
+    if (!result && m_fIsKeyboardCaptured)
+    {
+        /* keyEvent() returned that it didn't process the message, but since the
+         * keyboard is captured, we don't want to pass it to PM. We just want
+         * to let Qt process the message (to handle non-alphanumeric <HOST>+key
+         * shortcuts for example). So send it direcltly to the window with the
+         * special flag in the reserved area of lParam (to avoid recursion). */
+        ::WinSendMsg (aMsg->hwnd, WM_CHAR,
+                      aMsg->mp1,
+                      MPFROM2SHORT (SHORT1FROMMP (aMsg->mp2),
+                                    SHORT2FROMMP (aMsg->mp2) | 0x8000));
+        return true;
+    }
+    return result;
 }
 
 #elif defined(Q_WS_X11)
@@ -987,6 +1106,88 @@ bool UIKeyboardHandler::eventFilter(QObject *pWatchedObject, QEvent *pEvent)
             case QEvent::KeyRelease:
             {
                 QKeyEvent *pKeyEvent = static_cast<QKeyEvent*>(pEvent);
+
+#ifdef Q_WS_PM
+                /// @todo temporary solution to send Alt+Tab and friends to
+                //  the guest. The proper solution is to write a keyboard
+                //  driver that will steal these combos from the host (it's
+                //  impossible to do so using hooks on OS/2).
+
+                if (isHostKeyPressed())
+                {
+                    bool pressed = pEvent->type() == QEvent::KeyPress;
+                    CKeyboard &kbd = keyboard();
+
+                    /* whether the host key is Shift so that it will modify
+                     * the hot key values? Note that we don't distinguish
+                     * between left and right shift here (too much hassle) */
+                    int   keycode = m_globalSettings.hostCombo().toInt();
+                    const bool kShift = (keycode == VK_SHIFT || keycode == VK_LSHIFT) &&
+                                        (pKeyEvent->modifiers() & Qt::ShiftModifier);
+                    /* define hot keys according to the Shift state */
+                    const int kAltTab      = kShift ? Qt::Key_Exclam     : Qt::Key_1;
+                    const int kAltShiftTab = kShift ? Qt::Key_At         : Qt::Key_2;
+                    const int kCtrlEsc     = kShift ? Qt::Key_AsciiTilde : Qt::Key_QuoteLeft;
+
+                    /* Simulate Alt+Tab on Host+1 and Alt+Shift+Tab on Host+2 */
+                    if (pKeyEvent->key() == kAltTab || pKeyEvent->key() == kAltShiftTab)
+                    {
+                        if (pressed)
+                        {
+                            /* Send the Alt press to the guest */
+                            if (!(m_pressedKeysCopy [0x38] & IsKeyPressed))
+                            {
+                                /* store the press in *Copy to have it automatically
+                                 * released when the Host key is released */
+                                m_pressedKeysCopy [0x38] |= IsKeyPressed;
+                                kbd.PutScancode (0x38);
+                            }
+
+                            /* Make sure Shift is pressed if it's Key_2 and released
+                             * if it's Key_1 */
+                            if (pKeyEvent->key() == kAltTab &&
+                                (m_pressedKeysCopy [0x2A] & IsKeyPressed))
+                            {
+                                m_pressedKeysCopy [0x2A] &= ~IsKeyPressed;
+                                kbd.PutScancode (0xAA);
+                            }
+                            else
+                            if (pKeyEvent->key() == kAltShiftTab &&
+                                !(m_pressedKeysCopy [0x2A] & IsKeyPressed))
+                            {
+                                m_pressedKeysCopy [0x2A] |= IsKeyPressed;
+                                kbd.PutScancode (0x2A);
+                            }
+                        }
+
+                        kbd.PutScancode (pressed ? 0x0F : 0x8F);
+
+                        pKeyEvent->accept();
+                        return true;
+                    }
+
+                    /* Simulate Ctrl+Esc on Host+Tilde */
+                    if (pKeyEvent->key() == kCtrlEsc)
+                    {
+                        /* Send the Ctrl press to the guest */
+                        if (pressed && !(m_pressedKeysCopy [0x1d] & IsKeyPressed))
+                        {
+                            /* store the press in *Copy to have it automatically
+                             * released when the Host key is released */
+                            m_pressedKeysCopy [0x1d] |= IsKeyPressed;
+                            kbd.PutScancode (0x1d);
+                        }
+
+                        kbd.PutScancode (pressed ? 0x01 : 0x81);
+
+                        pKeyEvent->accept();
+                        return true;
+                    }
+                }
+
+                /* fall through to normal processing */
+
+#endif /* Q_WS_PM */
 
                 if (m_bIsHostComboPressed && pEvent->type() == QEvent::KeyPress)
                 {
@@ -1672,6 +1873,27 @@ void UIKeyboardHandler::fixModifierState(LONG *piCodes, uint *puCount)
         piCodes[(*puCount)++] = 0x45 | 0x80;
     }
     if (uisession()->capsLockAdaptionCnt() && (uisession()->isCapsLock() ^ !!(GetKeyState(VK_CAPITAL))))
+    {
+        uisession()->setCapsLockAdaptionCnt(uisession()->capsLockAdaptionCnt() - 1);
+        piCodes[(*puCount)++] = 0x3a;
+        piCodes[(*puCount)++] = 0x3a | 0x80;
+        /* Some keyboard layouts require shift to be pressed to break
+         * capslock.  For simplicity, only do this if shift is not
+         * already held down. */
+        if (uisession()->isCapsLock() && !(m_pressedKeys[0x2a] & IsKeyPressed))
+        {
+            piCodes[(*puCount)++] = 0x2a;
+            piCodes[(*puCount)++] = 0x2a | 0x80;
+        }
+    }
+#elif defined(Q_WS_PM)
+    if (uisession()->numLockAdaptionCnt() && (uisession()->isNumLock() ^ !!(WinGetKeyState(HWND_DESKTOP, VK_NUMLOCK) & 1)))
+    {
+        uisession()->setNumLockAdaptionCnt(uisession()->numLockAdaptionCnt() - 1);
+        piCodes[(*puCount)++] = 0x45;
+        piCodes[(*puCount)++] = 0x45 | 0x80;
+    }
+    if (uisession()->capsLockAdaptionCnt() && (uisession()->isCapsLock() ^ !!(WinGetKeyState(HWND_DESKTOP, VK_CAPSLOCK) & 1)))
     {
         uisession()->setCapsLockAdaptionCnt(uisession()->capsLockAdaptionCnt() - 1);
         piCodes[(*puCount)++] = 0x3a;

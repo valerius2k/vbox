@@ -88,6 +88,12 @@ const int XKeyRelease = KeyRelease;
 # endif
 #endif /* Q_WS_X11 */
 
+#ifdef Q_WS_PM
+# define  INCL_WIN
+# include "os2_defs.h"
+# include "UIHostComboEditor.h"
+#endif
+
 #ifdef Q_WS_MAC
 # include "DockIconPreview.h"
 # include "DarwinKeyboard.h"
@@ -1660,6 +1666,48 @@ bool UIMachineView::winEvent(MSG *pMsg, long* /* piResult */)
             /* Filter using keyboard filter? */
             bool fKeyboardFilteringResult =
                 machineLogic()->keyboardHandler()->winEventFilter(pMsg, screenId());
+            /* Keyboard filter rules the result? */
+            fResult = fKeyboardFilteringResult;
+            break;
+        }
+        default:
+            break;
+    }
+
+    return fResult;
+}
+
+#elif defined(Q_WS_PM)
+
+/**
+ *  Get PM messages before they are passed to Qt. This allows us to get
+ *  the keyboard events directly and bypass the harmful Qt translation. A
+ *  return value of @c true indicates to Qt that the event has been handled.
+ */
+bool UIMachineView::pmEvent (QMSG *aMsg, MRESULT *result)
+{
+    AssertPtrReturn(aMsg, false);
+
+    /* Check if some system event should be filtered out.
+     * Returning @c true means filtering-out,
+     * Returning @c false means passing event to Qt. */
+    bool fResult = false; /* Pass to Qt by default. */
+    switch (aMsg->msg)
+    {
+        case WM_CHAR:
+        case UM_PREACCEL_CHAR:
+        {
+            /* Can't do COM inter-process calls from a SendMessage handler,
+             * see http://support.microsoft.com/kb/131056 */
+            if (vboxGlobal().isSeparateProcess() && WinInSendMsg(WinQueryAnchorBlock(aMsg->hwnd)))
+            {
+                WinPostMsg(aMsg->hwnd, aMsg->msg, aMsg->mp1, aMsg->mp2);
+                fResult = true;
+                break;
+            }
+            /* Filter using keyboard filter? */
+            bool fKeyboardFilteringResult =
+                machineLogic()->keyboardHandler()->pmEventFilter(aMsg, screenId());
             /* Keyboard filter rules the result? */
             fResult = fKeyboardFilteringResult;
             break;

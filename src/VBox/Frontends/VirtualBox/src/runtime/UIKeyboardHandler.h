@@ -97,6 +97,8 @@ public:
     void winSkipKeyboardEvents(bool fSkip);
     /** Holds the object monitoring key event stream for problematic AltGr events. */
     WinAltGrMonitor *m_pAltGrMonitor;
+#elif defined(Q_WS_PM)
+    bool pmEventFilter(QMSG *aMsg, ulong uScreenId);
 #elif defined(Q_WS_X11)
     bool x11EventFilter(XEvent *pEvent, ulong uScreenId);
 #endif

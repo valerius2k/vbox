@@ -329,6 +329,8 @@ protected:
     /* Platform specific event processors: */
 #if defined(Q_WS_WIN)
     bool winEvent(MSG *pMsg, long *puResult);
+#elif defined(Q_WS_PM)
+    bool pmEvent (QMSG *aMsg, MRESULT *result);
 #elif defined(Q_WS_X11)
     bool x11Event(XEvent *event);
 #endif
