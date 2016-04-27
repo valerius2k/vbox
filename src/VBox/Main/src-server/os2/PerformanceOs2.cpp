@@ -355,7 +355,7 @@ int CollectorOS2::getRawHostNetworkLoad(const char *name, uint64_t *rx, uint64_t
         }
 
 
-        if (strcmp(pszName, name))
+        if (!strcmp(pszName, name))
         {
             *rx = ifmib.iftable[i].iftInOctets;
             *tx = ifmib.iftable[i].iftOutOctets;
