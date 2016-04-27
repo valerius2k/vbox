@@ -2066,6 +2066,43 @@ HRESULT Host::i_buildDVDDrivesList(MediaList &list)
         while (*p);
         delete[] hostDrives;
 
+#elif defined(RT_OS_OS2)
+        // note: this fragment is (c) Dmitry I. Platonoff
+        // http://ru2.halfos.ru/forum/m001200.html
+        // adapted by Valery V. Sedletski
+        typedef struct _CDROMDeviceMap
+        {
+            USHORT usDriveCount;
+            USHORT usFirstLetter;
+        } CDROMDeviceMap;
+
+        HFILE hf;
+        ULONG ulAction = 0;
+        CDROMDeviceMap CDMap;
+        ULONG ulParamSize = sizeof(ulAction);
+        ULONG ulDataSize = sizeof(CDROMDeviceMap);
+        wchar_t driveName[3] = { '?', ':', '\0' };
+
+        if (DosOpen("\\dev\\cd-rom2$", &hf, &ulAction, 0, FILE_NORMAL,
+                    OPEN_ACTION_FAIL_IF_NEW | OPEN_ACTION_OPEN_IF_EXISTS,
+                    OPEN_ACCESS_READONLY | OPEN_SHARE_DENYNONE, NULL))
+            return VERR_NOT_FOUND;
+
+        DosDevIOCtl(hf, 0x82, 0x60, NULL, 0, &ulParamSize,
+                    (PVOID)&CDMap, sizeof(CDROMDeviceMap), &ulDataSize);
+        DosClose(hf);
+
+        for (int drv = CDMap.usFirstLetter; drv < CDMap.usFirstLetter + CDMap.usDriveCount; drv++)
+        {
+            driveName[0] = 'A' + drv;
+            ComObjPtr<Medium> hostCDDriveObj;
+            rc = hostCDDriveObj.createObject();
+            if (SUCCEEDED(rc))
+                rc = hostCDDriveObj->init(m->pParent, DeviceType_DVD, Bstr(driveName));
+            if (SUCCEEDED(rc))
+                list.push_back(hostCDDriveObj);
+        }
+
 #elif defined(RT_OS_SOLARIS)
 # ifdef VBOX_USE_LIBHAL
         if (!i_getDVDInfoFromHal(list))
@@ -2147,6 +2184,24 @@ HRESULT Host::i_buildFloppyDrivesList(MediaList &list)
         }
         while (*p);
         delete[] hostDrives;
+#elif defined(RT_OS_OS2)
+        ULONG num = 0, map = 0;
+        wchar_t driveName[3] = { '?', ':', '\0' };
+        DosQueryCurrentDisk(&num, &map);
+        for (int drv = 0; drv < 2; drv++)
+        {
+            driveName[0] = 'A' + drv;
+
+            if ((map & (drv + 1)) == 0)
+                continue;
+
+            ComObjPtr<Medium> hostFloppyDriveObj;
+            rc = hostFloppyDriveObj.createObject();
+            if (SUCCEEDED(rc))
+                rc = hostFloppyDriveObj->init(m->pParent, DeviceType_Floppy, Bstr(driveName));
+            if (SUCCEEDED(rc))
+                list.push_back(hostFloppyDriveObj);
+        }
 #elif defined(RT_OS_LINUX)
         if (RT_SUCCESS(m->hostDrives.updateFloppies()))
             for (DriveInfoList::const_iterator it = m->hostDrives.FloppyBegin();
