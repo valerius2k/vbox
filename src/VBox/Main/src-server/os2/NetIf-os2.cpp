@@ -45,6 +45,7 @@ static int getInterfaceInfo(int sock, char *pszName, PNETIFINFO pInfo)
     const  char *type, *prev_type;
     int    i, num;
     struct ifmib ifmib;
+    char   pszIfName[20];
 
     // get network interface list
     if ( os2_ioctl( sock, SIOSTATIF42, (caddr_t)&ifmib,
@@ -60,38 +61,40 @@ static int getInterfaceInfo(int sock, char *pszName, PNETIFINFO pInfo)
         if (ifindex >=0 && ifindex <= 9)
         {
             // lanX
-            strcpy(pszName, "lan");
-            itoa(ifindex, pszName + strlen(pszName), 10);
+            strcpy(pszIfName, "lan");
+            itoa(ifindex, pszIfName + strlen(pszIfName), 10);
         }
         else if (strstr(ifmib.iftable[i].iftDescr, "back"))
         {
             // loopback
-            strcpy(pszName, "lo");
+            strcpy(pszIfName, "lo");
         }
         else if (strstr(ifmib.iftable[i].iftDescr, "ace ppp"))
         {
             // pppX
-            strcpy(pszName, "ppp");
-            itoa(ifindex, pszName + strlen(pszName), 10);
+            strcpy(pszIfName, "ppp");
+            itoa(ifindex, pszIfName + strlen(pszIfName), 10);
         }
         else if (strstr(ifmib.iftable[i].iftDescr,"ace sl"))
         {
             // slX
-            strcpy(pszName, "sl");
-            itoa(ifindex, pszName + strlen(pszName), 10);
+            strcpy(pszIfName, "sl");
+            itoa(ifindex, pszIfName + strlen(pszIfName), 10);
         }
         else if (strstr(ifmib.iftable[i].iftDescr,"ace dod"))
         {
             // dodX
-            strcpy(pszName, "dod");
-            itoa(ifindex, pszName + strlen(pszName), 10);
+            strcpy(pszIfName, "dod");
+            itoa(ifindex, pszIfName + strlen(pszIfName), 10);
         }
         else
         {
             // unknown
-            strcpy(pszName, "unk");
-            itoa(ifindex, pszName + strlen(pszName), 10);
+            strcpy(pszIfName, "unk");
+            itoa(ifindex, pszIfName + strlen(pszIfName), 10);
         }
+
+        if (stricmp(pszIfName, pszName)) continue;
 
         RT_ZERO(Req);
         RTStrCopy(Req.ifr_name, sizeof(Req.ifr_name), pszName);
@@ -193,7 +196,9 @@ static int getDefaultIfaceName(char *pszName)
             // headers, these declarations are missing for some reason. I see that the
             // interface name is contained in char * field at the start of the structure
             // pointed to by rt_ifp pointer. So, we just do this strange typecast:
-            strcpy(pszName, (char *)*(unsigned long *)(rt_table[j].rt_ifp));
+            //strcpy(pszName, (char *)*(unsigned long *)(rt_table[j].rt_ifp));
+            // hardcode it for the mean time, before repairing
+            strcpy(pszName, "lan0");
             break;
         }
     }
@@ -226,27 +231,72 @@ int NetIfList(std::list <ComObjPtr<HostNetworkInterface> > &list)
 
     NETIFINFO Info;
     RT_ZERO(Info);
-    rc = getInterfaceInfo(sock, pszName, &Info);
-    if (RT_FAILURE(rc))
-        return VERR_INTERNAL_ERROR;
 
-    if (Info.enmMediumType == NETIF_T_ETHERNET)
+    for (i = 0; i < ifmib.ifNumber; i++)
     {
-        ComObjPtr<HostNetworkInterface> IfObj;
-        IfObj.createObject();
+        struct ifreq Req;
 
-        HostNetworkInterfaceType_T enmType;
-        if (strncmp(pszName, RT_STR_TUPLE("vboxnet")))
-            enmType = HostNetworkInterfaceType_Bridged;
-        else
-            enmType = HostNetworkInterfaceType_HostOnly;
+        int ifindex = ifmib.iftable[i].iftIndex;
 
-        if (SUCCEEDED(IfObj->init(Bstr(pszName), enmType, &Info)))
+        if (ifindex >=0 && ifindex <= 9)
         {
-            if (strcmp(pszName, szDefaultIface) == 0)
-                list.push_front(IfObj);
+            // lanX
+            strcpy(pszName, "lan");
+            itoa(ifindex, pszName + strlen(pszName), 10);
+        }
+        else if (strstr(ifmib.iftable[i].iftDescr, "back"))
+        {
+            // loopback
+            strcpy(pszName, "lo");
+        }
+        else if (strstr(ifmib.iftable[i].iftDescr, "ace ppp"))
+        {
+            // pppX
+            strcpy(pszName, "ppp");
+            itoa(ifindex, pszName + strlen(pszName), 10);
+        }
+        else if (strstr(ifmib.iftable[i].iftDescr,"ace sl"))
+        {
+            // slX
+            strcpy(pszName, "sl");
+            itoa(ifindex, pszName + strlen(pszName), 10);
+        }
+        else if (strstr(ifmib.iftable[i].iftDescr,"ace dod"))
+        {
+            // dodX
+            strcpy(pszName, "dod");
+            itoa(ifindex, pszName + strlen(pszName), 10);
+        }
+        else
+        {
+            // unknown
+            strcpy(pszName, "unk");
+            itoa(ifindex, pszName + strlen(pszName), 10);
+        }
+
+        rc = getInterfaceInfo(sock, pszName, &Info);
+
+        if (RT_FAILURE(rc))
+            break;
+
+        if (Info.enmMediumType == NETIF_T_ETHERNET)
+        {
+            ComObjPtr<HostNetworkInterface> IfObj;
+            IfObj.createObject();
+
+            HostNetworkInterfaceType_T enmType;
+            if (strncmp(pszName, RT_STR_TUPLE("vboxnet")))
+                enmType = HostNetworkInterfaceType_Bridged;
             else
-                list.push_back(IfObj);
+                enmType = HostNetworkInterfaceType_HostOnly;
+
+            if (SUCCEEDED(IfObj->init(Bstr(pszName), enmType, &Info)))
+            {
+                if (strcmp(pszName, szDefaultIface) == 0)
+                    list.push_front(IfObj);
+                else
+                    list.push_back(IfObj);
+            }
         }
     }
 
