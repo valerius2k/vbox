@@ -706,6 +706,10 @@ if !defined(VBOX_ONLY_EXTPACKS)         # Goes on almost to the end of the file.
  	Parallel/DrvHostParallel.cpp \
  	Serial/DrvHostSerial.cpp
 
+ ifeq ($(KBUILD_TARGET),os2)
+  VBoxDD_SOURCES.os2 += Network/DrvTAPOs2.cpp
+ endif
+
  ifeq ($(KBUILD_TARGET),solaris)
   VBoxDD_SOURCES.solaris += Serial/DrvHostSerial.cpp
   ifdef VBOX_WITH_SUID_WRAPPER
