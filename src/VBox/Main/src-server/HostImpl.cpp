@@ -643,7 +643,7 @@ static int vboxNetWinAddComponent(std::list< ComObjPtr<HostNetworkInterface> > *
  */
 HRESULT Host::getNetworkInterfaces(std::vector<ComPtr<IHostNetworkInterface> > &aNetworkInterfaces)
 {
-#if defined(RT_OS_WINDOWS) || defined(VBOX_WITH_NETFLT) /*|| defined(RT_OS_OS2)*/
+#if defined(RT_OS_WINDOWS) || defined(VBOX_WITH_NETFLT) || defined(RT_OS_OS2)
 # ifdef VBOX_WITH_HOSTNETIF_API
     HRESULT rc = i_updateNetIfList();
     if (FAILED(rc))
@@ -782,7 +782,7 @@ HRESULT Host::getNetworkInterfaces(std::vector<ComPtr<IHostNetworkInterface> > &
 #   endif /* #  if defined VBOX_WITH_NETFLT */
 
 
-#  elif defined RT_OS_LINUX
+#  elif defined(RT_OS_LINUX) || defined(RT_OS_OS2)
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock >= 0)
     {
@@ -796,7 +796,12 @@ HRESULT Host::getNetworkInterfaces(std::vector<ComPtr<IHostNetworkInterface> > &
             {
                 if (ioctl(sock, SIOCGIFHWADDR, pReq) >= 0)
                 {
+#   ifdef RT_OS_LINUX
                     if (pReq->ifr_hwaddr.sa_family == ARPHRD_ETHER)
+#   else
+                    // We haven't ifr_hwaddr in struct ifreq
+                    if (!strncmp(pReq->ifr_name, "lan", 3))
+#   endif
                     {
                         RTUUID uuid;
                         Assert(sizeof(uuid) <= sizeof(*pReq));

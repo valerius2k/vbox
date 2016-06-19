@@ -42,7 +42,6 @@
 
 static int getInterfaceInfo(int sock, char *pszName, PNETIFINFO pInfo)
 {
-    const  char *type, *prev_type;
     int    i, num;
     struct ifmib ifmib;
     char   pszIfName[20];
@@ -94,7 +93,9 @@ static int getInterfaceInfo(int sock, char *pszName, PNETIFINFO pInfo)
             itoa(ifindex, pszIfName + strlen(pszIfName), 10);
         }
 
-        if (stricmp(pszIfName, pszName)) continue;
+        // search for pszName
+        if (stricmp(pszIfName, pszName))
+            continue;
 
         RT_ZERO(Req);
         RTStrCopy(Req.ifr_name, sizeof(Req.ifr_name), pszName);
@@ -226,11 +227,13 @@ int NetIfList(std::list <ComObjPtr<HostNetworkInterface> > &list)
     if (RT_FAILURE(rc))
     {
         Log(("NetIfList: Failed to find default interface.\n"));
-        szDefaultIface[0] = 0;
+        szDefaultIface[0] = '\0';
     }
 
-    NETIFINFO Info;
-    RT_ZERO(Info);
+    // get network interface list
+    if ( os2_ioctl( sock, SIOSTATIF42, (caddr_t)&ifmib,
+                    sizeof(struct ifmib) ) == -1 )
+        return VERR_INTERNAL_ERROR;
 
     for (i = 0; i < ifmib.ifNumber; i++)
     {
@@ -274,10 +277,13 @@ int NetIfList(std::list <ComObjPtr<HostNetworkInterface> > &list)
             itoa(ifindex, pszName + strlen(pszName), 10);
         }
 
+        NETIFINFO Info;
+        RT_ZERO(Info);
+
         rc = getInterfaceInfo(sock, pszName, &Info);
 
         if (RT_FAILURE(rc))
-            break;
+            return VERR_INTERNAL_ERROR;
 
         if (Info.enmMediumType == NETIF_T_ETHERNET)
         {
@@ -317,7 +323,6 @@ int NetIfList(std::list <ComObjPtr<HostNetworkInterface> > &list)
 int NetIfGetLinkSpeed(const char *pcszIfName, uint32_t *puMbits)
 {
     int    i, num, sock = -1, addr;
-    const  char *type, *prev_type;
     char   pszName[20];
     struct ifmib ifmib;
     struct ifreq Req;
@@ -334,8 +339,6 @@ int NetIfGetLinkSpeed(const char *pcszIfName, uint32_t *puMbits)
 
     for (i = 0; i < ifmib.ifNumber; i++)
     {
-        prev_type = type;
-
         int ifindex = ifmib.iftable[i].iftIndex;
 
         if (ifindex >=0 && ifindex <= 9)
