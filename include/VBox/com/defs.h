@@ -46,6 +46,7 @@
  * already defined in order to be able to redefine them using #define. */
 # define OS2EMX_PLAIN_CHAR
 # define INCL_BASE
+# define INCL_DOSDEVIOCTL
 # define INCL_PM
 # include <os2.h>
 
