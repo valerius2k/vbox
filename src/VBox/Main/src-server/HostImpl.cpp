@@ -2098,9 +2098,10 @@ HRESULT Host::i_buildDVDDrivesList(MediaList &list)
             ComObjPtr<Medium> hostCDDriveObj;
             rc = hostCDDriveObj.createObject();
             if (SUCCEEDED(rc))
+            {
                 rc = hostCDDriveObj->init(m->pParent, DeviceType_DVD, Bstr(driveName));
-            if (SUCCEEDED(rc))
                 list.push_back(hostCDDriveObj);
+            }
         }
 
 #elif defined(RT_OS_SOLARIS)
@@ -2185,22 +2186,79 @@ HRESULT Host::i_buildFloppyDrivesList(MediaList &list)
         while (*p);
         delete[] hostDrives;
 #elif defined(RT_OS_OS2)
+        /* parameter packet */
+        #pragma pack(1)
+        struct {
+            unsigned char command;
+            unsigned char drive;
+        } parm;
+        #pragma pack()
+        /* data packet      */
+        BIOSPARAMETERBLOCK bpb;
         ULONG num = 0, map = 0;
         wchar_t driveName[3] = { '?', ':', '\0' };
         DosQueryCurrentDisk(&num, &map);
-        for (int drv = 0; drv < 2; drv++)
+        for (int drv = 0; drv < 'z' - 'a' + 1; drv++)
         {
             driveName[0] = 'A' + drv;
 
+            // skip if the drive is not in map
             if ((map & (drv + 1)) == 0)
                 continue;
+
+            parm.command = 0;
+            parm.drive = drv;
+            ULONG parmlen = sizeof(parm);
+            ULONG datalen = sizeof(bpb);
+
+            // skip if we fail to get an BPB
+            if ( (rc = DosDevIOCtl(-1, IOCTL_DISK, DSK_GETDEVICEPARAMS,
+                              &parm, parmlen, &parmlen, &bpb, datalen, &datalen)) )
+                continue;
+
+            char szDevName[4] = "A:";
+            char fsqbuf2[sizeof(FSQBUFFER2) + 3 * CCHMAXPATH];
+            PFSQBUFFER2 pfsqbuf2 = (PFSQBUFFER2)fsqbuf2;
+            ULONG cbData;
+
+            switch (bpb.bDeviceType)
+            {
+                case 5: // Fixed disk
+                case 6: // Tape drive
+                case 8: // R/W optical disk
+                    continue;
+
+                case 7: // Other (includes 3.5" diskette drive)
+                    szDevName[0] += drv;
+                    cbData = sizeof(fsqbuf2);
+                    // disable error popups
+                    DosError(FERR_DISABLEEXCEPTION | FERR_DISABLEHARDERR);
+                    if (! DosQueryFSAttach(szDevName, 0L, FSAIL_QUERYNAME, (PFSQBUFFER2)&fsqbuf2, &cbData) )
+                    {
+                        if (pfsqbuf2->iType == FSAT_REMOTEDRV)
+                            continue; // skip remote drives
+                        else if (pfsqbuf2->iType == FSAT_LOCALDRV)
+                        {
+                            PSZ pszFSName = (PSZ)pfsqbuf2->szName + pfsqbuf2->cbName + 1;
+                            if (strcmp(pszFSName, "FAT") || bpb.usBytesPerSector != 512) // optical
+                                continue; // skip non-fat drives
+                        }
+                    }
+                    // enable error popups
+                    DosError(FERR_ENABLEEXCEPTION | FERR_ENABLEHARDERR);
+                    break;
+                    
+                default:
+                    break;
+            }
 
             ComObjPtr<Medium> hostFloppyDriveObj;
             rc = hostFloppyDriveObj.createObject();
             if (SUCCEEDED(rc))
+            {
                 rc = hostFloppyDriveObj->init(m->pParent, DeviceType_Floppy, Bstr(driveName));
-            if (SUCCEEDED(rc))
                 list.push_back(hostFloppyDriveObj);
+            }
         }
 #elif defined(RT_OS_LINUX)
         if (RT_SUCCESS(m->hostDrives.updateFloppies()))
