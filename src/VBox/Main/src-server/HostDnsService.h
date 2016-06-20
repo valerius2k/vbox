@@ -223,7 +223,15 @@ class HostDnsServiceOs2 : public HostDnsServiceResolvConf
     ~HostDnsServiceOs2(){}
     /* XXX: \\MPTN\\ETC should be taken from environment variable ETC  */
     virtual HRESULT init(VirtualBox *virtualbox) {
-        return HostDnsServiceResolvConf::init(virtualbox, "\\MPTN\\ETC\\RESOLV2");
+        char *etc = getenv("ETC");
+        char fn[256];
+
+        if (! etc)
+	    return -1;
+
+        strcpy(fn, etc);
+        strcat(fn, "\\resolv2");
+        return HostDnsServiceResolvConf::init(virtualbox, fn);
     }
 };
 
