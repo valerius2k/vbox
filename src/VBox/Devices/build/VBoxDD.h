@@ -97,7 +97,7 @@ extern const PDMDRVREG g_DrvMediaISO;
 extern const PDMDRVREG g_DrvRawImage;
 extern const PDMDRVREG g_DrvISCSI;
 extern const PDMDRVREG g_DrvISCSITransportTcp;
-#if defined(RT_OS_LINUX) || defined(RT_OS_FREEBSD)
+#if defined(RT_OS_LINUX) || defined(RT_OS_OS2) || defined(RT_OS_FREEBSD)
 extern const PDMDRVREG g_DrvHostInterface;
 #endif
 #ifdef VBOX_WITH_UDPTUNNEL
