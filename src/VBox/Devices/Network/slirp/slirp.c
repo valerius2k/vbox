@@ -42,9 +42,6 @@
  */
 
 #include "slirp.h"
-#ifdef RT_OS_OS2
-# include <paths.h>
-#endif
 
 #include <VBox/err.h>
 #include <VBox/vmm/dbgf.h>
@@ -2112,7 +2109,20 @@ int slirp_host_network_configuration_change_strategy_selector(const PNATState pD
         int rc;
 
         rcp_state.rcps_flags |= RCPSF_IGNORE_IPV6;
+#ifndef RT_OS_OS2
         rc = rcp_parse(&rcp_state, RESOLV_CONF_FILE);
+#else
+	char *etc = getenv("ETC");
+	char fn[256];
+
+        if (! etc)
+	        return VERR_FILE_NOT_FOUND;
+
+	strcpy(fn, etc);
+	strcat(fn, "\\resolv2");
+
+        rc = rcp_parse(&rcp_state, fn);
+#endif
         LogRelFunc(("NAT: rcp_parse:%Rrc old domain:%s new domain:%s\n",
                     rc, LIST_EMPTY(&pData->pDomainList)
                       ? "(null)"

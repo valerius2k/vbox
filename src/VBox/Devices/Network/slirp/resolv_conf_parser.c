@@ -209,7 +209,8 @@ static int rcp_get_token(struct rcp_parser *parser)
 
     if (tok == EOF) return tok_eof;
 
-    if (tok == '#')
+    /* in OS/2's %etc%\resolv2, ';' is a comment symbol too */
+    if (tok == '#' || tok == ';')
     {
         do{
             tok = GETCHAR(parser);

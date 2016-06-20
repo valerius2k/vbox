@@ -16,9 +16,6 @@
  */
 
 #include "slirp.h"
-#ifdef RT_OS_OS2
-# include <paths.h>
-#endif
 
 #include <VBox/err.h>
 #include <VBox/vmm/pdmdrv.h>
@@ -161,7 +158,20 @@ static int get_dns_addr_domain(PNATState pData, const char **ppszDomain)
 
     /* XXX: perhaps IPv6 shouldn't be ignored if we're using DNS proxy */
     st.rcps_flags = RCPSF_IGNORE_IPV6;
+#ifndef RT_OS_OS2
     rc = rcp_parse(&st, RESOLV_CONF_FILE);
+#else
+    char *etc = getenv("ETC");
+    char fn[256];
+
+    if (! etc)
+	    return -1;
+
+    strcpy(fn, etc);
+    strcat(fn, "\\resolv2");
+
+    rc = rcp_parse(&st, fn);
+#endif
 
     if (rc < 0)
         return -1;
