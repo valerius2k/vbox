@@ -241,7 +241,7 @@ bool UISession::initialize()
 #endif /* VBOX_WITH_VIDEOHWACCEL */
 
 /* Log whether HID LEDs sync is enabled: */
-#if defined(Q_WS_MAC) || defined(Q_WS_WIN)
+#if defined(Q_WS_MAC) || defined(Q_WS_WIN) || defined(Q_WS_PM)
     LogRel(("GUI: HID LEDs sync is %s\n",
             uimachine()->machineLogic()->isHidLedsSyncEnabled()
             ? "enabled" : "disabled"));
@@ -1662,15 +1662,24 @@ void UISession::setPointerShape(const uchar *pShapeData, bool fHasAlpha,
     uint mxX = WinQuerySysValue(HWND_DESKTOP, SV_CXPOINTER);
     uint mxY = WinQuerySysValue(HWND_DESKTOP, SV_CYPOINTER);
 
-    if (uX <= mxX)
-        mxX = uX;
+    printf("uAlpha=%u\n", uAlpha);
 
-    if (uY <= mxY)
-        mxY = uY;
+    printf("uHotX=%u\n", uHotX);
+    printf("uHotY=%u\n", uHotY);
+
+    printf("uX=%u\n", uX);
+    printf("uY=%u\n", uY);
+
+    //if (uX <= mxX)
+    //    mxX = uX;
+
+    //if (uY <= mxY)
+    //    mxY = uY;
 
     /* Width in bytes of the original AND mask scan line. */
-    uint32_t cbAndMaskScan     = (uX  + 7) / 8;
-    uint32_t cbAndMaskScanMx   = (mxX + 7) / 8;
+
+    uint32_t cbAndMaskScan     = uX  / 8;
+    uint32_t cbAndMaskScanMx   = mxX / 8;
 
     BITMAPINFOHEADER2 bmih2;
     PBITMAPINFO2      pbi2         = NULL;
@@ -1705,7 +1714,15 @@ void UISession::setPointerShape(const uchar *pShapeData, bool fHasAlpha,
                 uint x_old = x * (uX / mxX);
                 uint y_old = y * (uY / mxY);
 
-                dstshp[x - y * mxX] = srcshp[x_old + y_old * uX];
+                if (uX >= mxX && uY >= mxY) // stretching
+                    dstshp[x - y * mxX] = srcshp[x_old + y_old * uX];
+                else // padding
+                {
+                    if (x <= uX && y <= uY)
+                        dstshp[x - y * mxX] = srcshp[x + y * uX];
+                    else
+                        dstshp[x - y * mxX] = 0;
+                }
             }
         }
 
@@ -1736,7 +1753,7 @@ void UISession::setPointerShape(const uchar *pShapeData, bool fHasAlpha,
         /* Word aligned AND mask. Will be allocated and created if necessary. */
         uint8_t  *pu8AndMaskWordAligned = (uint8_t *)pbi + sizeof(BITMAPINFOHEADER2);
 
-        uint8_t  *dst = pu8AndMaskWordAligned + cbAndMaskScanMx * (mxY * 2 - 1);
+        uint8_t  *dst = pu8AndMaskWordAligned + mxX * (mxY * 2 - 1) / 8;
         uint8_t  *src = (uint8_t *)srcAndMaskPtr;
  
         ULONG *dstshp = (ULONG *) lpBits + mxX * (mxY - 1);
@@ -1764,13 +1781,37 @@ void UISession::setPointerShape(const uchar *pShapeData, bool fHasAlpha,
 
         for (uint y = 0; y < mxY; y++)
         {
-            for (uint x = 0; x < cbAndMaskScanMx; x++)
+            for (uint x = 0; x < mxX / 8; x++)
             {
                 // scaling the pointer
-                uint x_old = x * (uX / mxX);
-                uint y_old = y * (uY / mxY);
+                uint x_old = (x * uX) / mxX;
+                uint y_old = (y * uY) / mxY;
 
-                byte = src[x_old + cbAndMaskScan * y_old];
+                if (uX >= mxX && uY >= mxY) // stretching
+                    byte = src[x_old + y_old * (mxX / 8)];
+                else // padding
+                {
+                    byte = 0xff;
+
+                    if (8 * x < uX && y < uY)
+                    {
+                        // if uX == 9 then 1st byte takes 1st 8 bits, and the
+                        // 2nd byte is the remaining bit plus 7 bits padded by 1's
+                        uint rest = ((x / (uX / 8)) + y * (uX / 8)) % 8;
+
+                        if (x == uX / 8)
+                            rest = 1;
+
+                        // corresponding bitmask
+                        uint mask = (1 << (8 - rest)) - 1;
+
+                        if (x == uX / 8)
+                            byte = src[x + y * (uX / 8)] | mask;
+                        else
+                            byte = ((src[x + y * (uX / 8)] & mask) << rest) |
+                                   ((src[x + 1 + y * (uX / 8)] & ~mask) >> (8 - rest));
+                    }
+                }
 
                 if (uAlpha)
                 {
@@ -1778,7 +1819,12 @@ void UISession::setPointerShape(const uchar *pShapeData, bool fHasAlpha,
                     // mask bit to 1 if alpha is 0 for this pel
                     for (uint i = 0; i < 8; i++)
                     {
-                        uint8_t alpha = dstshp[8 * (x - cbAndMaskScanMx * y) + i] >> 24;
+                        uint8_t alpha;
+
+                        if (x < uX / 8 && y < uY)
+                            alpha = dstshp[8 * x - mxX * y + i] >> 24;
+                        else
+                            alpha = 0;
 
                         if (alpha < 128) // transparent pel
                             byte |= (1 << (7 - i));
@@ -1787,7 +1833,7 @@ void UISession::setPointerShape(const uchar *pShapeData, bool fHasAlpha,
                     }
                 }
 
-                dst[x - cbAndMaskScanMx * y] = byte;
+                dst[x - y * (mxX / 8)] = byte;
             }
 
             if (cbAndMaskScanMx & 1)
@@ -1796,6 +1842,13 @@ void UISession::setPointerShape(const uchar *pShapeData, bool fHasAlpha,
                 dst++;
             }
 
+        }
+
+        // Zero-out the XOR mask
+        for (uint y = mxY; y < mxY * 2; y++)
+        {
+            for (uint x = 0; x < cbAndMaskScanMx; x++)
+                dst[x - cbAndMaskScanMx * y] = 0;
         }
             
         // Create the Mono Bitmap: AND/XOR masks
