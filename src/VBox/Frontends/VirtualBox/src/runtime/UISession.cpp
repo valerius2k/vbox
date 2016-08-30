@@ -1662,24 +1662,10 @@ void UISession::setPointerShape(const uchar *pShapeData, bool fHasAlpha,
     uint mxX = WinQuerySysValue(HWND_DESKTOP, SV_CXPOINTER);
     uint mxY = WinQuerySysValue(HWND_DESKTOP, SV_CYPOINTER);
 
-    printf("uAlpha=%u\n", uAlpha);
-
-    printf("uHotX=%u\n", uHotX);
-    printf("uHotY=%u\n", uHotY);
-
-    printf("uX=%u\n", uX);
-    printf("uY=%u\n", uY);
-
-    //if (uX <= mxX)
-    //    mxX = uX;
-
-    //if (uY <= mxY)
-    //    mxY = uY;
-
     /* Width in bytes of the original AND mask scan line. */
 
-    uint32_t cbAndMaskScan     = uX  / 8;
-    uint32_t cbAndMaskScanMx   = mxX / 8;
+    uint32_t cbAndMaskScan     = (uX + 7)  / 8;
+    uint32_t cbAndMaskScanMx   = (mxX + 7) / 8;
 
     BITMAPINFOHEADER2 bmih2;
     PBITMAPINFO2      pbi2         = NULL;
@@ -1718,7 +1704,7 @@ void UISession::setPointerShape(const uchar *pShapeData, bool fHasAlpha,
                     dstshp[x - y * mxX] = srcshp[x_old + y_old * uX];
                 else // padding
                 {
-                    if (x <= uX && y <= uY)
+                    if (x < uX && y < uY)
                         dstshp[x - y * mxX] = srcshp[x + y * uX];
                     else
                         dstshp[x - y * mxX] = 0;
@@ -1758,13 +1744,13 @@ void UISession::setPointerShape(const uchar *pShapeData, bool fHasAlpha,
  
         ULONG *dstshp = (ULONG *) lpBits + mxX * (mxY - 1);
 
-        uint32_t u32PaddingBits;
+        /* uint32_t u32PaddingBits;
         uint8_t  u8LastBytesPaddingMask;
 
         if (cbAndMaskScanMx & 1)
         {
-            /* According to MSDN the padding bits must be 0.
-             * Compute the bit mask to set padding bits to 0 in the last byte of original AND mask. */
+            // According to MSDN the padding bits must be 0.
+            // Compute the bit mask to set padding bits to 0 in the last byte of original AND mask.
             u32PaddingBits = cbAndMaskScanMx * 8 - mxX;
             Assert(u32PaddingBits < 8);
 
@@ -1774,43 +1760,32 @@ void UISession::setPointerShape(const uchar *pShapeData, bool fHasAlpha,
                   u8LastBytesPaddingMask, (cbAndMaskScanMx + 1) * 8, mxX, cbAndMaskScanMx));
 
             pu8AndMaskWordAligned += mxY * 2 - 1;
-        }
+        } */
 
         pBits = (void *)pu8AndMaskWordAligned;
         uint8_t byte  = 0;
 
         for (uint y = 0; y < mxY; y++)
         {
-            for (uint x = 0; x < mxX / 8; x++)
+            for (uint x = 0; x < mxX; x += 8)
             {
                 // scaling the pointer
-                uint x_old = (x * uX) / mxX;
-                uint y_old = (y * uY) / mxY;
+                uint x_old, y_old;
+
+                x_old = x * (uX / mxX);
+                y_old = y * (uY / mxY);
 
                 if (uX >= mxX && uY >= mxY) // stretching
-                    byte = src[x_old + y_old * (mxX / 8)];
+                    byte = src[x_old / 8 + y_old * cbAndMaskScanMx];
                 else // padding
                 {
                     byte = 0xff;
 
-                    if (8 * x < uX && y < uY)
-                    {
-                        // if uX == 9 then 1st byte takes 1st 8 bits, and the
-                        // 2nd byte is the remaining bit plus 7 bits padded by 1's
-                        uint rest = ((x / (uX / 8)) + y * (uX / 8)) % 8;
+                    if (x < uX && y < uY)
+                        byte = src[x / 8 + y * cbAndMaskScan];
 
-                        if (x == uX / 8)
-                            rest = 1;
-
-                        // corresponding bitmask
-                        uint mask = (1 << (8 - rest)) - 1;
-
-                        if (x == uX / 8)
-                            byte = src[x + y * (uX / 8)] | mask;
-                        else
-                            byte = ((src[x + y * (uX / 8)] & mask) << rest) |
-                                   ((src[x + 1 + y * (uX / 8)] & ~mask) >> (8 - rest));
-                    }
+                    if (x == (uX / 8) * 8)
+                        byte |= (1 << (8 - (uX % 8))) - 1;
                 }
 
                 if (uAlpha)
@@ -1821,8 +1796,8 @@ void UISession::setPointerShape(const uchar *pShapeData, bool fHasAlpha,
                     {
                         uint8_t alpha;
 
-                        if (x < uX / 8 && y < uY)
-                            alpha = dstshp[8 * x - mxX * y + i] >> 24;
+                        if (x < uX && y < uY)
+                            alpha = dstshp[x - mxX * y + i] >> 24;
                         else
                             alpha = 0;
 
@@ -1833,22 +1808,21 @@ void UISession::setPointerShape(const uchar *pShapeData, bool fHasAlpha,
                     }
                 }
 
-                dst[x - y * (mxX / 8)] = byte;
+                dst[x / 8 - y * cbAndMaskScanMx] = byte;
             }
 
-            if (cbAndMaskScanMx & 1)
+            /* if (cbAndMaskScanMx & 1)
             {
                 dst[cbAndMaskScanMx - 1] &= u8LastBytesPaddingMask;
                 dst++;
-            }
-
+            } */
         }
 
         // Zero-out the XOR mask
         for (uint y = mxY; y < mxY * 2; y++)
         {
-            for (uint x = 0; x < cbAndMaskScanMx; x++)
-                dst[x - cbAndMaskScanMx * y] = 0;
+            for (uint x = 0; x < mxX; x += 8)
+                dst[x / 8 - y * cbAndMaskScanMx] = 0;
         }
             
         // Create the Mono Bitmap: AND/XOR masks
