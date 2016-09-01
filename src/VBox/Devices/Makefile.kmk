@@ -179,13 +179,13 @@ if !defined(VBOX_ONLY_EXTPACKS)         # Goes on almost to the end of the file.
  	Storage/ATAPIPassthrough.cpp \
  	Network/DrvNetSniffer.cpp \
  	Network/Pcap.cpp
- ifn1of ($(KBUILD_TARGET), os2)
+ #ifn1of ($(KBUILD_TARGET), )
   VBoxDD_SOURCES += Storage/DrvHostBase.cpp
- endif
- ifn1of ($(KBUILD_TARGET), os2)
+ #endif
+ #ifn1of ($(KBUILD_TARGET), )
   VBoxDD_SOURCES += Storage/DrvHostDVD.cpp
- endif
- ifn1of ($(KBUILD_TARGET), darwin freebsd os2 solaris)
+ #endif
+ ifn1of ($(KBUILD_TARGET), darwin freebsd solaris)
   VBoxDD_SOURCES += Storage/DrvHostFloppy.cpp
  endif
 
@@ -707,8 +707,10 @@ if !defined(VBOX_ONLY_EXTPACKS)         # Goes on almost to the end of the file.
  	Serial/DrvHostSerial.cpp
 
  ifeq ($(KBUILD_TARGET),os2)
+  # VBoxDD_SOURCES += Serial/DrvHostSerial.cpp
+  # VBoxDD_SOURCES += Parallel/DrvHostParallel.cpp
   VBoxDD_SOURCES.os2 += Network/DrvTAPOs2.cpp
- endif
+ endif # freebsd
 
  ifeq ($(KBUILD_TARGET),solaris)
   VBoxDD_SOURCES.solaris += Serial/DrvHostSerial.cpp

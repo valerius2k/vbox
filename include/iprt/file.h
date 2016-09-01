@@ -47,6 +47,27 @@ RT_C_DECLS_BEGIN
 # define RTFILE_LINEFEED    "\n"
 #endif
 
+#ifdef RT_OS_OS2
+/* internal file handle structure     */
+#pragma pack (1)
+struct RTFILEINT
+{
+    uint32_t hFile;   /* native file handle            */
+    uint8_t type;     /* file handle type (see below)  */
+    uint8_t rawfs;    /* use RAW FS (UNC pathnames)    */
+    uint64_t off;     /* seek offset                   */
+};
+#pragma pack ()
+/* normal file handle */
+# define FILE_TYPE_NORMAL 0
+/* volume open with flag OPEN_FLAGS_DASD   */
+# define FILE_TYPE_DASD   1
+/* cdrom file handle, cdrom ioctl          */
+# define FILE_TYPE_CD     2
+/* phys disk open using phys disk ioctl    */
+# define FILE_TYPE_RAW    3
+#endif
+
 /** Platform specific native standard input "handle". */
 #ifdef RT_OS_WINDOWS
 # define RTFILE_NATIVE_STDIN ((uint32_t)-10)

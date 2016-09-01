@@ -28,10 +28,14 @@
 # include <sys/fcntl.h>
 # include <errno.h>
 
-# elif defined(RT_OS_WINDOWS)
+#elif defined(RT_OS_WINDOWS)
 # include <windows.h>
 # include <dbt.h>
 
+#elif defined(RT_OS_OS2)
+# define  INCL_BASE
+# define  INCL_DOSDEVIOCTL
+# include <os2.h>
 #elif defined(RT_OS_L4)
 
 #else /* !RT_OS_WINDOWS nor RT_OS_LINUX nor RT_OS_L4 */
@@ -100,6 +104,56 @@ static DECLCALLBACK(int) drvHostFloppyGetMediaSize(PDRVHOSTBASE pThis, uint64_t 
     return rc;
 }
 #endif /* RT_OS_WINDOWS */
+
+#ifdef RT_OS_OS2
+
+/* parameter packet */
+#pragma pack(1)
+struct PARM {
+    unsigned char command;
+    unsigned char drive;
+};
+#pragma pack()
+
+/**
+ * Get media size - needs a special IOCTL.
+ *
+ * @param   pThis   The instance data.
+ */
+static DECLCALLBACK(int) drvHostFloppyGetMediaSize(PDRVHOSTBASE pThis, uint64_t *pcb)
+{
+    struct PARM parm;
+    BIOSPARAMETERBLOCK bpb;
+    ULONG cbSectors;
+    ULONG parmlen = sizeof(parm);
+    ULONG datalen = sizeof(bpb);
+    APIRET rc;
+
+    parm.command = 1; // Return the BPB for the media currently in the drive
+    parm.drive = 0;   // unused
+
+    memset(&bpb, 0, sizeof(bpb));
+
+    rc = DosDevIOCtl((HFILE)RTFileToNative(pThis->hFileDevice), IOCTL_DISK, DSK_GETDEVICEPARAMS,
+                     &parm, parmlen, &parmlen,
+                     &bpb, datalen, &datalen);
+
+    if (! rc) {
+        cbSectors = bpb.cCylinders * bpb.cHeads * bpb.usSectorsPerTrack;
+        *pcb = cbSectors * bpb.usBytesPerSector;
+        rc = VINF_SUCCESS;
+    }
+    else
+    {
+        rc = RTErrConvertFromOS2(rc);
+        Log(("DrvHostFloppy: ioctl DSK_GETDEVICEPARAMS(%s) failed, rc=%Rrc\n",
+             pThis->pszDevice, rc));
+        return rc;
+    }
+
+    return rc;
+}
+#endif /* RT_OS_OS2 */
 
 #ifdef RT_OS_LINUX
 /**
@@ -198,7 +252,7 @@ static DECLCALLBACK(int) drvHostFloppyConstruct(PPDMDRVINS pDrvIns, PCFGMNODE pC
             /*
              * Override stuff.
              */
-#ifdef RT_OS_WINDOWS
+#if defined(RT_OS_WINDOWS) || defined(RT_OS_OS2)
             pThis->Base.pfnGetMediaSize = drvHostFloppyGetMediaSize;
 #endif
 #ifdef RT_OS_LINUX

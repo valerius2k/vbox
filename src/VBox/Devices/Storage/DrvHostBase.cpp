@@ -96,6 +96,11 @@ NTSTATUS __stdcall NtQueryVolumeInformationFile(
         /*IN*/ ULONG                Length,
         /*IN*/ FS_INFORMATION_CLASS FileSystemInformationClass );
 
+#elif defined(RT_OS_OS2)
+# define  OS2EMX_PLAIN_CHAR
+# define  INCL_BASE
+# define  INCL_DOSDEVIOCTL
+# include <os2.h>
 #elif defined(RT_OS_FREEBSD)
 # include <sys/cdefs.h>
 # include <sys/param.h>
@@ -1128,6 +1133,13 @@ static int drvHostBaseReopen(PDRVHOSTBASE pThis)
     }
     RTFILE hFileRawDevice;
     int rc = drvHostBaseOpen(pThis, &hFileDevice, &hFileRawDevice, pThis->fReadOnlyConfig);
+#elif defined(RT_OS_OS2)
+    if (pThis->hFileDevice != NIL_RTFILE)
+    {
+        RTFileClose(pThis->hFileDevice);
+        pThis->hFileDevice = NIL_RTFILE;
+    }
+    int rc = drvHostBaseOpen(pThis, &hFileDevice, pThis->fReadOnlyConfig);
 #else
     int rc = drvHostBaseOpen(pThis, &hFileDevice, pThis->fReadOnlyConfig);
 #endif
@@ -2041,7 +2053,7 @@ int DRVHostBaseInitData(PPDMDRVINS pDrvIns, PCFGMNODE pCfg, PDMBLOCKTYPE enmType
     pThis->fAttachFailError = fAttachFailError;
 
     /* name to open & watch for */
-#ifdef RT_OS_WINDOWS
+#if defined(RT_OS_WINDOWS) || defined(RT_OS_OS2)
     int iBit = RT_C_TO_UPPER(pThis->pszDevice[0]) - 'A';
     if (    iBit > 'Z' - 'A'
         ||  pThis->pszDevice[1] != ':'
@@ -2051,7 +2063,11 @@ int DRVHostBaseInitData(PPDMDRVINS pDrvIns, PCFGMNODE pCfg, PDMBLOCKTYPE enmType
         return VERR_INVALID_PARAMETER;
     }
     pThis->fUnitMask = 1 << iBit;
+#if defined(RT_OS_WINDOWS)
     RTStrAPrintf(&pThis->pszDeviceOpen, "\\\\.\\%s", pThis->pszDevice);
+#else
+    RTStrAPrintf(&pThis->pszDeviceOpen, "%s", pThis->pszDevice);
+#endif
 
 #elif defined(RT_OS_SOLARIS)
     char *pszBlockDevName = getfullblkname(pThis->pszDevice);
@@ -2199,7 +2215,7 @@ int DRVHostBaseInitFinish(PDRVHOSTBASE pThis)
             }
         }
     }
-#ifdef RT_OS_WINDOWS
+#if defined(RT_OS_WINDOWS) || defined(RT_OS_OS2)
     if (RT_SUCCESS(src))
         DRVHostBaseMediaPresent(pThis);
 #endif

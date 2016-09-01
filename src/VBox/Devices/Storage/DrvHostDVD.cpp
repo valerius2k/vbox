@@ -86,6 +86,13 @@
 # undef _interlockedbittestandreset64
 # undef USE_MEDIA_POLLING
 
+#elif defined(RT_OS_OS2)
+# define  INCL_BASE
+# define  INCL_DOSDEVICES
+# define  INCL_DOSDEVIOCTL
+# include <os2.h>
+# include <stdio.h> // printf
+
 #elif defined(RT_OS_FREEBSD)
 # include <sys/cdefs.h>
 # include <sys/param.h>
@@ -106,6 +113,7 @@
 #include <iprt/string.h>
 #include <iprt/thread.h>
 #include <iprt/critsect.h>
+#include <iprt/mem.h>
 #include <VBox/scsi.h>
 
 #include "VBoxDD.h"
@@ -202,6 +210,17 @@ static DECLCALLBACK(int) drvHostDvdUnmount(PPDMIMOUNT pInterface, bool fForce, b
                 AssertMsgFailed(("Failed to open '%s' for ejecting this tray.\n",  rc));
 
 
+#elif defined(RT_OS_OS2)
+            ULONG parm = ('C') | ('D' << 8) | ('0' << 16) | ('1' << 24);
+            ULONG parmlen = sizeof(parm);
+
+            if (! (rc = DosDevIOCtl((HFILE)RTFileToNative(pThis->hFileDevice),
+                               IOCTL_CDROMDISK, CDROMDISK_EJECTDISK,
+                               &parm, parmlen, &parmlen,
+                               NULL, 0, NULL)))
+                rc = VINF_SUCCESS;
+            else
+                rc = RTErrConvertFromOS2(rc);
 #else
             AssertMsgFailed(("Eject is not implemented!\n"));
             rc = VINF_SUCCESS;
@@ -280,6 +299,28 @@ static DECLCALLBACK(int) drvHostDvdDoLock(PDRVHOSTBASE pThis, bool fLock)
         /** @todo figure out the return codes for already locked. */
         rc = RTErrConvertFromWin32(GetLastError());
 
+#elif defined(RT_OS_OS2)
+    #pragma pack(1)
+    typedef struct _PARM
+    {
+        ULONG sig;
+        char flag;
+    } PARM;
+    #pragma pack()
+
+    ULONG  parmlen, datalen = 0;
+    PARM   parm;
+    APIRET rc;
+
+    parm.sig = ('C') | ('D' << 8) | ('0' << 16) | ('1' << 24);
+    parm.flag = fLock ? 1 : 0;
+
+    if (! (rc = DosDevIOCtl((HFILE)RTFileToNative(pThis->hFileDevice), IOCTL_CDROMDISK, CDROMDISK_LOCKUNLOCKDOOR,
+                            &parm, sizeof(PARM), &parmlen,
+                            0, datalen, &datalen)))
+        rc = VINF_SUCCESS;
+    else
+        rc = RTErrConvertFromOS2(rc);
 #else
     AssertMsgFailed(("Lock/Unlock is not implemented!\n"));
     int rc = VINF_SUCCESS;
@@ -631,6 +672,174 @@ static DECLCALLBACK(int) drvHostDvdSendCmd(PPDMIBLOCK pInterface, const uint8_t 
         rc = RTErrConvertFromWin32(GetLastError());
     Log2(("%s: scsistatus=%d bytes returned=%d tlength=%d\n", __FUNCTION__, Req.spt.ScsiStatus, cbReturned, Req.spt.DataTransferLength));
 
+#elif defined(RT_OS_OS2)
+    #define CDROMDISK_EXECMD 0x7A
+    uint16_t flags;
+
+    #pragma pack(1)
+
+    struct ExecCMD {
+        ULONG        ID_code;          // 'CD01'
+        USHORT       data_length;      // length of the Data Packet
+        USHORT       cmd_length;       // length of the Command Buffer
+        USHORT       flags;            // flags
+        UCHAR        cmd_buffer[16];   // Command Buffer for SCSI command
+        ULONG        cmd_timeout;      // Timeout for executing command (0 - default)
+    } cmd;
+
+    // flags:
+    #define EX_DIRECTION_IN  0x0001
+    #define EX_PLAYING_CHK   0x0002
+    #define EX_RETURN_STATUS 0x0004
+    #define EX_SET_TIMEOUT   0x0008
+
+    #define DATA_TRANSFER_SIZE 32768
+
+    struct RetStatus {
+        UCHAR       sense_key;    // Sense Key
+        UCHAR       asc_code;     // Additional Sense Code (ASC)
+        UCHAR       ascq_code;    // Additional Sense Code Qualifier (ASCQ)
+    };
+
+    typedef struct _CDB_read_write {
+        UCHAR       opcode;
+        UCHAR       flags1;
+        ULONG       lba;
+        UCHAR       flags2;
+        USHORT      transfer_len;
+        UCHAR       control;
+    } CDB_read_write;
+
+    #pragma pack()
+
+    ULONG cmdlen = sizeof(cmd);
+    ULONG datalen;
+    char  *data;
+
+    switch (enmTxDir)
+    {
+        case PDMBLOCKTXDIR_NONE:
+            Assert(*pcbBuf == 0);
+            flags = EX_DIRECTION_IN;
+            break;
+        case PDMBLOCKTXDIR_FROM_DEVICE:
+            Assert(*pcbBuf != 0);
+            /* Make sure that the buffer is clear for commands reading
+             * data. The actually received data may be shorter than what
+             * we expect, and due to the unreliable feedback about how much
+             * data the ioctl actually transferred, it's impossible to
+             * prevent that. Returning previous buffer contents may cause
+             * security problems inside the guest OS, if users can issue
+             * commands to the CDROM device. */
+            memset(pvBuf, 0, *pcbBuf);
+            flags = EX_DIRECTION_IN;
+            break;
+        case PDMBLOCKTXDIR_TO_DEVICE:
+            Assert(*pcbBuf != 0);
+            flags = 0;
+            break;
+        default:
+            AssertMsgFailed(("enmTxDir invalid!\n"));
+            flags = 0;
+    }
+
+    flags |= EX_SET_TIMEOUT | EX_RETURN_STATUS;
+
+    uint32_t cbTransferred = 0;
+    int32_t cbSize   = (int32_t)*pcbBuf;
+    int32_t cbSize32 = (cbSize >= DATA_TRANSFER_SIZE) ? DATA_TRANSFER_SIZE : cbSize;
+    char    *pBuf    = (char *)pvBuf;
+
+    if (! cbSize32)
+        cbSize32 = 4;
+
+    data = (char *)RTMemAllocZ(cbSize32 + cbSense);
+
+    do
+    {
+        CDB_read_write *cdb = (CDB_read_write *)&cmd.cmd_buffer;
+
+        memset(&cmd, 0, sizeof(cmd));
+        memset(data, 0, cbSize32 + cbSense);
+
+        cmd.ID_code = ('C') | ('D' << 8) | ('0' << 16) | ('1' << 24);
+        cmd.cmd_length = sizeof(cmd.cmd_buffer);
+        memcpy((char *)&cmd.cmd_buffer, (char *)pbCmd, 12);
+        cmd.flags = flags;
+        cmd.cmd_timeout = (cTimeoutMillies + 999) / 1000; // convert to seconds
+        datalen = cmd.data_length = cbSize32;
+
+        printf("cmd=%02x, cbSize=%u, cbSize32=%u, lba=%x, len=%u", cdb->opcode, cbSize, cbSize32, RT_BSWAP_U32(cdb->lba), RT_BSWAP_U16(cdb->transfer_len));
+
+        // VBox sends 65536 byte data packets, but os2cdrom.dmd has a limitation
+        // of 32768 bytes per packet, sent in one ioctl command. So, we just split
+        // big packets to smaller ones, and patch the fields in a CDB accordingly.
+        if (cdb->opcode == 0x2a || // WRITE
+            cdb->opcode == 0x28)   // READ
+        {
+            uint32_t lba = RT_BSWAP_U32(cdb->lba);
+
+            lba += cbTransferred >> 11;    // lba
+            cdb->lba = RT_BSWAP_U32(lba);
+            cdb->transfer_len = RT_BSWAP_U16(cbSize32 >> 11); // blocks number
+        }
+
+        switch (enmTxDir)
+        {
+            case PDMBLOCKTXDIR_NONE:
+                printf(", direction: none");
+                break;
+
+            case PDMBLOCKTXDIR_FROM_DEVICE:
+                printf(", direction: from");
+                break;
+
+            case PDMBLOCKTXDIR_TO_DEVICE:
+                printf(", direction: to");
+                break;
+
+            default:
+                printf(", direction: illegal");
+                AssertMsgFailed(("enmTxDir invalid!\n"));
+        }
+
+        // copy data to ioctl data buffer
+        if (enmTxDir == PDMBLOCKTXDIR_TO_DEVICE)
+            memcpy(data, pBuf, cbSize32);
+
+        if (! (rc = DosDevIOCtl((HFILE)RTFileToNative(pThis->hFileDevice),
+                                IOCTL_CDROMDISK, CDROMDISK_EXECMD, 
+                                &cmd, cmdlen, &cmdlen, data, datalen, &datalen)) )
+        {
+            printf(", success, datalen=%lu", datalen);
+            // copy sense info
+            memcpy(pabSense, (char *)data + cbSize32, cbSense);
+
+            // copy data we got from CDROM driver
+            if ((enmTxDir == PDMBLOCKTXDIR_FROM_DEVICE) && datalen)
+            {
+                printf(", direction: from\n");
+                memcpy(pBuf, data, datalen);
+            }
+            else
+                printf(", direction: to\n");
+
+            pBuf          += datalen;
+            cbSize        -= datalen;
+            cbTransferred += datalen;
+        }
+        else
+            printf(", rc=%u\n", rc);
+
+        rc = RTErrConvertFromOS2(rc);
+
+    } while ((cbSize > 0) && RT_SUCCESS(rc));
+
+    RTMemFree(data);
+
+    printf("%s: bytes returned=%u\n", __FUNCTION__, cbTransferred);
+    Log2(("%s: bytes returned=%u\n", __FUNCTION__, cbTransferred));
+    
 #else
 # error "Unsupported platform."
 #endif

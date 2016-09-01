@@ -59,6 +59,12 @@
 # include <fcntl.h>
 # include <unistd.h>
 #endif
+#ifdef RT_OS_OS2
+# define  INCL_BASE
+# define  INCL_DOSDEVIOCTL
+# include <os2.h>
+# include <stdio.h> // SEEK_END
+#endif
 #ifdef RT_OS_LINUX
 # include <sys/utsname.h>
 # include <linux/hdreg.h>
@@ -1192,7 +1198,7 @@ static RTEXITCODE CmdCreateRawVMDK(int argc, char **argv, ComPtr<IVirtualBox> aV
             i++;
             pszPartitions = argv[i];
         }
-#if defined(RT_OS_LINUX) || defined(RT_OS_FREEBSD) || defined(RT_OS_WINDOWS)
+#if defined(RT_OS_LINUX) || defined(RT_OS_FREEBSD) || defined(RT_OS_WINDOWS) || defined(RT_OS_OS2)
         else if (strcmp(argv[i], "-relative") == 0)
         {
             fRelative = true;
@@ -1274,6 +1280,112 @@ static RTEXITCODE CmdCreateRawVMDK(int argc, char **argv, ComPtr<IVirtualBox> aV
          * before failing.
          */
         vrc = RTErrConvertFromWin32(GetLastError());
+        if (RT_FAILURE(RTFileGetSize(hRawFile, &cbSize)))
+        {
+            RTMsgError("Cannot get the geometry of the raw disk '%s': %Rrc", rawdisk.c_str(), vrc);
+            goto out;
+        }
+        else
+        {
+            if (fRelative)
+            {
+                RTMsgError("The -relative parameter is invalid for raw images");
+                vrc = VERR_INVALID_PARAMETER;
+                goto out;
+            }
+            vrc = VINF_SUCCESS;
+        }
+    }
+#elif defined(RT_OS_OS2)
+    /* parameter packet */
+    #pragma pack(1)
+    struct {
+        unsigned char command;
+        unsigned char drive;
+    } parm;
+    struct {
+        unsigned char command;
+    } parmphys;
+    #pragma pack()
+    /* data packet      */
+    BIOSPARAMETERBLOCK bpb;
+    DEVICEPARAMETERBLOCK dpb;
+    ULONG cbSectors;
+    ULONG parmlen;
+    ULONG datalen;
+    LONGLONG xrc;
+    APIRET ret;
+
+    if (hRawFile->type == FILE_TYPE_RAW)
+    {
+        parmlen = sizeof(parmphys);
+        datalen = sizeof(dpb);
+
+        memset(&dpb, 0, sizeof(dpb));
+
+        parmphys.command = 1;
+
+        ret = DosDevIOCtl((HFILE)RTFileToNative(hRawFile), IOCTL_PHYSICALDISK, PDSK_GETPHYSDEVICEPARAMS,
+                          &parmphys, parmlen, &parmlen,
+                          &dpb, datalen, &datalen);
+    }
+    else if (hRawFile->type == FILE_TYPE_DASD ||
+             hRawFile->type == FILE_TYPE_CD)
+    {
+        parmlen = sizeof(parm);
+        datalen = sizeof(bpb);
+
+        memset(&bpb, 0, sizeof(bpb));
+
+        parm.command = 1; // Return the BPB for the media currently in the drive
+        parm.drive = 0;   // unused
+
+        ret = DosDevIOCtl((HFILE)RTFileToNative(hRawFile), IOCTL_DISK, DSK_GETDEVICEPARAMS,
+                          &parm, parmlen, &parmlen,
+                          &bpb, datalen, &datalen);
+    }
+    //else if (hRawFile->type == FILE_TYPE_RAWFS)
+    //    ret = DosSetFilePtrL(RTFileToNative(hRawFile), 0, FILE_END, &xrc);
+
+    if (! ret)
+    {
+        if (hRawFile->type == FILE_TYPE_RAW)
+        {
+            cbSize = dpb.cCylinders
+                   * dpb.cHeads
+                   * dpb.cSectorsPerTrack;
+            cbSize <<= 9; // multiply by sector size
+        }
+        else if (bpb.bDeviceType == 5) // fixed disk
+        {
+            cbSize = bpb.cCylinders
+                   * bpb.cHeads
+                   * bpb.usSectorsPerTrack;
+            cbSize <<= 9; // multiply by sector size
+        }
+        //else if (hRawFile->type == FILE_TYPE_RAWFS)
+        //    cbSize = xrc;
+        else
+        {
+            RTMsgError("File '%s' is no fixed/removable medium device", rawdisk.c_str());
+            vrc = VERR_INVALID_PARAMETER;
+            goto out;
+        }
+
+        if (fRelative)
+        {
+            RTMsgError("The -relative parameter is invalid for raw disk %s", rawdisk.c_str());
+            vrc = VERR_INVALID_PARAMETER;
+            goto out;
+        }
+    }
+    else
+    {
+        /*
+         * Could be raw image, remember error code and try to get the size first
+         * before failing.
+         */
+        vrc = RTErrConvertFromOS2(ret);
         if (RT_FAILURE(RTFileGetSize(hRawFile, &cbSize)))
         {
             RTMsgError("Cannot get the geometry of the raw disk '%s': %Rrc", rawdisk.c_str(), vrc);

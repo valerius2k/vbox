@@ -129,6 +129,10 @@ typedef struct DRVHOSTBASE
     /** The unit mask. */
     DWORD                   fUnitMask;
 #endif
+#ifdef RT_OS_OS2
+    /** The unit mask. */
+    ULONG                   fUnitMask;
+#endif
 
 #ifdef RT_OS_LINUX
     /** Double buffer required for ioctl with the Linux kernel as long as we use
