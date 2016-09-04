@@ -522,7 +522,14 @@ static int rtOs2ExtraFileRead(RTFILE hFile, void *pvBuf, size_t cbToRead, ssize_
 
     #define BUFSIZE 0x4000
     #define SECSIZE 512
-    ULONG parmlen4 = sizeof(TRACKLAYOUT) + sizeof(USHORT) * 2 * (bpb.usSectorsPerTrack - 1);
+
+    ULONG parmlen4;
+
+    //if (hFile->type == FILE_TYPE_DASD || hFile->type == FILE_TYPE_CD)
+    //    parmlen4 = sizeof(TRACKLAYOUT) + sizeof(USHORT) * 2 * (bpb.usSectorsPerTrack - 1);
+    //else if (hFile->type == FILE_TYPE_RAW)
+    //    parmlen4 = sizeof(TRACKLAYOUT) + sizeof(USHORT) * 2 * (dpb.cSectorsPerTrack - 1);
+
     char trkbuf[sizeof(TRACKLAYOUT) + sizeof(USHORT) * 2 * 255];
     PTRACKLAYOUT ptrk = (PTRACKLAYOUT)trkbuf;
     ULONG datalen4 = BUFSIZE;
@@ -553,6 +560,8 @@ static int rtOs2ExtraFileRead(RTFILE hFile, void *pvBuf, size_t cbToRead, ssize_
                 AssertReturn(!(cbToRead % SECTORSIZE), VERR_INVALID_PARAMETER);
 
                 memset(&parm, 0, sizeof(parm));
+                memset(&data, 0, sizeof(data));
+
                 parm.ID_code = ('C') | ('D' << 8) | ('0' << 16) | ('1' << 24);
                 parm.address_mode = 0; // lba
 
@@ -580,8 +589,6 @@ static int rtOs2ExtraFileRead(RTFILE hFile, void *pvBuf, size_t cbToRead, ssize_
                 break;
 
             case FILE_TYPE_DASD:
-                cbRead32 = (cbToRead > BUFSIZE) ? BUFSIZE : (uint32_t)cbToRead;
-
                 memset((char *)trkbuf, 0, sizeof(trkbuf));
 
                 for (int i = 0; i < bpb.usSectorsPerTrack; i++)
@@ -592,14 +599,21 @@ static int rtOs2ExtraFileRead(RTFILE hFile, void *pvBuf, size_t cbToRead, ssize_
 
                 do
                 {
-                    cyl = hFile->off / (SECSIZE * bpb.cHeads * bpb.usSectorsPerTrack);
-                    head = (hFile->off / SECSIZE - bpb.cHeads * bpb.usSectorsPerTrack * cyl) / bpb.usSectorsPerTrack;
-                    sec = hFile->off / SECSIZE - bpb.cHeads * bpb.usSectorsPerTrack * cyl - head * bpb.usSectorsPerTrack;
+                    cbRead32 = (cbToRead > BUFSIZE) ? BUFSIZE : (uint32_t)cbToRead;
+                    parmlen4 = sizeof(TRACKLAYOUT) + sizeof(USHORT) * 2 * (bpb.usSectorsPerTrack - 1);
+                    datalen4 = BUFSIZE;
+
+                    uint64_t off = hFile->off;
+                    off += (uint64_t)bpb.cHiddenSectors * SECSIZE;
+
+                    cyl = off / (SECSIZE * bpb.cHeads * bpb.usSectorsPerTrack);
+                    head = (off / SECSIZE - bpb.cHeads * bpb.usSectorsPerTrack * cyl) / bpb.usSectorsPerTrack;
+                    sec = off / SECSIZE - bpb.cHeads * bpb.usSectorsPerTrack * cyl - head * bpb.usSectorsPerTrack;
 
                     if (sec + cbRead32 / SECSIZE > bpb.usSectorsPerTrack)
-                        n = bpb.usSectorsPerTrack - sec + 1;
-                    else
-                        n = cbRead32 / SECSIZE;
+                        cbRead32 = (bpb.usSectorsPerTrack - sec) * SECSIZE;
+
+                    n = cbRead32 / SECSIZE;
 
                     ptrk->bCommand = 1;
                     ptrk->usHead = head;
@@ -624,8 +638,6 @@ static int rtOs2ExtraFileRead(RTFILE hFile, void *pvBuf, size_t cbToRead, ssize_
                 break;
 
             case FILE_TYPE_RAW:
-                cbRead32 = (cbToRead > BUFSIZE) ? BUFSIZE : (uint32_t)cbToRead;
-
                 memset((char *)trkbuf, 0, sizeof(trkbuf));
 
                 for (int i = 0; i < dpb.cSectorsPerTrack; i++)
@@ -636,14 +648,18 @@ static int rtOs2ExtraFileRead(RTFILE hFile, void *pvBuf, size_t cbToRead, ssize_
 
                 do
                 {
+                    cbRead32 = (cbToRead > BUFSIZE) ? BUFSIZE : (uint32_t)cbToRead;
+                    parmlen4 = sizeof(TRACKLAYOUT) + sizeof(USHORT) * 2 * (dpb.cSectorsPerTrack - 1);
+                    datalen4 = BUFSIZE;
+
                     cyl = hFile->off / (SECSIZE * dpb.cHeads * dpb.cSectorsPerTrack);
                     head = (hFile->off / SECSIZE - dpb.cHeads * dpb.cSectorsPerTrack * cyl) / dpb.cSectorsPerTrack;
                     sec = hFile->off / SECSIZE - dpb.cHeads * dpb.cSectorsPerTrack * cyl - head * dpb.cSectorsPerTrack;
 
                     if (sec + cbRead32 / SECSIZE > dpb.cSectorsPerTrack)
-                        n = dpb.cSectorsPerTrack - sec + 1;
-                    else
-                        n = cbRead32 / SECSIZE;
+                        cbRead32 = (dpb.cSectorsPerTrack - sec) * SECSIZE;
+
+                    n = cbRead32 / SECSIZE;
 
                     ptrk->bCommand = 1;
                     ptrk->usHead = head;
@@ -698,7 +714,7 @@ static int rtOs2ExtraFileWrite(RTFILE hFile, const void *pvBuf, size_t cbToWrite
 
     // data packet
     struct WriteData_data {
-        UCHAR       sector_data[2048]; // Sector to be written to the disk
+        UCHAR       sector_data[SECTORSIZE]; // Sector to be written to the disk
     } data;
 
     ULONG datalen, data_offset;
@@ -750,10 +766,10 @@ static int rtOs2ExtraFileWrite(RTFILE hFile, const void *pvBuf, size_t cbToWrite
 
     ULONG parmlen4;
 
-    if (hFile->type == FILE_TYPE_DASD || hFile->type == FILE_TYPE_CD)
-        parmlen4 = sizeof(TRACKLAYOUT) + sizeof(USHORT) * 2 * (bpb.usSectorsPerTrack - 1);
-    else if (hFile->type == FILE_TYPE_RAW)
-        parmlen4 = sizeof(TRACKLAYOUT) + sizeof(USHORT) * 2 * (dpb.cSectorsPerTrack - 1);
+    //if (hFile->type == FILE_TYPE_DASD || hFile->type == FILE_TYPE_CD)
+    //    parmlen4 = sizeof(TRACKLAYOUT) + sizeof(USHORT) * 2 * (bpb.usSectorsPerTrack - 1);
+    //else if (hFile->type == FILE_TYPE_RAW)
+    //    parmlen4 = sizeof(TRACKLAYOUT) + sizeof(USHORT) * 2 * (dpb.cSectorsPerTrack - 1);
 
     char trkbuf[sizeof(TRACKLAYOUT) + sizeof(USHORT) * 2 * 255];
     PTRACKLAYOUT ptrk = (PTRACKLAYOUT)trkbuf;
@@ -814,8 +830,6 @@ static int rtOs2ExtraFileWrite(RTFILE hFile, const void *pvBuf, size_t cbToWrite
                 break;
 
             case FILE_TYPE_DASD:
-                cbWrite32 = (cbToWrite > BUFSIZE) ? BUFSIZE : (uint32_t)cbToWrite;
-
                 memset((char *)trkbuf, 0, sizeof(trkbuf));
 
                 for (int i = 0; i < bpb.usSectorsPerTrack; i++)
@@ -826,14 +840,21 @@ static int rtOs2ExtraFileWrite(RTFILE hFile, const void *pvBuf, size_t cbToWrite
 
                 do
                 {
-                    cyl = hFile->off / (SECSIZE * bpb.cHeads * bpb.usSectorsPerTrack);
-                    head = (hFile->off / SECSIZE - bpb.cHeads * bpb.usSectorsPerTrack * cyl) / bpb.usSectorsPerTrack;
-                    sec = hFile->off / SECSIZE - bpb.cHeads * bpb.usSectorsPerTrack * cyl - head * bpb.usSectorsPerTrack;
+                    cbWrite32 = (cbToWrite > BUFSIZE) ? BUFSIZE : (uint32_t)cbToWrite;
+                    parmlen4 = sizeof(TRACKLAYOUT) + sizeof(USHORT) * 2 * (bpb.usSectorsPerTrack - 1);
+                    datalen4 = BUFSIZE;
+
+                    uint64_t off = hFile->off;
+                    off += (uint64_t)bpb.cHiddenSectors * SECSIZE;
+
+                    cyl = off / (SECSIZE * bpb.cHeads * bpb.usSectorsPerTrack);
+                    head = (off / SECSIZE - bpb.cHeads * bpb.usSectorsPerTrack * cyl) / bpb.usSectorsPerTrack;
+                    sec = off / SECSIZE - bpb.cHeads * bpb.usSectorsPerTrack * cyl - head * bpb.usSectorsPerTrack;
 
                     if (sec + cbWrite32 / SECSIZE > bpb.usSectorsPerTrack)
-                        n = bpb.usSectorsPerTrack - sec + 1;
-                    else
-                        n = cbWrite32 / SECSIZE;
+                        cbWrite32 = (bpb.usSectorsPerTrack - sec) * SECSIZE;
+
+                    n = cbWrite32 / SECSIZE;
 
                     ptrk->bCommand = 1;
                     ptrk->usHead = head;
@@ -858,8 +879,6 @@ static int rtOs2ExtraFileWrite(RTFILE hFile, const void *pvBuf, size_t cbToWrite
                 break;
 
             case FILE_TYPE_RAW:
-                cbWrite32 = (cbToWrite > BUFSIZE) ? BUFSIZE : (uint32_t)cbToWrite;
-
                 memset((char *)trkbuf, 0, sizeof(trkbuf));
 
                 for (int i = 0; i < dpb.cSectorsPerTrack; i++)
@@ -870,14 +889,18 @@ static int rtOs2ExtraFileWrite(RTFILE hFile, const void *pvBuf, size_t cbToWrite
 
                 do
                 {
+                    cbWrite32 = (cbToWrite > BUFSIZE) ? BUFSIZE : (uint32_t)cbToWrite;
+                    parmlen4 = sizeof(TRACKLAYOUT) + sizeof(USHORT) * 2 * (dpb.cSectorsPerTrack - 1);
+                    datalen4 = BUFSIZE;
+
                     cyl = hFile->off / (SECSIZE * dpb.cHeads * dpb.cSectorsPerTrack);
                     head = (hFile->off / SECSIZE - dpb.cHeads * dpb.cSectorsPerTrack * cyl) / dpb.cSectorsPerTrack;
                     sec = hFile->off / SECSIZE - dpb.cHeads * dpb.cSectorsPerTrack * cyl - head * dpb.cSectorsPerTrack;
 
                     if (sec + cbWrite32 / SECSIZE > dpb.cSectorsPerTrack)
-                        n = dpb.cSectorsPerTrack - sec + 1;
-                    else
-                        n = cbWrite32 / SECSIZE;
+                        cbWrite32 = (dpb.cSectorsPerTrack - sec) * SECSIZE;
+
+                    n = cbWrite32 / SECSIZE;
 
                     ptrk->bCommand = 1;
                     ptrk->usHead = head;
