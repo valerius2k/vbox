@@ -727,7 +727,7 @@ void
 yybegin(yystate_t state)
 {
 #ifdef	YYDEBUG
-	/* yydebug = _dtrace_debug; */
+	int yydebug = _dtrace_debug;
 #endif
 	if (yypcb->pcb_yystate == state)
 		return; /* nothing to do if we're in the state already */
