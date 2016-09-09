@@ -34,6 +34,13 @@ if platform.system() in [ 'SunOS', ] and sys.maxsize <= 2**32:
     _asVBoxPythons = _asNew;
     del _asNew;
 
+# On OS/2 we use a short name for VBoxPython to be 8.3 compliant
+if platform.system() == 'OS/2':
+    _asNew = [ 'VBoxPy' + str(sys.version_info[0]) + str(sys.version_info[1]) ];
+    _asNew.extend(_asVBoxPythons);
+    _asVBoxPythons = _asNew;
+    del _asNew;
+
 # On Darwin (aka Mac OS X) we know exactly where things are in a normal
 # VirtualBox installation.
 ## @todo Edit this at build time to the actual VBox location set in the make files.
