@@ -67,6 +67,7 @@ VBoxPythonBase_TEMPLATE = XPCOM
 VBoxPythonBase_CXXFLAGS = -Wno-write-strings
 VBoxPythonBase_DLLSUFF.darwin = .so
 VBoxPythonBase_DLLSUFF.os2 = .pyd
+VBoxPythonBase_LDFLAGS.os2 = KMK_NOIMPLIB
 VBoxPythonBase_DEFS     = \
 	_IMPL_NS_COM \
 	_IMPL_NS_BASE \
@@ -213,7 +214,6 @@ VBoxPython2_7_EXTENDS    = VBoxPythonBase
 VBoxPython2_7_EXTENDS_BY = appending
 VBoxPython2_7_TEMPLATE   = XPCOM$(if-expr "$(KBUILD_TARGET)" == "darwin" && "$(VBOX_DEF_MACOSX_VERSION_MIN)" <= "10.7",OSX107,)
 VBoxPython2_7_NAME.os2   = VBoxPy27
-VBoxPython2_7_LDFLAGS.os2 = KMK_NOIMPLIB
 VBoxPython2_7_INCS       = $(VBOX_PYTHON27_INC)
 VBoxPython2_7_LIBS       = $(VBOX_PYTHON27_LIB)
 
