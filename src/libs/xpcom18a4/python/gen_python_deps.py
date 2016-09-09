@@ -27,6 +27,10 @@ def checkPair(p, v,dllpre,dllsuff, bitness_magic):
     if not os.path.isfile(lib):
         lib = os.path.join(p, "lib", dllpre+"python"+v+dllsuff)
 
+    if not os.path.isfile(lib):
+        vNoDot = v.replace(".", "")
+        lib = os.path.join(p, "lib", dllpre+"python"+vNoDot+dllsuff)
+
     if bitness_magic == 1:
         lib64 = os.path.join(p, "lib", "64", dllpre+"python"+v+dllsuff)
     elif bitness_magic == 2:
@@ -84,7 +88,6 @@ def main(argv):
         dllsuff = '.dylib'
 
     if target == 'os2':
-        versions = ["27",]
         prefixes = ["/@unixroot/usr"]
         dllsuff = '.dll'
         dllpre = ''
