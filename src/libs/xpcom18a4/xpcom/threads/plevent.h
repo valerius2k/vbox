@@ -194,14 +194,17 @@ and to ensure that no more events will be delivered for that owner.
 /* For HWND */
 #if defined(XP_WIN32)
 #include <windef.h>
-#elif defined(XP_OS2)
+#elif defined(XP_OS2) && !defined(QT_CORE_LIB)
 #ifndef OS2EMX_PLAIN_CHAR
 # define OS2EMX_PLAIN_CHAR
 #endif
 #define INCL_DOSMISC
 #define INCL_DOSPROCESS
 #define INCL_DOSERRORS
+#define INCL_WIN
 #include <os2.h>
+#elif defined(XP_OS2) && defined(QT_CORE_LIB)
+#include <prtypes.h>
 #endif
 
 #ifdef VBOX_WITH_XPCOM_NAMESPACE_CLEANUP
@@ -544,7 +547,7 @@ struct PLEvent {
 #ifdef PL_POST_TIMINGS
     PRIntervalTime      postTime;
 #endif
-#ifdef XP_UNIX
+#if defined(XP_UNIX) || ( defined(XP_OS2) && !defined(OS2_PM_EVENT_QUEUES) )
     unsigned long       id;
 #endif /* XP_UNIX */
     /* other fields follow... */
@@ -556,7 +559,7 @@ struct PLEvent {
 ** Returns the event queue associated with the main thread.
 ** 
 */
-#if defined(XP_WIN) || defined(XP_OS2)
+#if defined(XP_WIN) || ( defined(XP_OS2) && defined(OS2_PM_EVENT_QUEUES) )
 /* -----------------------------------------------------------------------
 ** FUNCTION: PL_GetNativeEventReceiverWindow()
 ** 
@@ -580,7 +583,7 @@ PR_EXTERN(HWND)
     );
 #endif /* XP_WIN || XP_OS2 */
 
-#ifdef XP_UNIX
+#if defined(XP_UNIX) || ( defined(XP_OS2) && !defined(OS2_PM_EVENT_QUEUES) )
 /* -----------------------------------------------------------------------
 ** FUNCTION: PL_ProcessEventsBeforeID()
 **

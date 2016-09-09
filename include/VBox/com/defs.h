@@ -44,7 +44,9 @@
 
 /* Make sure OS/2 Toolkit headers are pulled in to have BOOL/ULONG/etc. typedefs
  * already defined in order to be able to redefine them using #define. */
-# define OS2EMX_PLAIN_CHAR
+# ifndef OS2EMX_PLAIN_CHAR
+#  define OS2EMX_PLAIN_CHAR
+# endif
 # define INCL_BASE
 # define INCL_DOSDEVIOCTL
 # define INCL_PM
