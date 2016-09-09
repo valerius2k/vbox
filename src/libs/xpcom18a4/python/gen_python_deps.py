@@ -83,6 +83,12 @@ def main(argv):
                     '/Developer/SDKs/MacOSX10.7.sdk/usr']
         dllsuff = '.dylib'
 
+    if target == 'os2':
+        versions = ["27",]
+        prefixes = ["/@unixroot/usr"]
+        dllsuff = '.dll'
+        dllpre = ''
+
     if target == 'solaris' and arch == 'amd64':
         bitness_magic = 1
 
