@@ -47,13 +47,17 @@ endif
 #
 INSTALLS.os2 += ValidationKitOs2LibC
 ValidationKitOs2LibC_TEMPLATE = VBoxValidationKitR3
+USR_LIB_PATH := /@unixroot/usr/lib
+ifneq ($(shell test -d $(USR_LIB_PATH) ; echo $$?), 0)
+ USR_LIB_PATH := $(KBUILD_BIN_PATH)
+endif
 ValidationKitOs2LibC_SOURCES = \
-	$(KBUILD_BIN_PATH)/libc06.dll \
-	$(KBUILD_BIN_PATH)/libc061.dll \
-	$(KBUILD_BIN_PATH)/libc062.dll \
-	$(KBUILD_BIN_PATH)/libc063.dll \
-	$(KBUILD_BIN_PATH)/libc064.dll \
-	$(KBUILD_BIN_PATH)/libc065.dll
+	$(USR_LIB_PATH)/libc06.dll \
+	$(USR_LIB_PATH)/libc061.dll \
+	$(USR_LIB_PATH)/libc062.dll \
+	$(USR_LIB_PATH)/libc063.dll \
+	$(USR_LIB_PATH)/libc064.dll \
+	$(USR_LIB_PATH)/libc065.dll
 
 
 include $(FILE_KBUILD_SUB_FOOTER)
