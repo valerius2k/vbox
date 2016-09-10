@@ -2044,6 +2044,10 @@ EOF
       cnf_append "VBOX_WITH_PYTHON"     "1"
       cnf_append "VBOX_PATH_PYTHON_INC" "$p/include/$d"
       cnf_append "VBOX_LIB_PYTHON"      "$p/$b/$IMPLIBPREF$d$IMPLIBSUFF"
+      if [ "$OS" = "os2" ]; then
+        cnf_append "VBOX_PYTHON27_INC" "\$(VBOX_PATH_PYTHON_INC)"
+        cnf_append "VBOX_PYTHON27_LIB" "\$(VBOX_LIB_PYTHON)"
+      fi
     else
       log_failure "Python not working"
       fail
