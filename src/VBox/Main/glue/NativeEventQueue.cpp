@@ -16,6 +16,13 @@
  * hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
  */
 
+#ifdef RT_OS_OS2
+# define OS2EMX_PLAIN_CHAR
+# define INCL_BASE
+# define INCL_WIN
+# include <os2.h>
+#endif
+
 #include "VBox/com/NativeEventQueue.h"
 
 #include <new> /* For bad_alloc. */
@@ -45,7 +52,11 @@ namespace com
 // NativeEventQueue class
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef VBOX_WITH_XPCOM
+#if defined(RT_OS_OS2)
+# define EVENTQUEUE_WIN_LPARAM_MAGIC   (void *)0xf241b819
+#endif
+
+#if defined(RT_OS_WINDOWS)
 
 # define CHECK_THREAD_RET(ret) \
     do { \
@@ -59,6 +70,16 @@ namespace com
  *          vboxapi/PlatformMSCOM::interruptWaitEvents(). */
 #define EVENTQUEUE_WIN_LPARAM_MAGIC   UINT32_C(0xf241b819)
 
+#elif defined(RT_OS_OS2)
+
+# define CHECK_THREAD_RET(ret) \
+    do { \
+        PTIB ptib; PPIB ppib; \
+        DosGetInfoBlocks(&ptib, &ppib); \
+        AssertMsg(ptib->tib_ordinal == mThreadId, ("Must be on event queue thread!")); \
+        if (ptib->tib_ordinal != mThreadId) \
+            return ret; \
+    } while (0)
 
 #else // VBOX_WITH_XPCOM
 
@@ -78,8 +99,11 @@ namespace com
 /** Pointer to the main event queue. */
 NativeEventQueue *NativeEventQueue::sMainQueue = NULL;
 
+#ifdef RT_OS_OS2
+static const char *WinClass = "VBoxCOM_WinClass";
+#endif
 
-#ifdef VBOX_WITH_XPCOM
+#if !defined(RT_OS_WINDOWS) && !defined(RT_OS_OS2)
 
 struct MyPLEvent : public PLEvent
 {
@@ -113,6 +137,14 @@ void PR_CALLBACK com::NativeEventQueue::plEventDestructor(PLEvent *self)
 
 #endif // VBOX_WITH_XPCOM
 
+#ifdef RT_OS_OS2
+MRESULT EXPENTRY
+recvWndProc(HWND hwnd, ULONG uMsg, MPARAM mp1, MPARAM mp2)
+{
+    return WinDefWindowProc(hwnd, uMsg, mp1, mp2);
+}
+#endif
+
 /**
  *  Constructs an event queue for the current thread.
  *
@@ -122,7 +154,7 @@ void PR_CALLBACK com::NativeEventQueue::plEventDestructor(PLEvent *self)
  */
 NativeEventQueue::NativeEventQueue()
 {
-#ifndef VBOX_WITH_XPCOM
+#if defined(RT_OS_WINDOWS)
 
     mThreadId = GetCurrentThreadId();
     // force the system to create the message queue for the current thread
@@ -137,6 +169,52 @@ NativeEventQueue::NativeEventQueue()
                          FALSE /*bInheritHandle*/,
                          DUPLICATE_SAME_ACCESS))
       mhThread = INVALID_HANDLE_VALUE;
+
+#elif defined(RT_OS_OS2)
+
+    PTIB ptib; PPIB ppib;
+    DosGetInfoBlocks(&ptib, &ppib);
+ 
+    mThreadId = ptib->tib_ordinal;
+
+    if (! WinQueryQueueInfo( HMQ_CURRENT, NULL, 0))
+    {
+        /* "Morph" into a PM app   */
+        ppib->pib_ultype = 3;
+
+        /* Create the anchor block */
+        mHab = WinInitialize(0);
+
+        /* Create message queue    */
+        mHmq = WinCreateMsgQueue(mHab, 0);
+
+        Assert(mHmq);
+    }
+
+    if( !mMsgId)
+    {
+        /* Register class */
+        WinRegisterClass( 0 /* hab_current */,
+                         WinClass,
+                         (PFNWP)recvWndProc,
+                         0, 0);
+
+        mMsgId = WinAddAtom( WinQuerySystemAtomTable(),
+                            "VBoxCOM_PostEvent");
+    }
+
+    /* Create window */
+    mHwnd = WinCreateWindow( HWND_DESKTOP,
+                             WinClass,
+                             "", 0,
+                             0, 0, 0, 0,
+                             HWND_DESKTOP,
+                             HWND_TOP,
+                             0,
+                             NULL,
+                             NULL);
+
+    Assert(mHwnd);
 
 #else // VBOX_WITH_XPCOM
 
@@ -179,11 +257,29 @@ NativeEventQueue::NativeEventQueue()
 
 NativeEventQueue::~NativeEventQueue()
 {
-#ifndef VBOX_WITH_XPCOM
+#if defined(RT_OS_WINDOWS)
     if (mhThread != INVALID_HANDLE_VALUE)
     {
         CloseHandle(mhThread);
         mhThread = INVALID_HANDLE_VALUE;
+    }
+#elif defined(RT_OS_OS2)
+    if (mHwnd != NULLHANDLE)
+    {
+        /* Destroy window */
+        WinDestroyWindow(mHwnd);
+
+        /* Delete atom    */
+        WinDeleteAtom( WinQuerySystemAtomTable(), mMsgId);
+
+        /* Deregister class  */
+        WinDeregisterObjectClass(WinClass);
+
+        /* Destroy msg queue */
+        WinDestroyMsgQueue(mHmq);
+
+        /* Destroy anchor block */
+        WinTerminate(mHab);
     }
 #else // VBOX_WITH_XPCOM
     // process all pending events before destruction
@@ -192,7 +288,7 @@ NativeEventQueue::~NativeEventQueue()
         if (mEQCreated)
         {
             mEventQ->StopAcceptingEvents();
-            mEventQ->ProcessPendingEvents();
+            mEventQ->ProcessPendingEvents(mHab);
             mEventQService->DestroyThreadEventQueue();
         }
         mEventQ = nsnull;
@@ -221,7 +317,7 @@ int NativeEventQueue::init()
     {
         sMainQueue = new NativeEventQueue();
         AssertPtr(sMainQueue);
-#ifdef VBOX_WITH_XPCOM
+#if !defined(RT_OS_WINDOWS) && !defined(RT_OS_OS2)
         /* Check that it actually is the main event queue, i.e. that
            we're called on the right thread. */
         nsCOMPtr<nsIEventQueue> q;
@@ -256,7 +352,7 @@ int NativeEventQueue::uninit()
         /* Must process all events to make sure that no NULL event is left
          * after this point. It would need to modify the state of sMainQueue. */
 #ifdef RT_OS_DARWIN /* Do not process the native runloop, the toolkit may not be ready for it. */
-        sMainQueue->mEventQ->ProcessPendingEvents();
+        sMainQueue->mEventQ->ProcessPendingEvents(mHab);
 #else
         sMainQueue->processEventQueue(0);
 #endif
@@ -373,7 +469,7 @@ static int waitForEventsOnXPCOM(nsIEventQueue *pQueue, RTMSINTERVAL cMsTimeout)
 # endif // !RT_OS_DARWIN
 #endif // VBOX_WITH_XPCOM
 
-#ifndef VBOX_WITH_XPCOM
+#if defined(RT_OS_WINDOWS)
 
 /**
  * Dispatch a message on Windows.
@@ -437,6 +533,73 @@ static int processPendingEvents(void)
         do
             rc = NativeEventQueue::dispatchMessageOnWindows(&Msg, rc);
         while (PeekMessage(&Msg, NULL /*hWnd*/, 0 /*wMsgFilterMin*/, 0 /*wMsgFilterMax*/, PM_REMOVE));
+    }
+    return rc;
+}
+
+#elif defined(RT_OS_OS2)
+
+/**
+ * Dispatch a message on PM.
+ *
+ * This will pick out our events and handle them specially.
+ *
+ * @returns @a rc or VERR_INTERRUPTED (WM_QUIT or NULL msg).
+ * @param   pMsg    The message to dispatch.
+ * @param   rc      The current status code.
+ */
+/*static*/
+int NativeEventQueue::dispatchMessageOnPM(HAB hab, QMSG const *pMsg, int rc)
+{
+    /*
+     * Check for and dispatch our events.
+     */
+    if (   pMsg->hwnd    == NULL
+        && pMsg->msg == WM_USER)
+    {
+        if (pMsg->mp2 == EVENTQUEUE_WIN_LPARAM_MAGIC)
+        {
+            NativeEvent *pEvent = (NativeEvent *)pMsg->mp1;
+            if (pEvent)
+            {
+                pEvent->handler();
+                delete pEvent;
+            }
+            else
+                rc = VERR_INTERRUPTED;
+            return rc;
+        }
+        AssertMsgFailed(("lParam=%p wParam=%p\n", pMsg->mp1, pMsg->mp2));
+    }
+
+    /*
+     * Check for the quit message and dispatch the message the normal way.
+     */
+    if (pMsg->msg == WM_QUIT)
+        rc = VERR_INTERRUPTED;
+    WinDispatchMsg(hab, (PQMSG)pMsg);
+
+    return rc;
+}
+
+
+/**
+ * Process pending events (Windows).
+ *
+ * @retval  VINF_SUCCESS
+ * @retval  VERR_TIMEOUT
+ * @retval  VERR_INTERRUPTED.
+ */
+static int processPendingEvents(HAB hab)
+{
+    int rc = VERR_TIMEOUT;
+    QMSG Msg;
+    if (WinPeekMsg(hab, &Msg, NULL /*hWnd*/, 0 /*wMsgFilterMin*/, 0 /*wMsgFilterMax*/, PM_REMOVE))
+    {
+        rc = VINF_SUCCESS;
+        do
+            rc = NativeEventQueue::dispatchMessageOnPM(hab, &Msg, rc);
+        while (WinPeekMsg(hab, &Msg, NULL /*hWnd*/, 0 /*wMsgFilterMin*/, 0 /*wMsgFilterMax*/, PM_REMOVE));
     }
     return rc;
 }
@@ -506,7 +669,7 @@ int NativeEventQueue::processEventQueue(RTMSINTERVAL cMsTimeout)
     int rc;
     CHECK_THREAD_RET(VERR_INVALID_CONTEXT);
 
-#ifdef VBOX_WITH_XPCOM
+#if !defined(RT_OS_WINDOWS) && !defined(RT_OS_OS2)
     /*
      * Process pending events, if none are available and we're not in a
      * poll call, wait for some to appear.  (We have to be a little bit
@@ -542,7 +705,7 @@ int NativeEventQueue::processEventQueue(RTMSINTERVAL cMsTimeout)
         rc = VERR_INTERRUPTED;
     }
 
-#else // !VBOX_WITH_XPCOM
+#elif defined(RT_OS_WINDOWS)
     if (cMsTimeout == RT_INDEFINITE_WAIT)
     {
         BOOL fRet;
@@ -572,6 +735,43 @@ int NativeEventQueue::processEventQueue(RTMSINTERVAL cMsTimeout)
                             ("%d\n", rcW),
                             VERR_INTERNAL_ERROR_4);
             rc = processPendingEvents();
+        }
+    }
+#elif defined(RT_OS_OS2)
+    if (cMsTimeout == RT_INDEFINITE_WAIT)
+    {
+        BOOL fRet;
+        QMSG Msg;
+        rc = VINF_SUCCESS;
+        while (   rc != VERR_INTERRUPTED
+               && (fRet = WinGetMsg(mHwnd, &Msg, NULL /*hWnd*/, WM_USER, WM_USER)))
+            rc = NativeEventQueue::dispatchMessageOnPM(mHab, &Msg, rc);
+        if (fRet == 0)
+            rc = VERR_INTERRUPTED;
+    }
+    else
+    {
+        rc = processPendingEvents(mHab);
+        if (   rc == VERR_TIMEOUT
+            && cMsTimeout != 0)
+        {
+            /* It seems, we don't have timeouts support,
+               so, just emulate them via polling */
+            QMSG   msg;
+            ULONG  msCount = 0;
+            ULONG rcW;
+            do
+            {
+                if ( (rcW =  WinPeekMsg(mHab, &msg, mHwnd, 0x0000, 0xffff, PM_NOREMOVE)) )
+                    break;
+
+                msCount++;
+                DosSleep(1);
+            } while (msCount < cMsTimeout);
+            AssertMsgReturn(msCount >= cMsTimeout,
+                            ("%d\n", rcW),
+                            VERR_INTERNAL_ERROR_4);
+            rc = processPendingEvents(mHab);
         }
     }
 #endif // !VBOX_WITH_XPCOM
@@ -604,7 +804,7 @@ int NativeEventQueue::interruptEventQueueProcessing()
  */
 BOOL NativeEventQueue::postEvent(NativeEvent *pEvent)
 {
-#ifndef VBOX_WITH_XPCOM
+#if defined(RT_OS_WINDOWS)
     /* Note! The event == NULL case is duplicated in vboxapi/PlatformMSCOM::interruptWaitEvents(). */
     BOOL fRc = PostThreadMessage(mThreadId, WM_USER, (WPARAM)pEvent, EVENTQUEUE_WIN_LPARAM_MAGIC);
     if (!fRc)
@@ -617,6 +817,12 @@ BOOL NativeEventQueue::postEvent(NativeEvent *pEvent)
         else
             AssertFailed();
     }
+    return fRc;
+#elif defined(RT_OS_OS2)
+    /* Note! The event == NULL case is duplicated in vboxapi/PlatformMSCOM::interruptWaitEvents(). */
+    BOOL fRc = WinPostMsg(mHwnd, WM_USER, (MPARAM)pEvent, EVENTQUEUE_WIN_LPARAM_MAGIC);
+    if (!fRc)
+        AssertFailed();
     return fRc;
 #else // VBOX_WITH_XPCOM
     if (!mEventQ)
@@ -647,7 +853,7 @@ BOOL NativeEventQueue::postEvent(NativeEvent *pEvent)
  */
 int NativeEventQueue::getSelectFD()
 {
-#ifdef VBOX_WITH_XPCOM
+#if defined(VBOX_WITH_XPCOM) && !defined(RT_OS_OS2)
     return mEventQ->GetEventQueueSelectFD();
 #else
     return -1;

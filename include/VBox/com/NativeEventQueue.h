@@ -27,7 +27,7 @@
 #ifndef ___VBox_com_EventQueue_h
 #define ___VBox_com_EventQueue_h
 
-#ifndef VBOX_WITH_XPCOM
+#if defined(RT_OS_WINDOWS)
 # include <Windows.h>
 #else // VBOX_WITH_XPCOM
 # include <nsEventQueueUtils.h>
@@ -98,26 +98,37 @@ public:
     static int uninit();
     static NativeEventQueue *getMainEventQueue();
 
-#ifdef VBOX_WITH_XPCOM
+#if !defined(RT_OS_WINDOWS) && !defined(RT_OS_OS2)
     already_AddRefed<nsIEventQueue> getIEventQueue()
     {
         return mEventQ.get();
     }
-#else
+#elif defined(RT_OS_WINDOWS)
     static int dispatchMessageOnWindows(MSG const *pMsg, int rc);
+#elif defined(RT_OS_OS2)
+    static int dispatchMessageOnPM(HAB hab, QMSG const *pMsg, int rc);
 #endif
 
 private:
     static NativeEventQueue *sMainQueue;
 
-#ifndef VBOX_WITH_XPCOM
+#if defined (RT_OS_WINDOWS)
 
     /** The thread which the queue belongs to. */
     DWORD mThreadId;
     /** Duplicated thread handle for MsgWaitForMultipleObjects. */
     HANDLE mhThread;
 
-#else // VBOX_WITH_XPCOM
+#elif defined(RT_OS_OS2)
+
+    ULONG mThreadId;
+    ULONG mHwnd = 0;
+    ATOM  mMsgId = 0;
+    HAB   mHab = 0;
+    HMQ   mHmq = 0;
+
+#endif
+#if !defined(RT_OS_WINDOWS) && !defined(RT_OS_OS2)
 
     /** Whether it was created (and thus needs destroying) or if a queue already
      *  associated with the thread was used. */
