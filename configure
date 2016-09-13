@@ -441,7 +441,7 @@ check_environment()
   if [ "$OS" = "os2" ]; then
     # make sure tools' DLLs may be found
     DEVDIR_BIN_BS=`echo $DEVDIR_BIN | tr '/' '\\\'`
-    echo "ENDLIBPATH=\"$ENDLIBPATH${ENDLIBPATH:+;}$DEVDIR_BIN_BS\"" >> $ENV
+    expr "ENDLIBPATH=\"$ENDLIBPATH${ENDLIBPATH:+;}$DEVDIR_BIN_BS\"" >> $ENV
     echo "export ENDLIBPATH" >> $ENV
   fi
 }
