@@ -1,88 +1,56 @@
+VirtualBox for OS/2 OSE Edition BETA 
+====================================
 
-VirtualBox for OS/2 OSE Edition ALPHA
-=====================================
+Version 5.0.6_OSE r140
 
-Version 1.5.51_OSE_27858
+13.09.2016							
 
-03.02.2008
+This is a build of VirtualBox 5.0.6_OSE_r140 Edition for OS/2.
 
+bww bitwise works GmbH. undertook the effort to provide an updated 
+version of VirtualBox for OS/2. Please note, that this version is not
+supported by Oracle Corporation.
 
-This is an early development build of VirtualBox OSE Edition for OS/2.
-Please backup your data and don't expect everything to be highly polished
-and tuned just yet. If you find a *new* problem, meaning something
-not listed below, please report it at http://forums.virtualbox.org.
-
-This package is an official unofficial build of VirtualBox for OS/2.
-It means that it is coordinated by volunteers from Sun Microsystems that
-are still in touch with OS/2 and keep patching VirtualBox at their spare
-time to make sure it runs and more or less works under OS/2.
-
-PLEASE NOTE THAT THE OS/2 HOST (AND THEREFORE THE OS/2 VERSION OF
-VIRTUALBOX) IS NOT OFFICIALLY SUPPORTED BY SUN MICROSYSTEMS! DO NOT
-CONTACT SUN MICROSYSTEMS REGARDING THE OS/2 VERSION OF VIRTUALBOX NO
-MATTER WHAT YOUR QUESTION IS ABOUT! THANK YOU FOR UNDERSTANDING.
-
-
-Current Issues / TODOs
-----------------------
-
-* FE/Qt (Qt GUI frontend):
-
-  - Mouse pointer shape in mouse integration mode.
-  - NumLock/ScrollLock synchronization.
-  - Seamless mode (no top-level window transparency on OS/2).
-  - Keyboard driver to intercept system key combinations
-    (Alt+Tab etc.)
-
-* Devices:
-
-  - Host Floppy/DVD.
-  - Audio.
-  - Host interface networking.
-  - Internal networking.
-  - USB proxying.
-
-* Misc:
-
-  - Shared clipboard.
-  - Starting more than one VM simultaneously.
-  - Installer.
-  - VMX support.
-  - VBoxSDL (resizing/scaling/keyboard/slowness).
-  - Very slow Resume after Pause in real mode guest applications.
-
-Also, please pay attention to the section called "OS/2 Specific Features"
-below.
-
+DO NOT CONTACT ORACLE Corp. REGARDING THE OS/2 VERSION OF VIRTUALBOX 
+NO MATTER WHAT YOUR QUESTION IS ABOUT! THANK YOU FOR UNDERSTANDING.
 
 How to "Install" and Run
 ------------------------
 
-1. Unpack this archive somewhere.
+1. Run the following lines in order to install all required rpm/yum packages
 
-2. Make sure you have a dot (.) in your LIBPATH statement in CONFIG.SYS.
+   yum install libc libgcc1 libcx libstdc++6 libstdc++
+   yum install libsupc++6 libsupc++ libgcc-fwd
+   yum install gettext libxml2 libxslt openssl libcurl zlib 
+   yum install libidl libvncserver libaio SDL glib2 
+   yum install libqt4 pthread libvpx libpng libjpeg
+   yum install urpo yum install expat curl mmap
 
-3. Put the following line at the beginning of your CONFIG.SYS
+2. Unpack this archive somewhere.
+
+3. Make sure you have a dot (.) in your LIBPATH statement in CONFIG.SYS.
+
+4. Put the following line at the beginning of your CONFIG.SYS
    and reboot:
 
      DEVICE=<somewhere>\VBoxDrv.sys
 
-4. Go to <somewhere> and run VirtualBox.exe (Qt GUI frontend).
+5. Go to <somewhere> and run VirtualBox.exe (Qt GUI frontend).
 
-5. Note that by default VirtualBox stores all user data in the
+6. Note that by default VirtualBox stores all user data in the
    %HOME%\.VirtualBox directory. If %HOME% is not set, it will use
    the <boot_drive>:\.VirtualBox directory. In either case, you may
    overwrite the location of this directory using the VBOX_USER_HOME
    environment variable.
 
-6. For best performance, it is recommended to install the VirtualBox
+7. For best performance, it is recommended to install the VirtualBox
    Guest Additions to the guest OS. The archive containing the ISO
    image with Guest Additions for supported guest OSes (Windows,
    Linux, OS/2) is named
 
-     VBoxGuestAdditions_XXXXX.zip
+     VBoxGuestAdditions_5.0.6.iso
 
-   where XXXXX is the version number (it's best if it matches the version
+   where 5.0.6 is the version number (it's best if it matches the version
    number of this VirtualBox package).
 
    Download this ZIP from the same location you took this archive from
@@ -133,17 +101,32 @@ of VirtualBox and may be absent in versions for other platforms.
    host desktop (a workaround is to be found).
 
 
-History of Changes
-------------------
 
-* 03.02.2008
+Current Issues / TODOs
+----------------------
 
-  - Initial release.
+* FE/Qt (Qt GUI frontend):
 
-* XX.XX.XXXX
+  - Mouse pointer shape in mouse integration mode.
+  - NumLock/ScrollLock synchronization.
+  - Seamless mode (no top-level window transparency on OS/2).
+  - Keyboard driver to intercept system key combinations
+    (Alt+Tab etc.)
 
-  - Fixed: VirtualBox would hang or crash frequently on SMP machines in
-    ACPI mode.
+* Devices:
 
-  - Fixed: VBoxSDL keyboard key event to scan code conversion [contributed
-    by Paul Smedley].
+  - Host Floppy/DVD.
+  - Audio.
+  - Host interface networking.
+  - Internal networking.
+  - USB proxying.
+
+* Misc:
+
+  - Shared clipboard.
+  - Starting more than one VM simultaneously.
+  - Installer.
+  - VMX support.
+  - VBoxSDL (resizing/scaling/keyboard/slowness).
+  - Very slow Resume after Pause in real mode guest applications.
+
