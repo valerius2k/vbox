@@ -111,6 +111,7 @@ WITH_VNC=0
 WITH_EXTPACK=1
 WITH_DOCS=1
 WITH_LIBVPX=1
+WITH_VIO=0
 BUILD_LIBXML2=
 BUILD_LIBCURL=
 BUILD_LIBSSL=
@@ -2364,6 +2365,7 @@ EOF
 [ $WITH_DOCS    -eq 1 ] && echo "  --disable-docs           don't build the documentation"
 [ $WITH_LIBVPX  -eq 1 ] && echo "  --disable-libvpx         don't use libvpx for video capturing"
 [ "$OS" = "linux" -o "$OS" = "freebsd" ] && echo "  --enable-vde             enable VDE networking"
+[ "$OS" = "os2" ] && echo "  --enable-vio             enable vio output in the GUI"
 cat << EOF
   --disable-udptunnel      disable UDP tunnel networking
   --disable-devmapper      disable device mapper library access
@@ -2658,6 +2660,9 @@ for option in "$@"; do
     --only-additions)
       ONLY_ADDITIONS=1
       ;;
+    --enable-vio)
+      WITH_VIO=1
+      ;;
     *)
       echo
       echo "Unrecognized option \"$option\""
@@ -2917,6 +2922,14 @@ fi
 
 if [ $ONLY_ADDITIONS -eq 1 ]; then
   cnf_append "VBOX_ONLY_ADDITIONS" "1"
+fi
+
+# VIO output in GUI exe
+if [ $WITH_VIO -eq 0 ]; then
+  cnf_append "VBOX_OS2_WINDOWAPI" "WINDOWAPI"
+fi
+if [ $WITH_VIO -eq 1 ]; then
+  cnf_append "VBOX_OS2_WINDOWAPI" "WINDOWCOMPAT"
 fi
 
 # success!
