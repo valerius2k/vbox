@@ -3,7 +3,7 @@ VirtualBox for OS/2 OSE Edition BETA
 
 Version 5.0.6_OSE r141
 
-14.11.2016							
+14.11.2016
 
 This is a build of VirtualBox 5.0.6_OSE_r141 Edition for OS/2.
 
