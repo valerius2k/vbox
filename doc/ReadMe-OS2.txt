@@ -1,11 +1,11 @@
 VirtualBox for OS/2 OSE Edition BETA 
 ====================================
 
-Version 5.0.6_OSE r140
+Version 5.0.6_OSE r141
 
-13.09.2016							
+14.11.2016							
 
-This is a build of VirtualBox 5.0.6_OSE_r140 Edition for OS/2.
+This is a build of VirtualBox 5.0.6_OSE_r141 Edition for OS/2.
 
 bww bitwise works GmbH. undertook the effort to provide an updated 
 version of VirtualBox for OS/2. Please note, that this version is not
@@ -52,6 +52,10 @@ How to "Install" and Run
 
    where 5.0.6 is the version number (it's best if it matches the version
    number of this VirtualBox package).
+   
+   In case the ISO is missing from the archive it can be downloaded from
+   http://download.virtualbox.org/virtualbox/5.0.6/
+   
 
    Download this ZIP from the same location you took this archive from
    and unpack the contents to the directory containing VirtualBox.exe.
@@ -99,6 +103,16 @@ of VirtualBox and may be absent in versions for other platforms.
 3. Make sure you do not do 'set LIBPATHSTRICT=T' in the environment you start
    VirtualBox from: it will make the VirtualBox keyboard hook screw up your
    host desktop (a workaround is to be found).
+   
+4. AMD-V/VTx is not supported on OS/2 host (and never was).Hardware-assisted 
+   virtualization is not supported, because some features are missing from 
+   OS/2 kernel.
+
+5. The PAE/NX setting which is required by certain Linux distributions in
+   order to work, is available and workable.
+   
+6. Best experience with RAM hungry guests such as Windows currently can be 
+   achieved by using the unofficial OS/4 Kernel and setting VALIMIT to 3072.
 
 
 
@@ -107,15 +121,12 @@ Current Issues / TODOs
 
 * FE/Qt (Qt GUI frontend):
 
-  - Mouse pointer shape in mouse integration mode.
-  - NumLock/ScrollLock synchronization.
   - Seamless mode (no top-level window transparency on OS/2).
   - Keyboard driver to intercept system key combinations
     (Alt+Tab etc.)
 
 * Devices:
 
-  - Host Floppy/DVD.
   - Audio.
   - Host interface networking.
   - Internal networking.
@@ -124,9 +135,6 @@ Current Issues / TODOs
 * Misc:
 
   - Shared clipboard.
-  - Starting more than one VM simultaneously.
   - Installer.
-  - VMX support.
-  - VBoxSDL (resizing/scaling/keyboard/slowness).
   - Very slow Resume after Pause in real mode guest applications.
 
