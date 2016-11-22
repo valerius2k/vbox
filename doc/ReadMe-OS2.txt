@@ -1,4 +1,4 @@
-VirtualBox for OS/2 OSE Edition BETA 
+VirtualBox for OS/2 OSE Edition BETA
 ====================================
 
 Version 5.0.6_OSE r141
@@ -23,8 +23,8 @@ How to "Install" and Run
    yum install libsupc++6 libsupc++ libgcc-fwd
    yum install gettext libxml2 libxslt openssl libcurl zlib 
    yum install libidl libvncserver libaio SDL glib2 
-   yum install libqt4 pthread libvpx libpng libjpeg
-   yum install urpo yum install expat curl mmap
+   yum install libqt4-gui libqt4 pthread libvpx libpng libjpeg
+   yum install urpo expat curl mmap
 
 2. Unpack this archive somewhere.
 
