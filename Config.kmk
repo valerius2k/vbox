@@ -1293,7 +1293,7 @@ VBOX_ASFLAGS_FMT = -f elf64 -DASM_FORMAT_ELF
  VBOX_ASFLAGS_DBFINFO = -g dwarf2
 endif
 ifeq ($(VBOX_LDR_FMT),lx)
- VBOX_ASFLAGS_FMT = -f obj -DASM_FORMAT_OMF
+ VBOX_ASFLAGS_FMT = -f obj --allow-64bit-code-anywhere -DASM_FORMAT_OMF
  VBOX_ASFLAGS_DBFINFO = -g stabs
 endif
 ifeq ($(VBOX_LDR_FMT),macho)
@@ -1321,7 +1321,7 @@ ifeq ($(VBOX_LDR_FMT32),elf)
  VBOX_ASFLAGS_DBFINFO32 = -g dwarf2
 endif
 ifeq ($(VBOX_LDR_FMT32),lx)
- VBOX_ASFLAGS_FMT32 = -f obj -DASM_FORMAT_OMF
+ VBOX_ASFLAGS_FMT32 = -f obj --allow-64bit-code-anywhere -DASM_FORMAT_OMF
  VBOX_ASFLAGS_DBFINFO32 = -g stabs
 endif
 ifeq ($(VBOX_LDR_FMT32),macho)

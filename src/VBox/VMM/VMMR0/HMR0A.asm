@@ -26,21 +26,6 @@
 %include "iprt/x86.mac"
 %include "HMInternal.mac"
 
-%ifdef RT_OS_OS2 ;; @todo fix OMF support in yasm and kick nasm out completely.
- %macro vmwrite 2,
-    int3
- %endmacro
- %define vmlaunch int3
- %define vmresume int3
- %define vmsave int3
- %define vmload int3
- %define vmrun int3
- %define clgi int3
- %define stgi int3
- %macro invlpga 2,
-    int3
- %endmacro
-%endif
 
 ;*********************************************************************************************************************************
 ;*  Defined Constants And Macros                                                                                                 *
@@ -638,23 +623,22 @@ ENDPROC VMXActivateVmcs
 ; */
 ;DECLASM(int) VMXGetActivatedVmcs(RTHCPHYS *pVMCS);
 BEGINPROC VMXGetActivatedVmcs
-%ifdef RT_OS_OS2
-    mov     eax, VERR_NOT_SUPPORTED
-    ret
-%else
- %ifdef RT_ARCH_AMD64
-  %ifdef ASM_CALL64_GCC
+%ifdef RT_ARCH_AMD64
+ %ifdef ASM_CALL64_GCC
     vmptrst qword [rdi]
-  %else
+ %else
     vmptrst qword [rcx]
-  %endif
+ %endif
+%else
+ %ifdef __NASM__
+    vmptrst [esp+04h]
  %else
     vmptrst qword [esp+04h]
  %endif
+%endif
     xor     eax, eax
 .the_end:
     ret
-%endif
 ENDPROC VMXGetActivatedVmcs
 
 ;/**
@@ -752,7 +736,9 @@ BEGINPROC SVMR0InvlpgA
     mov     eax, [esp + 4]
     mov     ecx, [esp + 0Ch]
 %endif
-    invlpga [xAX], ecx
+    mov xAX, [xAX]
+    invlpga xAX, ecx
+    ; invlpga [xAX], ecx ; vs
     ret
 ENDPROC SVMR0InvlpgA
 

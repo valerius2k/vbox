@@ -76,23 +76,6 @@
 %endmacro
 
 
-;; Stubs for making OS/2 compile (though, not work).
-%ifdef RT_OS_OS2 ;; @todo fix OMF support in yasm and kick nasm out completely.
- %macro vmwrite 2,
-    int3
- %endmacro
- %define vmlaunch int3
- %define vmresume int3
- %define vmsave int3
- %define vmload int3
- %define vmrun int3
- %define clgi int3
- %define stgi int3
- %macro invlpga 2,
-    int3
- %endmacro
-%endif
-
 ;; Debug options
 ;%define DEBUG_STUFF 1
 ;%define STRICT_IF 1
@@ -590,7 +573,11 @@ ALIGNCODE(16)
 NAME(IDEnter64Mode):
     DEBUG64_CHAR('6')
     DEBUG_CMOS_TRASH_AL 1eh
+%ifdef __NASM__
+    jmp     [rel NAME(pICEnterTarget)]
+%else
     jmp     [NAME(pICEnterTarget) wrt rip]
+%endif
 
 ; 64-bit jump target
 NAME(pICEnterTarget):
@@ -610,11 +597,16 @@ db 'Switch_marker'
     ;
     ; When we arrive here we're in 64 bits mode in the intermediate context
     ;
+BITS 64 ; vs
 ALIGNCODE(16)
 GLOBALNAME ICEnterTarget
     ;DEBUG_CMOS_TRASH_AL 1fh
     ; Load CPUM pointer into rdx
+%ifdef __NASM__
+    mov     rdx, [rel NAME(pCpumIC)]
+%else
     mov     rdx, [NAME(pCpumIC) wrt rip]
+%endif
     CPUMCPU_FROM_CPUM_WITH_OFFSET edx, ebp
 
     mov     rax, cs
@@ -734,7 +726,11 @@ htg_debug_done:
     ; parameter for all helper functions (pCtx)
     DEBUG64_CHAR('9')
     lea     rsi, [rdx + CPUMCPU.Guest]
+%ifdef __NASM__
+    lea     rax, [rel htg_return]
+%else
     lea     rax, [htg_return wrt rip]
+%endif
     push    rax                         ; return address
 
     ; load the hypervisor function address
@@ -754,7 +750,11 @@ htg_return:
     DEBUG64_CHAR('r')
 
     ; Load CPUM pointer into rdx
+%ifdef __NASM__
+    mov     rdx, [rel NAME(pCpumIC)]
+%else
     mov     rdx, [NAME(pCpumIC) wrt rip]
+%endif
     CPUMCPU_FROM_CPUM_WITH_OFFSET edx, ebp
 
 %ifdef VBOX_WITH_CRASHDUMP_MAGIC
@@ -947,7 +947,11 @@ ALIGN(16)
     ; Hopefully we can ignore TR (we restore it anyway on the way back to 32-bit mode).
 
     ; First we have to save some final CPU context registers.
+%ifdef __NASM__
+    lea     rdx, [rel .vmlaunch64_done]
+%else
     lea     rdx, [.vmlaunch64_done wrt rip]
+%endif
     mov     rax, VMX_VMCS_HOST_RIP  ; Return address (too difficult to continue after VMLAUNCH?).
     vmwrite rax, rdx
     ; Note: assumes success!
@@ -1124,7 +1128,11 @@ ALIGN(16)
 %endif
 
     ; Write back the data and disable the VMCS.
+%ifdef __NASM__
+    vmclear [rsp]  ; Pushed pVMCS
+%else
     vmclear qword [rsp]  ; Pushed pVMCS
+%endif
     add     rsp, 8
 
 .vmstart64_vmxoff_end:
@@ -1806,7 +1814,11 @@ NAME(vmmRCToHostAsmNoReturn):
     ;;
     ;; Switch to compatibility mode, placing ourselves in identity mapped code.
     ;;
+%ifdef __NASM__
+    jmp far [rel NAME(fpIDEnterTarget)]
+%else
     jmp far [NAME(fpIDEnterTarget) wrt rip]
+%endif
 
 ; 16:32 Pointer to IDEnterTarget.
 NAME(fpIDEnterTarget):
