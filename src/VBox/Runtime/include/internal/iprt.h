@@ -185,7 +185,8 @@
 /** @def RT_ASSERT_PREEMPTIBLE
  * Asserts that preemption hasn't been disabled (using
  * RTThreadPreemptDisable) when RT_MORE_STRICT is defined. */
-#ifdef RT_MORE_STRICT
+#if defined(RT_MORE_STRICT) \
+    && !( defined(RT_OS_OS2) && defined(IN_RING0) ) /* OS/2 is not preemptible in kernel mode */
 # define RT_ASSERT_PREEMPTIBLE()        Assert(RTThreadPreemptIsEnabled(NIL_RTTHREAD))
 #else
 # define RT_ASSERT_PREEMPTIBLE()        do { } while (0)
