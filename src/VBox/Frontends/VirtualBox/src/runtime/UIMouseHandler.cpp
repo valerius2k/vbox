@@ -41,6 +41,11 @@
 #  include "VBoxUtils-win.h"
 # endif /* Q_WS_WIN */
 
+# ifdef Q_WS_PM
+#  define  INCL_WIN
+#  include <os2.h>
+# endif /* Q_WS_WIN */
+
 # ifdef Q_WS_MAC
 #  include "VBoxUtils-darwin.h"
 # endif /* Q_WS_MAC */
@@ -195,6 +200,18 @@ void UIMouseHandler::captureMouse(ulong uScreenId)
         QCursor::setPos(m_lastMousePos);
         /* Update mouse clipping: */
         updateMouseCursorClipping();
+#elif defined (Q_WS_PM)
+        HWND       hwnd;
+        SWP        swp;
+        POINTL     pointl;
+        /* Grab all mouse events: */
+        hwnd = m_viewports[m_iMouseCaptureViewIndex]->winId();
+        WinSetCapture(HWND_DESKTOP, hwnd);
+        WinQueryWindowPos(hwnd, &swp);
+        pointl.x = swp.cx / 2;
+        pointl.y = swp.cy / 2;
+        WinMapWindowPoints(hwnd, HWND_DESKTOP, &pointl, 1);
+        WinSetPointerPos(HWND_DESKTOP, pointl.x, pointl.y);
 #elif defined (Q_WS_MAC)
         /* Grab all mouse events: */
         ::darwinMouseGrab(m_viewports[m_iMouseCaptureViewIndex]);
@@ -230,6 +247,9 @@ void UIMouseHandler::releaseMouse()
 #ifdef Q_WS_WIN
         /* Update mouse clipping: */
         updateMouseCursorClipping();
+#elif defined(Q_WS_PM)
+        /* Releasing grabbed mouse from that view: */
+        WinSetCapture(HWND_DESKTOP, 0);
 #elif defined(Q_WS_MAC)
         /* Releasing grabbed mouse from that view: */
         ::darwinMouseRelease(m_viewports[m_iMouseCaptureViewIndex]);
