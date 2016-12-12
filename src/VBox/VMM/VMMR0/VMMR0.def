@@ -38,17 +38,17 @@ EXPORTS
     PGMPhysSimpleDirtyWriteGCPtr
     IOMMMIOResetRegion
     IOMMMIOMapMMIO2Page
-    RTLogDefaultInstance
-    RTLogDefaultInstanceEx
-    RTLogRelGetDefaultInstance
-    RTLogRelGetDefaultInstanceEx
-    RTLogLogger
-    RTLogLoggerEx
-    RTLogLoggerExV
-    RTTimeMilliTS
-    RTTraceBufAddMsgF
-    RTTraceBufAddPos
-    RTTraceBufAddPosMsgF
+    RTLogDefaultInstance                ; not-os2
+    RTLogDefaultInstanceEx              ; not-os2
+    RTLogRelGetDefaultInstance          ; not-os2
+    RTLogRelGetDefaultInstanceEx        ; not-os2
+    RTLogLogger                         ; not-os2
+    RTLogLoggerEx                       ; not-os2
+    RTLogLoggerExV                      ; not-os2
+    RTTimeMilliTS                       ; not-os2
+    RTTraceBufAddMsgF                   ; not-os2
+    RTTraceBufAddPos                    ; not-os2
+    RTTraceBufAddPosMsgF                ; not-os2
     TMTimerFromMilli
     TMTimerFromMicro
     TMTimerFromNano
@@ -88,29 +88,30 @@ EXPORTS
     RTAssertMsg1Weak
     RTAssertMsg2Weak
     RTAssertShouldPanic
-    RTCrc32
+    RTCrc32                                 ; not-os2
     RTOnceSlow
-    RTTimeNanoTSLegacySyncInvarNoDelta
-    RTTimeNanoTSLegacySyncInvarWithDelta
-    RTTimeNanoTSLegacyAsync
-    RTTimeNanoTSLFenceSyncInvarNoDelta
-    RTTimeNanoTSLFenceSyncInvarWithDelta
-    RTTimeNanoTSLFenceAsync
-    RTTimeSystemNanoTS
-    RTTimeNanoTS
+    RTTimeNanoTSLegacySyncInvarNoDelta      ; not-os2
+    RTTimeNanoTSLegacySyncInvarWithDelta    ; not-os2
+    RTTimeNanoTSLegacyAsync                 ; not-os2
+    RTTimeNanoTSLFenceSyncInvarNoDelta      ; not-os2
+    RTTimeNanoTSLFenceSyncInvarWithDelta    ; not-os2
+    RTTimeNanoTSLFenceAsync                 ; not-os2
+    RTTimeSystemNanoTS                  ; not-os2
+    RTTimeNanoTS                        ; not-os2
+    RTMpOs2GetApiExt                    ; not-win
     ASMMultU64ByU32DivByU32             ; not-os2
     ASMAtomicXchgU8                     ; not-x86
     ASMBitFirstSet                      ; not-x86
     ASMNopPause                         ; not-x86
-    nocrt_memchr
+    nocrt_memchr                        ; not-os2
     nocrt_memcmp
     nocrt_memcpy
     memcpy=nocrt_memcpy                 ; not-os2
     nocrt_memmove
     nocrt_memset
     memset=nocrt_memset                 ; not-os2
-    nocrt_strcpy
-    nocrt_strcmp
-    nocrt_strchr
-    nocrt_strlen
+    nocrt_strcpy                        ; not-os2
+    nocrt_strcmp                        ; not-os2
+    nocrt_strchr                        ; not-os2
+    nocrt_strlen                        ; not-os2
 

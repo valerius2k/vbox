@@ -63,18 +63,21 @@ DosVarJumpTab:
     dd  0                           ; 3 - Reserved
     dd  Load1616                    ; 4 - VectorSDF
     dd  Load1616                    ; 5 - VectorReboot
-    dd  Load1616                    ; 6 - VectorMSATS
-    dd  AsIs                        ; 7 - YieldFlag (Resched)
-    dd  AsIs                        ; 8 - TCYieldFlag (TCResched)
+    dd  Load1616  ; QWORD !!!       ; 6 - VectorMSATS
+    dd  LoadByte                    ; 7 - YieldFlag (Resched)
+    dd  LoadByte                    ; 8 - TCYieldFlag (TCResched)
     dd  AsIs                        ; 9 - DOSTable
     dd  Load1616                    ; a - VectorDEKKO
     dd  AsIs                        ; b - CodePgBuff
     dd  Load1616                    ; c - VectorRIPL
-    dd  AsIs                        ; d - InterruptLevel
+    dd  LoadDword                   ; d - InterruptLevel
     dd  AsIs                        ; e - DevClassTables
     dd  AsIs                        ; f - DMQS_Sel
     dd  AsIs                        ;10 - APMInfo
     dd  LoadWord                    ;11 - APM_Length (length of above structure)
+    dd  LoadDword                   ;12 - CPUMODE: 0 = uniprocessor, 1=multiprocessor
+    dd  LoadDword                   ;13 - PSD flags
+    dd  LoadDword                   ;14 - Number of processors online
 DosVarJumpTabEnd:
 %define DosVarJumpTabSize (DosVarJumpTabEnd - DosVarJumpTab) / 4
 
@@ -130,6 +133,13 @@ GLOBALNAME RTR0Os2DHQueryDOSVar_32
     jg      Error2
     jmp     [DosVarJumpTab + ecx * 4]
 
+    ; Load Byte at ax:ebx.
+LoadByte:
+    mov     es, ax
+    mov     dl, byte [es:ebx]
+    movzx   edx, dl
+    jmp StoreIt
+
     ; Load Word at ax:ebx.
 LoadWord:
     mov     es, ax
@@ -145,6 +155,7 @@ Load1600:
 
     ; Load 16:16 ptr at ax:ebx.
 Load1616:
+LoadDword:
     mov     es, ax
     mov     edx, dword [es:ebx]
     jmp StoreIt

@@ -35,19 +35,55 @@
 #define LOG_GROUP RTLOGGROUP_TIME
 #include <InnoTekLIBC/FastInfoBlocks.h>
 
+#define  INCL_LONGLONG
+#define  INCL_BASE
+
+#include <os2.h>
+
+#include <math.h>
+
 #include <iprt/time.h>
 #include "internal/time.h"
 
 /** @todo mscount will roll over after ~48 days. */
+/* Note: define VBOX_OS2_USE_HIRES_TIMER in the Makefile.kmk for 
+ * high resolution time to be used. If not defined, then
+ * less precise time will be used (millisecond resolution),
+ * but faster GIS-based routines will be used.
+ */
 
 RTDECL(uint64_t) RTTimeSystemNanoTS(void)
 {
-    return fibGetMsCount() * UINT64_C(10000000);
+#if VBOX_OS2_USE_HIRES_TIMER
+    ULONGLONG time = 0;
+    static ULONG freq = 0;
+    static bool bInitted = 0;
+    double x;
+
+    if (! bInitted)
+    {
+        DosTmrQueryFreq(&freq);
+        bInitted = 1;
+    }
+
+    DosTmrQueryTime((PQWORD)&time);
+
+    x = time;
+    x /= freq;
+    x *= 1.0e9;
+
+    return trunc(x);
+#else
+    return fibGetMsCount() * UINT64_C(1000000); // 10000000
+#endif
 }
 
 
 RTDECL(uint64_t) RTTimeSystemMilliTS(void)
 {
+#if VBOX_OS2_USE_HIRES_TIMER
+    return RTTimeSystemNanoTS() / 1000000UL;
+#else
     return fibGetMsCount();
+#endif
 }
-

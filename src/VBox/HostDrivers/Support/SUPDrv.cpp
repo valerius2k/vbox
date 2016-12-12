@@ -282,6 +282,9 @@ static SUPFUNC g_aFunctions[] =
     { "RTMemFree",                              (void *)RTMemFree },
     { "RTMemFreeEx",                            (void *)RTMemFreeEx },
     { "RTMemReallocTag",                        (void *)RTMemReallocTag },
+#ifdef RT_OS_OS2
+    { "RTMpOs2GetApiExt",                       (void *)RTMpOs2GetApiExt },
+#endif
     { "RTMpCpuId",                              (void *)RTMpCpuId },
     { "RTMpCpuIdFromSetIndex",                  (void *)RTMpCpuIdFromSetIndex },
     { "RTMpCpuIdToSetIndex",                    (void *)RTMpCpuIdToSetIndex },

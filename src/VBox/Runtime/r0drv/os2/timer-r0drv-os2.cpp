@@ -36,6 +36,7 @@
 
 #include <iprt/timer.h>
 #include <iprt/time.h>
+#include <iprt/mp.h>
 #include <iprt/spinlock.h>
 #include <iprt/err.h>
 #include <iprt/asm.h>
@@ -357,10 +358,18 @@ DECLASM(void) rtTimerOs2Tick(void)
     RTSpinlockRelease(g_Spinlock);
 }
 
+#define HPET_FREQ 14318179
 
 RTDECL(uint32_t) RTTimerGetSystemGranularity(void)
 {
-    return 32000000; /* 32ms */
+    switch (RTMpOs2GetApiExt())
+    {
+        case ISCS_OS4_MP:
+            return 1000000000UL / HPET_FREQ;
+
+        default:
+            return 32000000; /* 32ms */
+    }
 }
 
 

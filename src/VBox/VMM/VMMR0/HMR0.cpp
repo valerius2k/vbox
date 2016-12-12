@@ -668,21 +668,29 @@ VMMR0_INT_DECL(int) HMR0Init(void)
                 g_HmR0.cpuid.u32AMDFeatureECX = g_HmR0.cpuid.u32AMDFeatureEDX = 0;
 
             /* Go to CPU specific initialization code. */
-            if (   ASMIsIntelCpuEx(u32VendorEBX, u32VendorECX, u32VendorEDX)
-                || ASMIsViaCentaurCpuEx(u32VendorEBX, u32VendorECX, u32VendorEDX))
+#if defined(RT_OS_OS2)
+            if (RTMpOs2GetApiExt() == ISCS_OS4_MP)
             {
-                rc = hmR0InitIntel(u32FeaturesECX, u32FeaturesEDX);
-                if (RT_FAILURE(rc))
-                    return rc;
+                /* If proper Mp functions are present */
+#endif
+                if (   ASMIsIntelCpuEx(u32VendorEBX, u32VendorECX, u32VendorEDX)
+                    || ASMIsViaCentaurCpuEx(u32VendorEBX, u32VendorECX, u32VendorEDX))
+                {
+                    rc = hmR0InitIntel(u32FeaturesECX, u32FeaturesEDX);
+                    if (RT_FAILURE(rc))
+                        return rc;
+                }
+                else if (ASMIsAmdCpuEx(u32VendorEBX, u32VendorECX, u32VendorEDX))
+                {
+                    rc = hmR0InitAmd(u32FeaturesEDX, uMaxExtLeaf);
+                    if (RT_FAILURE(rc))
+                        return rc;
+                }
+                else
+                    g_HmR0.lLastError = VERR_HM_UNKNOWN_CPU;
+#if defined(RT_OS_OS2)
             }
-            else if (ASMIsAmdCpuEx(u32VendorEBX, u32VendorECX, u32VendorEDX))
-            {
-                rc = hmR0InitAmd(u32FeaturesEDX, uMaxExtLeaf);
-                if (RT_FAILURE(rc))
-                    return rc;
-            }
-            else
-                g_HmR0.lLastError = VERR_HM_UNKNOWN_CPU;
+#endif
         }
         else
             g_HmR0.lLastError = VERR_HM_UNKNOWN_CPU;

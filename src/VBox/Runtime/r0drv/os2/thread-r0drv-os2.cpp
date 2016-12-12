@@ -43,6 +43,7 @@
 #include <iprt/mp.h>
 #include "internal/thread.h"
 
+#include <VBox/sup.h>
 
 /*********************************************************************************************************************************
 *   Global Variables                                                                                                             *
@@ -56,6 +57,7 @@ RTDECL(RTNATIVETHREAD) RTThreadNativeSelf(void)
 {
     PLINFOSEG pLIS = (PLINFOSEG)RTR0Os2Virt2Flat(g_fpLIS);
     AssertReturn(pLIS, NIL_RTNATIVETHREAD);
+    Assert(! RTThreadIsInInterrupt(NIL_RTTHREAD));
     return pLIS->tidCurrent | (pLIS->pidCurrent << 16);
 }
 
@@ -94,40 +96,71 @@ RTDECL(int) RTThreadSleepNoBlock(RTMSINTERVAL cMillies)
 
 RTDECL(bool) RTThreadYield(void)
 {
-    /** @todo implement me (requires a devhelp) */
-    return false;
+    switch (RTMpOs2GetApiExt())
+    {
+        case ISCS_OS4_MP:
+            return KernYield();
+
+        default:
+            return RTR0Os2DHYield();
+    }
 }
 
 
 RTDECL(bool) RTThreadPreemptIsEnabled(RTTHREAD hThread)
 {
     Assert(hThread == NIL_RTTHREAD);
-    int32_t c = g_acPreemptDisabled[ASMGetApicId()];
+    int32_t c = g_acPreemptDisabled[RTMpCpuId()];
     AssertMsg(c >= 0 && c < 32, ("%d\n", c));
-    return c == 0
+    return RTThreadPreemptIsPossible() && (c == 0)
         && ASMIntAreEnabled();
 }
 
 
 RTDECL(bool) RTThreadPreemptIsPending(RTTHREAD hThread)
 {
+    static uint32_t msecs = 0;
+    uint32_t msecs_prev;
+
     Assert(hThread == NIL_RTTHREAD);
 
-    union
+    msecs_prev = msecs;
+    msecs = g_pGIS->msecs;
+
+    switch (RTMpOs2GetApiExt())
     {
-        RTFAR16 fp;
-        uint8_t fResched;
-    } u;
-    int rc = RTR0Os2DHQueryDOSVar(DHGETDOSV_YIELDFLAG, 0, &u.fp);
-    AssertReturn(rc == 0, false);
-    if (u.fResched)
+        case ISCS_OS4_MP:
+            if (KernGetReschedStatus())
+                return true;
+
+            if (KernGetTCReschedStatus())
+                return true;
+
+        default:
+            union
+            {
+                RTFAR16 fp;
+                uint8_t fResched;
+            } u;
+
+            int rc = RTR0Os2DHQueryDOSVar(DHGETDOSV_YIELDFLAG, 0, &u.fp);
+            AssertReturn(rc == 0, false);
+
+            if (u.fResched)
+                return true;
+
+            /** @todo Check if DHGETDOSV_YIELDFLAG includes TCYIELDFLAG. */
+            rc = RTR0Os2DHQueryDOSVar(DHGETDOSV_TCYIELDFLAG, 0, &u.fp);
+            AssertReturn(rc == 0, false);
+
+            if (u.fResched)
+                return true;
+    }
+
+    // if milliseconds are incremented since the last call
+    if (msecs != msecs_prev)
         return true;
 
-    /** @todo Check if DHGETDOSV_YIELDFLAG includes TCYIELDFLAG. */
-    rc = RTR0Os2DHQueryDOSVar(DHGETDOSV_TCYIELDFLAG, 0, &u.fp);
-    AssertReturn(rc == 0, false);
-    if (u.fResched)
-        return true;
     return false;
 }
 
@@ -152,7 +185,7 @@ RTDECL(void) RTThreadPreemptDisable(PRTTHREADPREEMPTSTATE pState)
     Assert(pState->u32Reserved == 0);
 
     /* No preemption on OS/2, so do our own accounting. */
-    int32_t c = ASMAtomicIncS32(&g_acPreemptDisabled[ASMGetApicId()]);
+    int32_t c = ASMAtomicIncS32(&g_acPreemptDisabled[RTMpCpuId()]);
     AssertMsg(c > 0 && c < 32, ("%d\n", c));
     pState->u32Reserved = c;
     RT_ASSERT_PREEMPT_CPUID_DISABLE(pState);
@@ -166,7 +199,7 @@ RTDECL(void) RTThreadPreemptRestore(PRTTHREADPREEMPTSTATE pState)
     RT_ASSERT_PREEMPT_CPUID_RESTORE(pState);
 
     /* No preemption on OS/2, so do our own accounting. */
-    int32_t volatile *pc = &g_acPreemptDisabled[ASMGetApicId()];
+    int32_t volatile *pc = &g_acPreemptDisabled[RTMpCpuId()];
     AssertMsg(pState->u32Reserved == (uint32_t)*pc, ("uchDummy=%d *pc=%d \n", pState->u32Reserved, *pc));
     ASMAtomicUoWriteS32(pc, pState->u32Reserved - 1);
     pState->u32Reserved = 0;
@@ -177,15 +210,8 @@ RTDECL(bool) RTThreadIsInInterrupt(RTTHREAD hThread)
 {
     Assert(hThread == NIL_RTTHREAD); NOREF(hThread);
 
-    union
-    {
-        RTFAR16 fp;
-        uint8_t cInterruptLevel;
-    } u;
-    /** @todo OS/2: verify the usage of DHGETDOSV_INTERRUPTLEV. */
-    int rc = RTR0Os2DHQueryDOSVar(DHGETDOSV_INTERRUPTLEV, 0, &u.fp);
-    AssertReturn(rc == 0, true);
+    if (KernInterruptLevel == -1)
+        return false;
 
-    return u.cInterruptLevel > 0;
+    return true;
 }
-

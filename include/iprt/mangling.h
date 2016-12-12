@@ -963,6 +963,9 @@
 # define RTMemTrackerHdrReallocDone                     RT_MANGLER(RTMemTrackerHdrReallocDone)
 # define RTMemTrackerHdrReallocPrep                     RT_MANGLER(RTMemTrackerHdrReallocPrep)
 # define RTMemWipeThoroughly                            RT_MANGLER(RTMemWipeThoroughly)
+#ifdef RT_OS_OS2
+# define RTMpOs2GetApiExt                               RT_MANGLER(RTMpOs2GetApiExt)
+#endif
 # define RTMpCpuId                                      RT_MANGLER(RTMpCpuId)
 # define RTMpCpuIdFromSetIndex                          RT_MANGLER(RTMpCpuIdFromSetIndex)
 # define RTMpCpuIdToSetIndex                            RT_MANGLER(RTMpCpuIdToSetIndex)

@@ -276,6 +276,15 @@ typedef FNRTMPWORKER *PFNRTMPWORKER;
 #define RTMPON_F_VALID_MASK         UINT32_C(0x00000001)
 /** @}*/
 
+#ifdef RT_OS_OS2
+#define ISCS_DEFAULT  0
+#define ISCS_ACPI_PSD 1
+#define ISCS_OS4_BASE 2
+#define ISCS_OS4_MP   3
+
+RTDECL(uint8_t) RTMpOs2GetApiExt(void);
+#endif
+
 /**
  * Checks if the RTMpOnAll() is safe with regards to all threads executing
  * concurrently.

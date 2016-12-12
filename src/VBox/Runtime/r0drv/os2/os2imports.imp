@@ -4,13 +4,13 @@
 DOS16OPEN DOSCALLS 70 ?
 DOS16CLOSE DOSCALLS 59 ?
 DOS16READ DOSCALLS 137 ?
-DOS16WRITE DOSCALL1 138 ?
-DOS16IREAD DOSCALL1 79 ?
-DOS16IWRITE DOSCALL1 87 ?
-DOS16DEVIOCTL DOSCALL1 53 ?
-DOS16DEVIOCTL2 DOSCALL1 99 ?
-DOS16FSATTACH DOSCALL1 181 ?
-DOS16FSCTL DOSCALL1 183 ?
+DOS16WRITE DOSCALLS 138 ?
+DOS16IREAD DOSCALLS 79 ?
+DOS16IWRITE DOSCALLS 87 ?
+DOS16DEVIOCTL DOSCALLS 53 ?
+DOS16DEVIOCTL2 DOSCALLS 99 ?
+DOS16FSATTACH DOSCALLS 181 ?
+DOS16FSCTL DOSCALLS 183 ?
 
 ;
 ; KEE
@@ -30,6 +30,9 @@ KernReleaseExclusiveMutex KEE       26 ?
 KernTryRequestExclusiveMutex KEE       27 ?
 KernBlock               KEE       30 ?
 KernWakeup              KEE       31 ?
+KernInvokeAtEachCpu     KEE       36 ?
+KernInvokeAtSpecificCpu KEE       37 ?
+KernYield               KEE       38 ?
 KernThunkStackTo16      KEE       40 ?
 KernThunkStackTo32      KEE       41 ?
 KernSerialize16BitDD    KEE       42 ?
@@ -46,6 +49,9 @@ KernLinToPageList       KEE       64 ?
 KernVMSetMem            KEE       65 ?
 KernSelToFlat           KEE       66 ?
 KernDynamicAPI          KEE       70 ?
+
+KernClockMonotonicGetTime  KEE    73 ?
+
 KernRASSysTrace         KEE       80 ?
 KernPerfSysTrace        KEE       81 ?
 _KernSISData            KEE       90 ?
@@ -53,6 +59,12 @@ _KernLISData            KEE       91 ?
 _KernInterruptLevel     KEE       92 ?
 _KernTKSSBase           KEE       93 ?
 _KernKEEVersion         KEE       94 ?
+
+KernGetCurrentCpuId     KEE       95 ?
+KernGetReschedStatus    KEE       96 ?
+KernGetTCReschedStatus  KEE       97 ?
+KernGetNumCpus          KEE       98 ?
+
 KernLockFile            KEE      100 ?
 KernUnLockFile          KEE      101 ?
 KernGetFileSize         KEE      102 ?

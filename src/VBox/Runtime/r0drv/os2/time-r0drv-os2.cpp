@@ -35,33 +35,61 @@
 #include "the-os2-kernel.h"
 
 #include <iprt/time.h>
+#include <iprt/mp.h>
 
+
+/* Note: define VBOX_OS2_USE_HIRES_TIMER in the Makefile.kmk for 
+ * high resolution time to be used. If not defined, then
+ * less precise time will be used (millisecond resolution),
+ * but faster GIS-based routines will be used.
+ */
 
 RTDECL(uint64_t) RTTimeNanoTS(void)
 {
-    /** @remark OS/2 Ring-0: will wrap after 48 days. */
-    return g_pGIS->msecs * UINT64_C(1000000);
+    switch (RTMpOs2GetApiExt())
+    {
+        case ISCS_OS4_MP:
+            struct timespec time;
+            KernClockMonotonicGetTime(&time);
+            return time.tv_sec * UINT64_C(1000000000) + time.tv_nsec;
+
+        default:
+            /** @remark OS/2 Ring-0: will wrap after 48 days. */
+            return g_pGIS->msecs * UINT64_C(1000000);
+    }
 }
 
 
 RTDECL(uint64_t) RTTimeMilliTS(void)
 {
+#if VBOX_OS2_USE_HIRES_TIMER
+    return RTTimeNanoTS() / UINT64_C(1000000);
+#else
     /** @remark OS/2 Ring-0: will wrap after 48 days. */
     return g_pGIS->msecs;
+#endif
 }
 
 
 RTDECL(uint64_t) RTTimeSystemNanoTS(void)
 {
+#if VBOX_OS2_USE_HIRES_TIMER
+    return RTTimeNanoTS();
+#else
     /** @remark OS/2 Ring-0: will wrap after 48 days. */
     return g_pGIS->msecs * UINT64_C(1000000);
+#endif
 }
 
 
 RTDECL(uint64_t) RTTimeSystemMilliTS(void)
 {
+#if VBOX_OS2_USE_HIRES_TIMER
+    return RTTimeMilliTS();
+#else
     /** @remark OS/2 Ring-0: will wrap after 48 days. */
     return g_pGIS->msecs;
+#endif
 }
 
 
@@ -89,4 +117,3 @@ RTDECL(PRTTIMESPEC) RTTimeNow(PRTTIMESPEC pTime)
     /** @remark OS/2 Ring-0: Currently returns local time instead of UCT. */
     return RTTimeSpecSetNano(pTime, u64);
 }
-

@@ -35,6 +35,12 @@
 # include "CMediumAttachment.h"
 #endif /* !VBOX_WITH_PRECOMPILED_HEADERS */
 
+#ifdef Q_OS_OS2
+#define  INCL_BASE
+#include <os2.h>
+#define  INDX_SVN_REVISION 33
+#endif
+
 UIMachineSettingsGeneral::UIMachineSettingsGeneral()
     : m_fHWVirtExEnabled(false)
     , m_fEncryptionCipherChanged(false)
@@ -386,6 +392,16 @@ bool UIMachineSettingsGeneral::validate(QList<UIValidationMessage> &messages)
                              "64-bit guest systems require hardware virtualization, "
                              "so this will be enabled automatically if you confirm the changes.");
     }
+
+#ifdef Q_OS_OS2
+    /* Warn about kernel not having all the required features for HW virtualization */
+    ULONG value;
+    if ( (DosQuerySysInfo(INDX_SVN_REVISION, INDX_SVN_REVISION, &value, sizeof(value)) || 
+         value < 4742) && m_fHWVirtExEnabled )
+        message.second << tr("The current kernel doesn't allow to enable hardware virtualization,"
+                             "Note that software emulation will be used, so it is possible that"
+                             "the machine will work slowly. If you don't expect this, disable VT-x/AMD-V.");
+#endif
 
     /* Serialize message: */
     if (!message.second.isEmpty())

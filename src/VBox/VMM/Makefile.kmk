@@ -565,6 +565,7 @@ ifndef VBOX_ONLY_EXTPACKS
 
  VMMR0_SOURCES   = \
  	VBoxVMM.d \
+ 	VMMR0/dummy.cpp \
  	VMMR0/CPUMR0.cpp \
  	VMMR0/CPUMR0A.asm \
  	VMMR0/GIMR0.cpp \
