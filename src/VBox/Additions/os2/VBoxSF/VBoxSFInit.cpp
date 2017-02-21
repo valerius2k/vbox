@@ -51,6 +51,7 @@ extern VBOXGUESTOS2IDCCONNECT g_VBoxGuestIDC;
 extern uint32_t g_u32Info;
 /* from sys0.asm and the linker/end.lib. */
 extern char _text, _etext, _data, _end;
+extern VBSFCLIENT g_clientHandle;
 RT_C_DECLS_END
 
 
@@ -70,8 +71,10 @@ RT_C_DECLS_END
 DECLASM(void)
 VBoxSFR0Init(void)
 {
-    Log(("VBoxSFR0Init: g_fpfnDevHlp=%lx u32Version=%RX32 u32Session=%RX32 pfnServiceEP=%p g_u32Info=%u (%#x)\n",
-         g_fpfnDevHlp, g_VBoxGuestIDC.u32Version, g_VBoxGuestIDC.u32Session, g_VBoxGuestIDC.pfnServiceEP, g_u32Info, g_u32Info));
+    APIRET rc;
+
+    dprintf("VBoxSFR0Init: g_fpfnDevHlp=%lx u32Version=%RX32 u32Session=%RX32 pfnServiceEP=%p g_u32Info=%u (%#x)\n",
+         g_fpfnDevHlp, g_VBoxGuestIDC.u32Version, g_VBoxGuestIDC.u32Session, g_VBoxGuestIDC.pfnServiceEP, g_u32Info, g_u32Info);
 
     /*
      * Start by initializing IPRT.
@@ -80,35 +83,46 @@ VBoxSFR0Init(void)
         &&  VALID_PTR(g_VBoxGuestIDC.u32Session)
         &&  VALID_PTR(g_VBoxGuestIDC.pfnServiceEP))
     {
-        int rc = RTR0Init(0);
-        if (RT_SUCCESS(rc))
-        {
-            rc = VbglInit();
-            if (RT_SUCCESS(rc))
-            {
 #ifndef DONT_LOCK_SEGMENTS
-                /*
-                 * Lock the 32-bit segments in memory.
-                 */
-                static KernVMLock_t s_Text32, s_Data32;
-                rc = KernVMLock(VMDHL_LONG,
-                                &_text, (uintptr_t)&_etext - (uintptr_t)&_text,
-                                &s_Text32, (KernPageList_t *)-1, NULL);
-                AssertMsg(rc == NO_ERROR, ("locking text32 failed, rc=%d\n"));
-                rc = KernVMLock(VMDHL_LONG | VMDHL_WRITE,
-                                &_data, (uintptr_t)&_end - (uintptr_t)&_data,
-                                &s_Data32, (KernPageList_t *)-1, NULL);
-                AssertMsg(rc == NO_ERROR, ("locking text32 failed, rc=%d\n"));
+        /*
+         * Lock the 32-bit segments in memory.
+         */
+        static KernVMLock_t s_Text32, s_Data32;
+        rc = KernVMLock(VMDHL_LONG,
+                        &_text, (uintptr_t)&_etext - (uintptr_t)&_text,
+                        &s_Text32, (KernPageList_t *)-1, NULL);
+        AssertMsg(rc == NO_ERROR, ("locking text32 failed, rc=%d\n"));
+        rc = KernVMLock(VMDHL_LONG | VMDHL_WRITE,
+                        &_data, (uintptr_t)&_end - (uintptr_t)&_data,
+                        &s_Data32, (KernPageList_t *)-1, NULL);
+        AssertMsg(rc == NO_ERROR, ("locking text32 failed, rc=%d\n"));
 #endif
-
-                Log(("VBoxSFR0Init: completed successfully\n"));
-                return;
-            }
+        /* Initialize VBox subsystem. */
+        rc = vboxInit();
+        if (RT_FAILURE(rc))
+        {
+            dprintf("VBOXSF: %s: ERROR while initializing VBox subsystem (%Rrc)!\n", __FUNCTION__, rc);
         }
 
-        LogRel(("VBoxSF: RTR0Init failed, rc=%Rrc\n", rc));
+        /* Connect the HGCM client */
+        RT_ZERO(g_clientHandle);
+        rc = vboxConnect(&g_clientHandle);
+        if (RT_FAILURE(rc))
+        {
+            dprintf("VBOXSF: %s: ERROR while connecting to host (%Rrc)!\n", __FUNCTION__, rc);
+            vboxUninit();
+        }
+
+        rc = vboxCallSetUtf8(&g_clientHandle);
+        if (RT_FAILURE(rc))
+        {
+            dprintf("VBOXSF: vboxCallSetUtf8 failed. rc=%d\n", rc);
+        }
+
+        dprintf("VBoxSFR0Init: completed successfully\n");
+        return;
     }
     else
-        LogRel(("VBoxSF: Failed to connect to VBoxGuest.sys.\n"));
+        dprintf("VBoxSF: Failed to connect to VBoxGuest.sys.\n");
 }
 

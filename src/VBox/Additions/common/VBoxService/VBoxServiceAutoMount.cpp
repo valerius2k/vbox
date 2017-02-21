@@ -29,6 +29,12 @@
 #include "VBoxServiceInternal.h"
 #include "VBoxServiceUtils.h"
 
+#ifdef RT_OS_OS2
+# define  OS2EMX_PLAIN_CHAR
+# define  INCL_BASE
+# define  INCL_DOSFILEMGR
+# include <os2.h>
+#else
 #include <errno.h>
 #include <grp.h>
 #include <sys/mount.h>
@@ -60,6 +66,7 @@ RT_C_DECLS_END
  #endif
 #endif
 
+#endif
 
 /*********************************************************************************************************************************
 *   Global Variables                                                                                                             *
@@ -115,7 +122,7 @@ static bool VBoxServiceAutoMountShareIsMounted(const char *pszShare,
      *       of an absolute one ("temp" vs. "/media/temp")?
      * procfs contains the full path but not the actual share name ...
      * FILE *pFh = setmntent("/proc/mounts", "r+t"); */
-#ifdef RT_OS_SOLARIS
+#if defined(RT_OS_SOLARIS)
     FILE *pFh = fopen(_PATH_MOUNTED, "r");
     if (!pFh)
         VBoxServiceError("VBoxServiceAutoMountShareIsMounted: Could not open mount tab \"%s\"!\n",
@@ -133,6 +140,30 @@ static bool VBoxServiceAutoMountShareIsMounted(const char *pszShare,
             }
         }
         fclose(pFh);
+    }
+#elif defined(RT_OS_OS2)
+    APIRET hrc;
+    char buf[sizeof(FSQBUFFER2) + 3 * CCHMAXPATH] = {0};
+    PFSQBUFFER2 pBuf = (PFSQBUFFER2)buf;
+    ULONG cbBuf = sizeof(buf);
+    char szDriveLetter[] = "c:";
+    int index;
+
+    for (index = 0; index < 'z' - 'c' + 1; index++, szDriveLetter[0]++)
+    {
+        hrc = DosQueryFSAttach(szDriveLetter, 0, FSAIL_QUERYNAME,
+                               pBuf, &cbBuf);
+
+        if ( ! hrc && pBuf->iType == FSAT_REMOTEDRV &&
+             pBuf->rgFSAData[pBuf->cbName + pBuf->cbFSDName] &&
+             ! strcmp((char *)&pBuf->rgFSAData[pBuf->cbName + pBuf->cbFSDName], pszShare) )
+            break;
+    }
+
+    if (index != 'z' - 'c' + 1)
+    {
+        fMounted = RTStrPrintf(pszMountPoint, cbMountPoint, "%s", szDriveLetter)
+                 ? true : false;
     }
 #else
     FILE *pFh = setmntent(_PATH_MOUNTED, "r+t");
@@ -165,22 +196,37 @@ static int VBoxServiceAutoMountUnmount(const char *pszMountPoint)
 {
     AssertPtrReturn(pszMountPoint, VERR_INVALID_PARAMETER);
 
+#ifdef RT_OS_OS2
+    APIRET hrc = NO_ERROR;
+#endif
     int rc = VINF_SUCCESS;
     uint8_t uTries = 0;
     int r;
     while (uTries++ < 3)
     {
+#ifdef RT_OS_OS2
+        hrc = DosFSAttach(pszMountPoint, "VBOXSF", NULL, 0, FS_DETACH);
+        if (! hrc)
+            break;
+#else
         r = umount(pszMountPoint);
         if (r == 0)
             break;
+#endif
         RTThreadSleep(5000); /* Wait a while ... */
     }
+#ifdef RT_OS_OS2
+    if (hrc)
+        rc = RTErrConvertFromErrno(hrc);
+#else
     if (r == -1)
         rc = RTErrConvertFromErrno(errno);
+#endif
     return rc;
 }
 
 
+#ifndef RT_OS_OS2
 static int VBoxServiceAutoMountPrepareMountPoint(const char *pszMountPoint, const char *pszShareName,
                                                  vbsf_mount_opts *pOpts)
 {
@@ -217,12 +263,17 @@ static int VBoxServiceAutoMountPrepareMountPoint(const char *pszMountPoint, cons
                          pszMountPoint, fMode, rc);
     return rc;
 }
+#endif
 
-
-static int VBoxServiceAutoMountSharedFolder(const char *pszShareName, const char *pszMountPoint,
+#ifdef RT_OS_OS2
+static int VBoxServiceAutoMountSharedFolder(const char *pszShareName, const char *pszMountPoint)
+{
+#else
+static int VBoxServiceAutoMountSharedFolder(const char *pszShareName, const char *pszMountPoint
                                             vbsf_mount_opts *pOpts)
 {
     AssertPtr(pOpts);
+#endif
 
     int rc = VINF_SUCCESS;
     char szAlreadyMountedTo[RTPATH_MAX];
@@ -239,8 +290,13 @@ static int VBoxServiceAutoMountSharedFolder(const char *pszShareName, const char
                                pszShareName, szAlreadyMountedTo);
             rc = VBoxServiceAutoMountUnmount(szAlreadyMountedTo);
             if (RT_FAILURE(rc))
+#ifdef RT_OS_OS2
+                VBoxServiceError("VBoxServiceAutoMountWorker: Failed to unmount \"%s\", rc=%d!\n",
+                                 szAlreadyMountedTo, rc);
+#else
                 VBoxServiceError("VBoxServiceAutoMountWorker: Failed to unmount \"%s\", %s (%d)!\n",
                                  szAlreadyMountedTo, strerror(errno), errno);
+#endif
             else
                 fSkip = false;
         }
@@ -249,11 +305,13 @@ static int VBoxServiceAutoMountSharedFolder(const char *pszShareName, const char
                                pszShareName, szAlreadyMountedTo);
     }
 
+#ifndef RT_OS_OS2
     if (!fSkip && RT_SUCCESS(rc))
         rc = VBoxServiceAutoMountPrepareMountPoint(pszMountPoint, pszShareName, pOpts);
+#endif
     if (!fSkip && RT_SUCCESS(rc))
     {
-#ifdef RT_OS_SOLARIS
+#if defined(RT_OS_SOLARIS)
         char achOptBuf[MAX_MNTOPT_STR] = { '\0', };
         int flags = 0;
         if (pOpts->ronly)
@@ -277,6 +335,20 @@ static int VBoxServiceAutoMountSharedFolder(const char *pszShareName, const char
             if (errno != EBUSY) /* Share is already mounted? Then skip error msg. */
                 VBoxServiceError("VBoxServiceAutoMountWorker: Could not mount shared folder \"%s\" to \"%s\", error = %s\n",
                                  pszShareName, pszMountPoint, strerror(errno));
+        }
+#elif defined(RT_OS_OS2)
+        char pBuf[CCHMAXPATH];
+        strcpy(pBuf, pszShareName);
+        APIRET hrc = DosFSAttach(pszMountPoint, "VBOXSF", pBuf, strlen(pBuf) + 1, FS_ATTACH);
+        if (! hrc)
+        {
+            VBoxServiceVerbose(0, "VBoxServiceAutoMountWorker: Shared folder \"%s\" was mounted to \"%s\"\n", pszShareName, pszMountPoint);
+        }
+        else
+        {
+            /* Share is already mounted? Then skip error msg. */
+            VBoxServiceError("VBoxServiceAutoMountWorker: Could not mount shared folder \"%s\" to \"%s\", rc = %lu\n",
+                             pszShareName, pszMountPoint, hrc);
         }
 #else /* !RT_OS_SOLARIS */
         unsigned long flags = MS_NODEV;
@@ -423,6 +495,27 @@ static int VBoxServiceAutoMountProcessMappings(PVBGLR3SHAREDFOLDERMAPPING paMapp
             if (RTStrAPrintf(&pszShareNameFull, "%s%s", pszSharePrefix, pszShareName) > 0)
             {
                 char szMountPoint[RTPATH_MAX];
+#ifdef RT_OS_OS2
+                char   pszDriveLetter[] = "c:";
+                char   buf[sizeof(FSQBUFFER2) + 3 * CCHMAXPATH] = {0};
+                PFSQBUFFER2 pBuf = (PFSQBUFFER2)buf;
+                ULONG  cbBuf = sizeof(buf);
+                APIRET hrc;
+                int    index;
+
+                // find the first free drive letter
+                for (index = 0; index < 'z' - 'c' + 1; index++, pszDriveLetter[0] ++)
+                {
+                    if ( (hrc = DosQueryFSAttach(pszDriveLetter, 0, FSAIL_QUERYNAME, pBuf, &cbBuf)) == ERROR_INVALID_DRIVE )
+                        break;
+                }
+
+                if (index != 'z' - 'c' + 1)
+                {
+                    strcpy(szMountPoint, pszDriveLetter);
+                    rc = VBoxServiceAutoMountSharedFolder(pszShareName, szMountPoint);
+                }
+#else
                 rc = RTPathJoin(szMountPoint, sizeof(szMountPoint), pszMountDir, pszShareNameFull);
                 if (RT_SUCCESS(rc))
                 {
@@ -457,6 +550,7 @@ static int VBoxServiceAutoMountProcessMappings(PVBGLR3SHAREDFOLDERMAPPING paMapp
                 }
                 else
                     VBoxServiceError("VBoxServiceAutoMountWorker: Unable to join mount point/prefix/shrae, rc = %Rrc\n", rc);
+#endif
                 RTStrFree(pszShareNameFull);
             }
             else
@@ -488,15 +582,25 @@ DECLCALLBACK(int) VBoxServiceAutoMountWorker(bool volatile *pfShutdown)
         && cMappings)
     {
         char *pszMountDir;
+#ifdef RT_OS_OS2
+        pszMountDir = (char *)"";
+        rc = VINF_SUCCESS;
+#else
         rc = VbglR3SharedFolderGetMountDir(&pszMountDir);
         if (rc == VERR_NOT_FOUND)
             rc = RTStrDupEx(&pszMountDir, VBOXSERVICE_AUTOMOUNT_DEFAULT_DIR);
+#endif
         if (RT_SUCCESS(rc))
         {
             VBoxServiceVerbose(3, "VBoxServiceAutoMountWorker: Shared folder mount dir set to \"%s\"\n", pszMountDir);
 
             char *pszSharePrefix;
+#ifdef RT_OS_OS2
+            pszSharePrefix = (char *)"";
+            rc = VINF_SUCCESS;
+#else
             rc = VbglR3SharedFolderGetMountPrefix(&pszSharePrefix);
+#endif
             if (RT_SUCCESS(rc))
             {
                 VBoxServiceVerbose(3, "VBoxServiceAutoMountWorker: Shared folder mount prefix set to \"%s\"\n", pszSharePrefix);

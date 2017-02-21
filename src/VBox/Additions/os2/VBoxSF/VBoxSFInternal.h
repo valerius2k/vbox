@@ -41,9 +41,100 @@
 #include <os2ddk/fsd.h>
 #undef RT_MAX
 
+#include <VBoxGuestR0LibSharedFolders.h>
+
 #include <iprt/types.h>
 #include <iprt/assert.h>
 
+#define MIN(a, b) ((a < b) ? a : b)
+
+#define ERROR_VOLUME_NOT_MOUNTED 0xEE00
+
+#define dprintf RTLogBackdoorPrintf
+
+#define SECTORSIZE    512
+
+#pragma pack(2)
+typedef struct _FILEFNDBUF3                 /* findbuf3 */
+{
+    FDATE   fdateCreation;
+    FTIME   ftimeCreation;
+    FDATE   fdateLastAccess;
+    FTIME   ftimeLastAccess;
+    FDATE   fdateLastWrite;
+    FTIME   ftimeLastWrite;
+    ULONG   cbFile;
+    ULONG   cbFileAlloc;
+    ULONG   attrFile;                    /* widened field */
+    UCHAR   cchName;
+    CHAR    achName[CCHMAXPATHCOMP];
+} FILEFNDBUF3;
+typedef FILEFNDBUF3 *PFILEFNDBUF3;
+
+typedef struct _FILEFNDBUF3L     /* findbuf */
+{
+    FDATE  fdateCreation;
+    FTIME  ftimeCreation;
+    FDATE  fdateLastAccess;
+    FTIME  ftimeLastAccess;
+    FDATE  fdateLastWrite;
+    FTIME  ftimeLastWrite;
+    LONGLONG  cbFile;
+    LONGLONG  cbFileAlloc;
+    ULONG  attrFile;
+    UCHAR  cchName;
+    CHAR   achName[CCHMAXPATHCOMP];
+} FILEFNDBUF3L;
+typedef FILEFNDBUF3L *PFILEFNDBUF3L;
+
+typedef struct _FILEFNDBUF2    /* findbuf2 */
+{
+    FDATE  fdateCreation;
+    FTIME  ftimeCreation;
+    FDATE  fdateLastAccess;
+    FTIME  ftimeLastAccess;
+    FDATE  fdateLastWrite;
+    FTIME  ftimeLastWrite;
+    ULONG  cbFile;
+    ULONG  cbFileAlloc;
+    SHORT attrFile;
+    ULONG  cbList;
+    UCHAR  cchName;
+    CHAR   achName[CCHMAXPATHCOMP];
+} FILEFNDBUF2;
+typedef FILEFNDBUF2 *PFILEFNDBUF2;
+
+typedef struct _FILEFNDBUF4L                /* findbuf4l */
+{
+    ULONG    oNextEntryOffset;            /* new field */
+    FDATE    fdateCreation;
+    FTIME    ftimeCreation;
+    FDATE    fdateLastAccess;
+    FTIME    ftimeLastAccess;
+    FDATE    fdateLastWrite;
+    FTIME    ftimeLastWrite;
+    LONGLONG cbFile;
+    LONGLONG cbFileAlloc;
+    ULONG    attrFile;                    /* widened field */
+    ULONG    cbList;
+    UCHAR    cchName;
+    CHAR     achName[CCHMAXPATHCOMP];
+} FILEFNDBUF4L;
+typedef FILEFNDBUF4L  *PFILEFNDBUF4L;
+
+#pragma pack()
+
+typedef struct _CWD
+{
+    SHFLHANDLE handle;
+    VBSFMAP map;
+} CWD, *PCWD;
+
+typedef struct _FILEBUF
+{
+    SHFLHANDLE handle;
+    PSHFLSTRING path;
+} FILEBUF, *PFILEBUF;
 
 /**
  * VBoxSF Volume Parameter Structure.
@@ -53,6 +144,8 @@
 typedef struct VBOXSFVP
 {
     uint32_t u32Dummy;
+    VBSFMAP  map;
+    char szLabel[12];
 } VBOXSFVP;
 AssertCompile(sizeof(VBOXSFVP) <= sizeof(VPFSD));
 /** Pointer to a VBOXSFVP struct. */
@@ -67,6 +160,7 @@ typedef VBOXSFVP *PVBOXSFVP;
 typedef struct VBOXSFCD
 {
     uint32_t u32Dummy;
+    PCWD cwd;
 } VBOXSFCD;
 AssertCompile(sizeof(VBOXSFCD) <= sizeof(CDFSD));
 /** Pointer to a VBOXSFCD struct. */
@@ -82,26 +176,68 @@ typedef struct VBOXSFFSD
 {
     /** Self pointer for quick 16:16 to flat translation. */
     struct VBOXSFFSD *pSelf;
+    PFILEBUF filebuf;
 } VBOXSFFSD;
 AssertCompile(sizeof(VBOXSFFSD) <= sizeof(SFFSD));
 /** Pointer to a VBOXSFFSD struct. */
 typedef VBOXSFFSD *PVBOXSFFSD;
 
+typedef struct _FINDBUF
+{
+    SHFLHANDLE handle;
+    PSHFLDIRINFO buf, bufpos;
+    PSHFLSTRING path;
+    uint32_t num_files;
+    uint32_t index;
+    uint32_t len;
+    bool has_more_files;
+    char *pDir;
+    uint32_t bAttr;
+    uint32_t bMustAttr;
+    VBSFMAP  map;
+} FINDBUF, *PFINDBUF;
 
 /**
  * VBoxSF File Search Structure.
  *
  * @remark  Overlays the 24 byte FSFSD structure (fsd.h).
  */
-typedef struct VBOXSFFS
+typedef struct VBOXFSFSD
 {
     /** Self pointer for quick 16:16 to flat translation. */
     struct VBOXSFFS *pSelf;
-} VBOXSFFS;
-AssertCompile(sizeof(VBOXSFFS) <= sizeof(FSFSD));
+    PFINDBUF pFindBuf;
+} VBOXFSFSD;
+AssertCompile(sizeof(VBOXFSFSD) <= sizeof(FSFSD));
 /** Pointer to a VBOXSFFS struct. */
-typedef VBOXSFFS *PVBOXSFFS;
+typedef VBOXFSFSD *PVBOXFSFSD;
 
+PSHFLSTRING make_shflstring(const char* const s);
+void free_shflstring(PSHFLSTRING s);
+PSHFLSTRING clone_shflstring(PSHFLSTRING s);
+PSHFLSTRING concat_shflstring_cstr(PSHFLSTRING s1, const char* const s2);
+PSHFLSTRING concat_cstr_shflstring(const char* const s1, PSHFLSTRING s2);
+PSHFLSTRING build_path(PSHFLSTRING dir, const char* const name);
+APIRET APIENTRY vboxsfStrFromUtf8(char *dst, char *src, ULONG len, ULONG srclen);
+APIRET APIENTRY vboxsfStrToUtf8(char *dst, char *src);
+APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
+                              char *pszParsedPath, int *cbParsedPath, VBSFMAP *map);
+
+RT_C_DECLS_BEGIN
+
+/* IFS Helpers */
+APIRET APIENTRY FSH32_GETVOLPARM(USHORT hVPB, PVPFSI *pvpfsi, PVPFSD *pvpfsd);
+APIRET APIENTRY FSH32_PROBEBUF(ULONG operation, char *pData, ULONG cbData);
+APIRET APIENTRY FSH32_WILDMATCH(char *pPat, char *pStr);
+
+RT_C_DECLS_END
+
+uint32_t VBoxToOS2Attr(uint32_t fMode);
+
+USHORT vbox_err_to_os2_err(int rc);
+
+int tolower (int c);
+char *strncpy(char *dst, char *src, int len);
 
 #endif
 

@@ -6,6 +6,11 @@
 SUB_DEPTH = ../../../../..
 include $(KBUILD_PATH)/subheader.kmk
 
+PROGRAMS += VBoxSFAttach
+VBoxSFAttach_TEMPLATE   = NewVBoxGuestR3Exe
+VBoxSFAttach_SOURCES    = \
+        VBoxSFAttach.cpp
+
 #?DLLS += VBoxSF
 SYSMODS += VBoxSF
 VBoxSF_TEMPLATE      = VBOXGUESTR0
@@ -14,7 +19,10 @@ VBoxSF_DLLSUFF       = .ifs
 VBoxSF_DEFS          = VBOX_WITH_HGCM
 VBoxSF_INCS         := \
 	. \
-	$(PATH_ROOT)/src/VBox/Runtime/include
+	$(PATH_ROOT)/src/VBox/Additions/common/VBoxGuestLib \
+	$(PATH_ROOT)/src/VBox/Additions/common/VBoxGuest \
+	$(PATH_ROOT)/src/VBox/Runtime/include \
+	$(PATH_ROOT)/src/VBox/Runtime/r0drv/os2
 VBoxSF_LDFLAGS      := $(addprefix -Zlinker , \
 	SEG TYPE CODE PRELOAD DYNAMIC SHARED NONPERMANENT, \
 	    TYPE DATA PRELOAD DYNAMIC)
@@ -22,6 +30,7 @@ VBoxSF_LDFLAGS      := $(addprefix -Zlinker , \
 VBoxSF_SOURCES       = \
 	VBoxSFA.asm \
 	VBoxSF.cpp \
+	VBoxSFStr.cpp \
 	VBoxSFFile.cpp \
 	VBoxSFFind.cpp \
 	VBoxSFInit.cpp \

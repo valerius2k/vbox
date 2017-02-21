@@ -58,7 +58,7 @@ if1of ($(KBUILD_TARGET), linux)
 endif
 ifdef VBOX_WITH_SHARED_FOLDERS
  # darwin freebsd
- if1of ($(KBUILD_TARGET), linux solaris)
+ if1of ($(KBUILD_TARGET), linux solaris os2)
   VBoxService_DEFS       += VBOX_WITH_SHARED_FOLDERS
  endif
 endif
@@ -100,7 +100,7 @@ if1of ($(KBUILD_TARGET), linux)
 endif
 
 ifdef VBOX_WITH_SHARED_FOLDERS
- if1of ($(KBUILD_TARGET), linux solaris)
+ if1of ($(KBUILD_TARGET), linux solaris os2)
   VBoxService_SOURCES          += \
 	VBoxServiceAutoMount.cpp
   VBoxService_SOURCES.linux    += \

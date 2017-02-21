@@ -133,6 +133,10 @@ typedef VBSFDRIVE *PVBSFDRIVE;
 struct _MRX_VBOX_DEVICE_EXTENSION;
 typedef struct _MRX_VBOX_DEVICE_EXTENSION *PMRX_VBOX_DEVICE_EXTENSION;
 
+#ifdef RT_OS_OS2
+RT_C_DECLS_BEGIN
+#endif
+
 DECLVBGL(int)  vboxInit (void);
 DECLVBGL(void) vboxUninit (void);
 DECLVBGL(int)  vboxConnect (PVBSFCLIENT pClient);
@@ -195,6 +199,10 @@ DECLVBGL(int) vboxCallSetUtf8 (PVBSFCLIENT pClient);
 DECLVBGL(int) vboxReadLink (PVBSFCLIENT pClient, PVBSFMAP pMap, PSHFLSTRING ParsedPath, uint32_t pcbBuffer, uint8_t *pBuffer);
 DECLVBGL(int) vboxCallSymlink (PVBSFCLIENT pClient, PVBSFMAP pMap, PSHFLSTRING pNewPath, PSHFLSTRING pOldPath, PSHFLFSOBJINFO pBuffer);
 DECLVBGL(int) vboxCallSetSymlinks (PVBSFCLIENT pClient);
+
+#ifdef RT_OS_OS2
+RT_C_DECLS_END
+#endif
 
 #endif /* !___VBoxGuestLib_VBoxGuestR0LibSharedFolders_h */
 

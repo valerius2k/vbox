@@ -43,7 +43,12 @@
 ;*******************************************************************************
 %define ERROR_NOT_SUPPORTED         50
 %define ERROR_INVALID_PARAMETER     87
+%define ERROR_PROTECTION_VIOLATION  115
 %define DevHlp_AttachDD             2ah
+%define DevHlp_AllocGDTSelector     2dh
+%define DevHlp_FreeGDTSelector      53h
+%define DevHlp_VMProcessToGlobal    59h
+%define DevHlp_LinToGDTSelector     5ch
 
 ;;
 ; Prints a string to the VBox log port.
@@ -68,6 +73,19 @@ global %1
 %endmacro
 
 %macro VBOXSF_EP16_END 1
+global %1_EndProc
+%1_EndProc:
+%endmacro
+
+
+%macro VBOXSF_EP32_BEGIN 2
+global %1
+%1:
+;    DEBUG_STR16 {'VBoxSF: ', %2}
+
+%endmacro
+
+%macro VBOXSF_EP32_END 1
 global %1_EndProc
 %1_EndProc:
 %endmacro
@@ -131,31 +149,201 @@ GLOBALNAME %1 %+ _16
     pop     ebp
 %endmacro
 
+
+;;
+; Used to taking us to 16-bit and reserving a parameter frame.
+;
+; @param    %1      The function name
+; @param    %2      The number of bytes to reserve
+;
+%macro VBOXSF_32_TO_16 2
+    ; prologue
+    push    ebp
+    mov     ebp, esp                    ; ebp
+    push    edi                         ; ebp - 4
+    push    ebx                         ; ebp - 8
+    push    ds                          ; ebp - 0c
+    push    es                          ; ebp - 10
+
+    ; Reserve the 16-bit parameters and align the stack on a 16 byte
+    ; boundary to make GCC really happy.
+    sub     esp, %2
+    and     esp, 0fffffff0h
+
+    call    KernThunkStackTo16
+
+    xor   ebx, ebx
+
+    ;jmp far dword NAME(%i %+ _16)
+    db      066h
+    db      0eah
+    dw      NAME(%1 %+ _16) wrt CODE16
+    dw      CODE16
+segment CODE16
+GLOBALNAME %1 %+ _16
+    mov     ax, DATA16
+    mov     ds, ax
+    mov     es, ax
+
+%endmacro VBOXSF_32_TO_16 1
+
+
+;;
+; The counter part to VBOXSF_32_TO_16
+;
+; @param    %1      The function name
+;
+%macro VBOXSF_16_TO_32 1
+    ;jmp far dword NAME(%1 %+ _32) wrt FLAT
+    db      066h
+    db      0eah
+    dd      NAME(%1 %+ _32) wrt FLAT
+    dw      TEXT32 wrt FLAT
+segment TEXT32
+GLOBALNAME %1 %+ _32
+    mov     ax, DATA32 wrt FLAT
+    mov     ds, ax
+    mov     es, ax
+
+    call    KernThunkStackTo32
+
+%endmacro
+
+;;
+; Allocate a GDT selector
+;
+; @param   %1     The function name
+; @param   %2     esp offset to the selector
+;
+%macro VBOXSF_ALLOCGDTSEL 1
+    mov     eax, ss
+    mov     es, ax
+    lea     edi, [esp + %1]                      ; &sel in ES:DI
+    mov     ecx, 1                               ; one selector
+    mov     dl, DevHlp_AllocGDTSelector
+    call    far [NAME(g_fpfnDevHlp)]
+%endmacro
+
+;;
+; Map Linear address to a GDT selector
+;
+; @param   %1     Selector esp offset
+; @param   %2     Linear address ebp offset
+; @param   %3     Size (immediate)
+;
+; carry flag if unsuccessful
+;
+%macro VBOXSF_LINTOGDTSEL 3
+    xor     eax, eax
+    mov     ax,  [esp + %1]                     ; sel
+    mov     ebx, [ebp + %2]                     ; lin
+    mov     ecx, %3                             ; size
+    mov     dl, DevHlp_LinToGDTSelector
+    call    far [NAME(g_fpfnDevHlp)]
+%endmacro
+
+;;
+; Free GDT selector
+;
+; @param   %1     Selector esp offset
+;
+%macro VBOXSF_FREEGDTSEL 1
+    mov     ax, [esp + %1]                      ; sel
+    mov     dl, DevHlp_FreeGDTSelector
+    call    far [NAME(g_fpfnDevHlp)]
+%endmacro
+
+;;
+; Process to Global
+;
+; @param   %1     Linear address ebp offset
+; @param   %2     size
+; @param   %3     Action flags
+;
+%macro VBOXSF_PROCESSTOGLOBAL 3
+    mov    ebx, [ebp + %1]                      ; lin
+    mov    ecx, %2                              ; size
+    mov    eax, %3                              ; flags
+    mov    dl,  DevHlp_VMProcessToGlobal
+    call    far [NAME(g_fpfnDevHlp)]
+%endmacro
+
+
+;;
+; Take off the old stack frame
+;
+%macro VBOXSF_EPILOGUE 0
+    ; Epilogue
+    lea     esp, [ebp - 10h]
+
+    pop     es
+    pop     ds
+    pop     ebx
+    pop     edi
+    mov     esp, ebp
+    pop     ebp
+%endmacro
+
 ;;
 ; Thunks the given 16:16 pointer to a flat pointer.
 ;
-; @param    %1      The negated ebp offset of the input.
+; @param    %1      The ebp offset of the input.
 ; @param    %2      The esp offset of the output.
-; @users    eax, edx, ecx
+; @users    eax
 ;
 %macro VBOXSF_FARPTR_2_FLAT 2
-    movzx   eax, word [ebp - (%1) + 2]
+    mov     eax, dword [ebp + (%1)]
     push    eax
     call    KernSelToFlat
-    movzx   edx, word [ebp - (%1)]
-    add     eax, edx
+    add     esp, 4
     mov     [esp + (%2)], eax
 %endmacro
+
+
+;;
+; Put address of an input variable and put it at an output offset.
+;
+; @param    %1      The esp offset of the input.
+; @param    %2      The esp offset of the output.
+; @users    eax, edx
+
+%macro VBOXSF_PUTVARADDR 2
+    lea     edx, [esp + (%1)]
+    mov     ax, ss
+    shl     eax, 10h
+    mov     ax, dx
+    mov     [esp + (%2)], eax
+%endmacro
+
+
+;;
+; Converts the 16:16 pointer on stack to a FLAT pointer.
+;
+; @param    %1      The esp offset of the input
+; @param    %2      The ebp offset of the input
+; @users    eax, ecx
+;
+%macro VBOXSF_THUNK_FARPTR_2_FLAT 2
+    mov     eax, [esp + (%1)]
+
+    push    eax
+    call    KernSelToFlat
+    add     sp, 4
+
+    mov     ecx, [ebp + (%2)]
+    mov     [ecx], eax
+%endmacro
+
 
 ;;
 ; Thunks the given 16:16 struct sffsd pointer to a flat pointer.
 ;
-; @param    %1      The negated ebp offset of the input.
+; @param    %1      The ebp offset of the input.
 ; @param    %2      The esp offset of the output.
 ; @users    eax, ecx
 ;
 %macro VBOXSF_PSFFSD_2_FLAT 2
-    lds     cx, [ebp - (%1)]
+    lds     cx, [ebp + (%1)]
     and     ecx, 0ffffh
     mov     eax, dword [ecx]
     mov     cx, DATA32 wrt FLAT
@@ -167,12 +355,12 @@ GLOBALNAME %1 %+ _16
 ;;
 ; Thunks the given 16:16 struct cdfsd pointer to a flat pointer.
 ;
-; @param    %1      The negated ebp offset of the input.
+; @param    %1      The ebp offset of the input.
 ; @param    %2      The esp offset of the output.
 ; @users    eax, ecx
 ;
 %macro VBOXSF_PCDFSD_2_FLAT 2
-    lds     cx, [ebp - (%1)]
+    lds     cx, [ebp + (%1)]
     and     ecx, 0ffffh
     mov     eax, dword [ecx]
     mov     cx, DATA32 wrt FLAT
@@ -183,19 +371,18 @@ GLOBALNAME %1 %+ _16
 ;;
 ; Thunks the given 16:16 struct fsfsd pointer to a flat pointer.
 ;
-; @param    %1      The negated ebp offset of the input.
+; @param    %1      The ebp offset of the input.
 ; @param    %2      The esp offset of the output.
 ; @users    eax, ecx
 ;
 %macro VBOXSF_PFSFSD_2_FLAT 2
-    lds     cx, [ebp - (%1)]
+    lds     cx, [ebp + (%1)]
     and     ecx, 0ffffh
     mov     eax, dword [ecx]
     mov     cx, DATA32 wrt FLAT
     mov     [esp + (%2)], eax
     mov     ds, cx
 %endmacro
-
 
 
 ;*******************************************************************************
@@ -208,6 +395,9 @@ extern KernSelToFlat
 segment CODE16
 extern FSH_FORCENOSWAP
 extern DOS16WRITE
+extern FSH_GETVOLPARM
+extern FSH_PROBEBUF
+extern FSH_WILDMATCH
 
 segment CODE32
 extern NAME(FS32_ALLOCATEPAGESPACE)
@@ -251,10 +441,159 @@ extern FS32_READ
 extern NAME(FS32_RMDIR)
 extern NAME(FS32_SETSWAP)
 extern NAME(FS32_SHUTDOWN)
+extern NAME(FS32_VERIFYUNCNAME)
 extern FS32_WRITE
 
 extern NAME(VBoxSFR0Init)
 
+
+;*******************************************************************************
+;*  IFS Helpers                                                                *
+;*******************************************************************************
+segment TEXT32
+
+;;
+; @cproto APIRET APIENTRY FSH32_GETVOLPARM(USHORT hVPB, PVPFSI *ppvpfsi, PVPFSD *ppvpfsd);
+VBOXSF_EP32_BEGIN   FSH32_GETVOLPARM, 'FSH32_GETVOLPARM'
+    ; switch to 16-bits and reserve place in stack for pvpfsi/pvpfsd and FSH_GETVOLPARM args (2+3=5)
+    VBOXSF_32_TO_16     FSH32_GETVOLPARM, 5*4
+segment CODE16
+    mov     cx, [ebp + 8h]            ; hVPB
+    mov     [esp + 2*4], cx
+    ; reserve place for ppvpfsi far16 pointer on stack
+    VBOXSF_PUTVARADDR 4*4, 1*4        ; ppvpfsi
+    ; reserve place for ppvpfsd far16 pointer on stack
+    VBOXSF_PUTVARADDR 3*4, 0*4        ; ppvpfsd
+    call    far FSH_GETVOLPARM
+    ; switch back to 32 bits
+    VBOXSF_16_TO_32     FSH32_GETVOLPARM
+    ; convert pvpfsd to FLAT
+    VBOXSF_THUNK_FARPTR_2_FLAT 2 + 0*4, 4*4
+    ; convert pvpfsi to FLAT
+    VBOXSF_THUNK_FARPTR_2_FLAT 2 + 1*4, 3*4
+    ; restore stack
+    VBOXSF_EPILOGUE
+    ret
+VBOXSF_EP32_END     FSH32_GETVOLPARM
+
+;;
+; APIRET APIENTRY FSH32_PROBEBUF(ULONG operation, char *pData, ULONG cbData);
+VBOXSF_EP32_BEGIN   FSH32_PROBEBUF, 'FSH32_PROBEBUF'
+    ; switch to 16-bits and reserve place in stack for one selector and three vars
+    VBOXSF_32_TO_16     FSH32_PROBEBUF, 10
+segment CODE16
+    mov     cx, [ebp + 8h]             ; operation
+    mov     [esp + 6], cx
+
+    ; alloc a GDT selector for pData
+    VBOXSF_ALLOCGDTSEL     8
+    jnc   FSH32_PROBEBUF_ok1
+    mov   ebx, ERROR_PROTECTION_VIOLATION
+    jmp   NAME(FSH32_PROBEBUF_exit2)
+FSH32_PROBEBUF_ok1:
+    ; Convert address from current process address space to system one
+    VBOXSF_PROCESSTOGLOBAL 0xc, [ebp + 10h], [ebp + 8h]
+    jnc   FSH32_PROBEBUF_ok2
+    mov   ebx, ERROR_PROTECTION_VIOLATION
+    jmp   NAME(FSH32_PROBEBUF_exit1)
+FSH32_PROBEBUF_ok2:
+    mov   [ebp + 0ch], eax
+    ; map pData FLAT addr to an allocated selector
+    VBOXSF_LINTOGDTSEL     8, 0xc, [ebp + 10h]
+    jnc   FSH32_PROBEBUF_ok3
+    mov   ebx, ERROR_PROTECTION_VIOLATION
+    jmp   NAME(FSH32_PROBEBUF_exit1)
+FSH32_PROBEBUF_ok3:
+    ; store a far pointer to pData
+    mov   eax, [esp + 8]
+    shl   eax, 16
+    mov   [esp + 2], eax
+
+    mov     cx, [ebp + 10h]            ; cbData
+    mov     [esp], cx
+
+    call  far FSH_PROBEBUF
+
+    ; save return code
+    xor   ebx, ebx
+    mov   bx, ax
+
+    ; -2*4 is because of "ret 8" command at the end of last function
+    sub   esp, 8
+
+GLOBALNAME FSH32_PROBEBUF_exit1
+    ; free GDT selectors
+    VBOXSF_FREEGDTSEL 8
+GLOBALNAME FSH32_PROBEBUF_exit2
+
+    add   esp, 8
+
+    ; switch back to 32 bits
+    VBOXSF_16_TO_32     FSH32_PROBEBUF
+
+    ; restore return code
+    mov   eax, ebx
+
+    ; restore stack
+    VBOXSF_EPILOGUE
+    ret
+VBOXSF_EP32_END     FSH32_PROBEBUF
+
+;;
+; APIRET APIENTRY FSH32_WILDMATCH(char *pPat, char *pStr);
+VBOXSF_EP32_BEGIN   FSH32_WILDMATCH, 'FSH32_WILDMATCH'
+    ; switch to 16-bits and reserve place in stack for two selectors and two far ptrs (2+2=4)
+    VBOXSF_32_TO_16     FSH32_WILDMATCH, 4*4
+segment CODE16
+    ; alloc a GDT selector for pPat
+    VBOXSF_ALLOCGDTSEL     3*4
+    jc    NAME(FSH32_WILDMATCH_exit2)
+    ; map pPat FLAT addr to an allocated selector
+    VBOXSF_LINTOGDTSEL     3*4, 0x8, 0x10000
+    jc    NAME(FSH32_WILDMATCH_exit2)
+    ; store a far pointer to pPat
+    mov   eax, [esp + 3*4]
+    shl   eax, 16
+    mov   [esp + 1*4], eax
+
+    ; alloc a GDT selector for pStr
+    VBOXSF_ALLOCGDTSEL     2*4
+    jc    NAME(FSH32_WILDMATCH_exit1)
+    ; map pStr FLAT addr to an allocated selector
+    VBOXSF_LINTOGDTSEL     2*4, 0xc, 0x10000
+    jc    NAME(FSH32_WILDMATCH_exit1)
+    ; store a far pointer to pStr
+    mov   eax, [esp + 2*4]
+    shl   eax, 16
+    mov   [esp + 0*4], eax
+
+    call  far FSH_WILDMATCH
+
+    ; save return code
+    xor   ebx, ebx
+    mov   bx, ax
+
+    ; -2*4 is because of "ret 8" command at the end of last function
+    sub   esp, 2*4
+
+    ; free GDT selectors
+    VBOXSF_FREEGDTSEL 2*4
+GLOBALNAME FSH32_WILDMATCH_exit1
+    VBOXSF_FREEGDTSEL 3*4
+GLOBALNAME FSH32_WILDMATCH_exit2
+
+    add   esp, 2*4
+
+    ; switch back to 32 bits
+    VBOXSF_16_TO_32     FSH32_WILDMATCH
+
+    ; restore return code
+    mov   eax, ebx
+
+    ; restore stack
+    VBOXSF_EPILOGUE
+    ret
+VBOXSF_EP32_END     FSH32_WILDMATCH
 
 
 ;*******************************************************************************
@@ -283,7 +622,7 @@ global FS_ATTRIBUTE
 global FS32_ATTRIBUTE
 FS_ATTRIBUTE:
 FS32_ATTRIBUTE:
-    dd FSA_REMOTE + FSA_LARGEFILE ;+ FSA_LVL7 + FSA_LOCK
+    dd FSA_REMOTE + FSA_LARGEFILE + FSA_UNC ;+ FSA_LVL7 + FSA_LOCK
 
 ;; 64-bit mask.
 ; bit 0 - don't get the ring-0 spinlock.
@@ -366,7 +705,8 @@ VBOXSF_TO_32        FS_ALLOCATEPAGESPACE, 4*4
     mov     [esp + 3*4], ecx
     mov     edx, [ebp + 0ah]            ; cb
     mov     [esp + 2*4], edx
-    VBOXSF_PSFFSD_2_FLAT  0eh, 1*4      ; psffsd
+    ;VBOXSF_PSFFSD_2_FLAT  0eh, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  0eh, 1*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  12h, 0*4      ; psffsi
     call    NAME(FS32_ALLOCATEPAGESPACE)
 VBOXSF_TO_16        FS_ALLOCATEPAGESPACE
@@ -408,7 +748,8 @@ VBOXSF_EP16_END     FS_ATTACH
 VBOXSF_EP16_BEGIN   FS_CANCELLOCKREQUEST, 'FS_CANCELLOCKREQUEST'
 VBOXSF_TO_32        FS_CANCELLOCKREQUEST, 3*4
     VBOXSF_FARPTR_2_FLAT  08h, 2*4      ; pLockRange
-    VBOXSF_PSFFSD_2_FLAT  0ch, 1*4      ; psffsd
+    ;VBOXSF_PSFFSD_2_FLAT  0ch, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  0ch, 1*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  10h, 0*4      ; psffsi
     call    NAME(FS32_CANCELLOCKREQUEST)
 VBOXSF_TO_16        FS_CANCELLOCKREQUEST
@@ -421,7 +762,8 @@ VBOXSF_EP16_END     FS_CANCELLOCKREQUEST
 VBOXSF_EP16_BEGIN   FS_CANCELLOCKREQUESTL, 'FS_CANCELLOCKREQUESTL'
 VBOXSF_TO_32        FS_CANCELLOCKREQUESTL, 3*4
     VBOXSF_FARPTR_2_FLAT  08h, 2*4      ; pLockRange
-    VBOXSF_PSFFSD_2_FLAT  0ch, 1*4      ; psffsd
+    ;VBOXSF_PSFFSD_2_FLAT  0ch, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  0ch, 1*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  10h, 0*4      ; psffsi
     call    NAME(FS32_CANCELLOCKREQUESTL)
 VBOXSF_TO_16        FS_CANCELLOCKREQUESTL
@@ -460,7 +802,8 @@ VBOXSF_TO_32        FS_CHGFILEPTR, 6*4
     mov     edx, 0ffffffffh
     mul     edx
     mov     [esp + 3*4], eax
-    VBOXSF_PSFFSD_2_FLAT  10h, 1*4      ; psffsd
+    ;VBOXSF_PSFFSD_2_FLAT  10h, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  10h, 1*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  14h, 0*4      ; psffsi
     call    FS32_CHGFILEPTRL
 VBOXSF_TO_16        FS_CHGFILEPTR
@@ -473,7 +816,8 @@ VBOXSF_EP16_END     FS_CHGFILEPTR
 ;
 VBOXSF_EP16_BEGIN   FS_CLOSE, 'FS_CLOSE'
 VBOXSF_TO_32        FS_CLOSE, 4*4
-    VBOXSF_PSFFSD_2_FLAT  08h, 3*4      ; psffsd
+    ;VBOXSF_PSFFSD_2_FLAT  08h, 3*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  08h, 3*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  0ch, 2*4      ; psffsi
     movzx   ecx, word [ebp + 10h]       ; IOflag
     mov     [esp + 1*4], ecx
@@ -490,7 +834,8 @@ VBOXSF_EP16_END     FS_CLOSE
 ;
 VBOXSF_EP16_BEGIN   FS_COMMIT, 'FS_COMMIT'
 VBOXSF_TO_32        FS_COMMIT, 4*4
-    VBOXSF_PSFFSD_2_FLAT  08h, 3*4      ; psffsd
+    ;VBOXSF_PSFFSD_2_FLAT  08h, 3*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  08h, 3*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  0ch, 2*4      ; psffsi
     movzx   ecx, word [ebp + 10h]       ; IOflag
     mov     [esp + 1*4], ecx
@@ -514,7 +859,8 @@ VBOXSF_TO_32        FS_COPY, 8*4
     movzx   eax, word [ebp + 10h]       ; iSrcCurDirEnd
     mov     [esp + 4*4], eax
     VBOXSF_FARPTR_2_FLAT  12h, 3*4      ; pszSrc
-    VBOXSF_PCDFSD_2_FLAT  16h, 2*4      ; psffsd
+    ;VBOXSF_PCDFSD_2_FLAT  16h, 2*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  16h, 2*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  1ah, 1*4      ; psffsi
     movzx   ecx, word [ebp + 1eh]       ; flag
     mov     [esp], ecx
@@ -531,7 +877,8 @@ VBOXSF_TO_32        FS_DELETE, 4*4
     movzx   ecx, word [ebp + 08h]       ; iCurDirEnd
     mov     [esp + 3*4], ecx
     VBOXSF_FARPTR_2_FLAT  0ah, 2*4      ; pszFile
-    VBOXSF_PCDFSD_2_FLAT  0eh, 1*4      ; pcdfsd
+    ;VBOXSF_PCDFSD_2_FLAT  0eh, 1*4      ; pcdfsd
+    VBOXSF_FARPTR_2_FLAT  0eh, 1*4      ; pcdfsd
     VBOXSF_FARPTR_2_FLAT  12h, 0*4      ; pcdfsi
     call    NAME(FS32_DELETE)
 VBOXSF_TO_16        FS_DELETE
@@ -544,7 +891,8 @@ VBOXSF_EP16_END FS_DELETE
 VBOXSF_EP16_BEGIN   FS_DOPAGEIO, 'FS_DOPAGEIO'
 VBOXSF_TO_32        FS_DOPAGEIO, 3*4
     VBOXSF_FARPTR_2_FLAT  08h, 2*4      ; pList
-    VBOXSF_PSFFSD_2_FLAT  0ch, 1*4      ; psffsd
+    ;VBOXSF_PSFFSD_2_FLAT  0ch, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  0ch, 1*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  10h, 0*4      ; psffsi
     call    NAME(FS32_DOPAGEIO)
 VBOXSF_TO_16        FS_DOPAGEIO
@@ -588,7 +936,8 @@ VBOXSF_TO_32        FS_FILEATTRIBUTE, 6*4
     movzx   ecx, word [ebp + 0ch]       ; iCurDirEnd
     mov     [esp + 4*4], ecx
     VBOXSF_FARPTR_2_FLAT  0eh, 3*4      ; pszName
-    VBOXSF_PCDFSD_2_FLAT  12h, 2*4      ; pcdfsd
+    ;VBOXSF_PCDFSD_2_FLAT  12h, 2*4      ; pcdfsd
+    VBOXSF_FARPTR_2_FLAT  12h, 2*4      ; pcdfsd
     VBOXSF_FARPTR_2_FLAT  16h, 1*4      ; pcdfsi
     movzx   edx, word [ebp + 1ah]       ; flag
     mov     [esp], edx
@@ -610,7 +959,8 @@ VBOXSF_TO_32        FS_FILEINFO, 7*4
     VBOXSF_FARPTR_2_FLAT  0ch, 4*4      ; pData
     movzx   eax, word [ebp + 10h]       ; level
     mov     [esp + 3*4], eax
-    VBOXSF_PSFFSD_2_FLAT  12h, 2*4      ; psffsd
+    ;VBOXSF_PSFFSD_2_FLAT  12h, 2*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  12h, 2*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  16h, 1*4      ; psffsi
     movzx   ecx, word [ebp + 1ah]       ; flag
     mov     [esp], ecx
@@ -631,7 +981,8 @@ VBOXSF_TO_32        FS_FILEIO, 6*4
     movzx   edx, word [ebp + 0eh]       ; cbCmdList
     mov     [esp + 3*4], edx
     VBOXSF_FARPTR_2_FLAT  10h, 2*4      ; pCmdList
-    VBOXSF_PSFFSD_2_FLAT  14h, 1*4      ; psffsd
+    ;VBOXSF_PSFFSD_2_FLAT  14h, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  14h, 1*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  18h, 0*4      ; psffsi
     call    NAME(FS32_FILEIO)
 VBOXSF_TO_16        FS_FILEIO
@@ -650,7 +1001,8 @@ VBOXSF_TO_32        FS_FILELOCKS, 6*4
     mov     [esp + 4*4], edx
     VBOXSF_FARPTR_2_FLAT  10h, 3*4      ; pLockRange
     VBOXSF_FARPTR_2_FLAT  14h, 2*4      ; pUnLockRange
-    VBOXSF_PSFFSD_2_FLAT  18h, 1*4      ; psffsd
+    ;VBOXSF_PSFFSD_2_FLAT  18h, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  18h, 1*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  1ch, 0*4      ; psffsi
     call    NAME(FS32_FILELOCKS)
 VBOXSF_TO_16        FS_FILELOCKS
@@ -669,7 +1021,8 @@ VBOXSF_TO_32        FS_FILELOCKSL, 6*4
     mov     [esp + 4*4], edx
     VBOXSF_FARPTR_2_FLAT  10h, 3*4      ; pLockRange
     VBOXSF_FARPTR_2_FLAT  14h, 2*4      ; pUnLockRange
-    VBOXSF_PSFFSD_2_FLAT  18h, 1*4      ; psffsd
+    ;VBOXSF_PSFFSD_2_FLAT  18h, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  18h, 1*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  1ch, 0*4      ; psffsi
     call    NAME(FS32_FILELOCKS)
 VBOXSF_TO_16        FS_FILELOCKSL
@@ -682,7 +1035,8 @@ VBOXSF_EP16_END     FS_FILELOCKSL
 ;
 VBOXSF_EP16_BEGIN   FS_FINDCLOSE, 'FS_FINDCLOSE'
 VBOXSF_TO_32        FS_FINDCLOSE, 2*4
-    VBOXSF_PFSFSD_2_FLAT  08h, 1*4      ; pfsfsd
+    ;VBOXSF_PFSFSD_2_FLAT  08h, 1*4      ; pfsfsd
+    VBOXSF_FARPTR_2_FLAT  08h, 1*4      ; pfsfsd
     VBOXSF_FARPTR_2_FLAT  0ch, 0*4      ; pfsfsi
     call    NAME(FS32_FINDCLOSE)
 VBOXSF_TO_16        FS_FINDCLOSE
@@ -712,7 +1066,8 @@ VBOXSF_TO_32        FS_FINDFIRST, 12*4
     movzx   edx, word [ebp + 20h]       ; iCurDirEnd
     mov     [esp + 3*4], edx
     VBOXSF_FARPTR_2_FLAT  22h, 2*4      ; pszName
-    VBOXSF_PCDFSD_2_FLAT  26h, 1*4      ; pcdfsd
+    ;VBOXSF_PCDFSD_2_FLAT  26h, 1*4      ; pcdfsd
+    VBOXSF_FARPTR_2_FLAT  26h, 1*4      ; pcdfsd
     VBOXSF_FARPTR_2_FLAT  2ah, 0*4      ; pcdfsi
     call    NAME(FS32_FINDFIRST)
 VBOXSF_TO_16        FS_FINDFIRST
@@ -737,7 +1092,8 @@ VBOXSF_TO_32        FS_FINDFROMNAME, 9*4
     movzx   eax, word [ebp + 18h]       ; cbData
     mov     [esp + 3*4], eax
     VBOXSF_FARPTR_2_FLAT  1ah, 2*4      ; pbData
-    VBOXSF_PFSFSD_2_FLAT  1eh, 1*4      ; pfsfsd
+    ;VBOXSF_PFSFSD_2_FLAT  1eh, 1*4      ; pfsfsd
+    VBOXSF_FARPTR_2_FLAT  1eh, 1*4      ; pfsfsd
     VBOXSF_FARPTR_2_FLAT  22h, 0*4      ; pfsfsi
     call    NAME(FS32_FINDFROMNAME)
 VBOXSF_TO_16        FS_FINDFROMNAME
@@ -759,7 +1115,8 @@ VBOXSF_TO_32        FS_FINDNEXT, 7*4
     movzx   eax, word [ebp + 10h]       ; cbData
     mov     [esp + 3*4], eax
     VBOXSF_FARPTR_2_FLAT  12h, 2*4      ; pbData
-    VBOXSF_PFSFSD_2_FLAT  16h, 1*4      ; pfsfsd
+    ;VBOXSF_PFSFSD_2_FLAT  16h, 1*4      ; pfsfsd
+    VBOXSF_FARPTR_2_FLAT  16h, 1*4      ; pfsfsd
     VBOXSF_FARPTR_2_FLAT  1ah, 0*4      ; pfsfsi
     call    NAME(FS32_FINDNEXT)
 VBOXSF_TO_16        FS_FINDNEXT
@@ -801,7 +1158,8 @@ VBOXSF_TO_32        FS_FINDNOTIFYFIRST, 11*4
     movzx   edx, word [ebp + 1ch]       ; iCurDirEnd
     mov     [esp + 3*4], edx
     VBOXSF_FARPTR_2_FLAT  1eh, 2*4      ; pszName
-    VBOXSF_PCDFSD_2_FLAT  22h, 1*4      ; pcdfsd
+    ;VBOXSF_PCDFSD_2_FLAT  22h, 1*4      ; pcdfsd
+    VBOXSF_FARPTR_2_FLAT  22h, 1*4      ; pcdfsd
     VBOXSF_FARPTR_2_FLAT  26h, 0*4      ; pcdfsi
     call    NAME(FS32_FINDNOTIFYFIRST)
 VBOXSF_TO_16        FS_FINDNOTIFYFIRST
@@ -884,14 +1242,14 @@ VBOXSF_EP16_END FS_FSCTL
 VBOXSF_EP16_BEGIN FS_FSINFO, 'FS_FSINFO'
 VBOXSF_TO_32        FS_FSINFO, 5*4
     movzx   ecx, word [ebp + 08h]       ; level
-    mov     [esp + 10h], ecx
+    mov     [esp + 4*4], ecx
     movzx   edx, word [ebp + 0ah]       ; cbData
-    mov     [esp + 0ch], edx
+    mov     [esp + 3*4], edx
     VBOXSF_FARPTR_2_FLAT  0ch, 2*4      ; pbData
     movzx   edx, word [ebp + 10h]       ; hVPB
-    mov     [esp], edx
+    mov     [esp + 1*4], edx
     movzx   eax, word [ebp + 12h]       ; flag
-    mov     [esp], eax
+    mov     [esp + 0*4], eax
     call    NAME(FS32_FSINFO)
 VBOXSF_TO_16        FS_FSINFO
     retf    14h
@@ -916,7 +1274,8 @@ VBOXSF_TO_32        FS_IOCTL, 10*4
     mov     [esp + 3*4], edx
     movzx   eax, word [ebp + 1eh]       ; func
     mov     [esp + 2*4], eax
-    VBOXSF_PSFFSD_2_FLAT  20h, 1*4      ; psffsd
+    ;VBOXSF_PSFFSD_2_FLAT  20h, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  20h, 1*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  24h, 0*4      ; pData
     call    NAME(FS32_IOCTL)
 VBOXSF_TO_16        FS_IOCTL
@@ -935,7 +1294,8 @@ VBOXSF_TO_32        FS_MKDIR, 6*4
     movzx   edx, word [ebp + 0eh]       ; iCurDirEnd
     mov     [esp + 3*4], edx
     VBOXSF_FARPTR_2_FLAT  10h, 2*4      ; pszName
-    VBOXSF_PCDFSD_2_FLAT  14h, 1*4      ; pcdfsd
+    ;VBOXSF_PCDFSD_2_FLAT  14h, 1*4      ; pcdfsd
+    VBOXSF_FARPTR_2_FLAT  14h, 1*4      ; pcdfsd
     VBOXSF_FARPTR_2_FLAT  18h, 0*4      ; pcdfsi
     call    NAME(FS32_MKDIR)
 VBOXSF_TO_16        FS_MKDIR
@@ -985,7 +1345,8 @@ VBOXSF_TO_32        FS_MOVE, 7*4
     movzx   eax, word [ebp + 10h]       ; iSrcCurDirEnd
     mov     [esp + 3*4], eax
     VBOXSF_FARPTR_2_FLAT  12h, 2*4      ; pszSrc
-    VBOXSF_PCDFSD_2_FLAT  16h, 1*4      ; psffsd
+    ;VBOXSF_PCDFSD_2_FLAT  16h, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  16h, 1*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  1ah, 0*4      ; psffsi
     call    NAME(FS32_MOVE)
 VBOXSF_TO_16        FS_MOVE
@@ -1002,7 +1363,8 @@ VBOXSF_TO_32        FS_NEWSIZE, 5*4     ; thunking to longlong edition.
     mov     eax, [ebp + 0ah]            ; cbFile (ULONG -> LONGLONG)
     mov     dword [esp + 3*4], 0
     mov     [esp + 2*4], eax
-    VBOXSF_PSFFSD_2_FLAT  0eh, 1*4      ; psffsd
+    ;VBOXSF_PSFFSD_2_FLAT  0eh, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  0eh, 1*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  12h, 0*4      ; psffsi
     call            NAME(FS32_NEWSIZEL)
 VBOXSF_TO_16        FS_NEWSIZE
@@ -1020,7 +1382,8 @@ VBOXSF_TO_32        FS_NEWSIZEL, 5*4
     mov     edx, [ebp + 0eh]
     mov     [esp + 3*4], edx
     mov     [esp + 2*4], eax
-    VBOXSF_PSFFSD_2_FLAT  12h, 1*4      ; psffsd
+    ;VBOXSF_PSFFSD_2_FLAT  12h, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  12h, 1*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  16h, 0*4      ; psffsi
     call            NAME(FS32_NEWSIZEL)
 VBOXSF_TO_16        FS_NEWSIZEL
@@ -1066,7 +1429,8 @@ VBOXSF_TO_32        FS_OPENCREATE, 12*4
     movzx   ecx, word [ebp + 24h]       ; iCurDirEnd
     mov     [esp + 3*4], ecx
     VBOXSF_FARPTR_2_FLAT  26h, 2*4      ; pszName
-    VBOXSF_PCDFSD_2_FLAT  2ah, 1*4      ; pcdfsd
+    ;VBOXSF_PCDFSD_2_FLAT  2ah, 1*4      ; pcdfsd
+    VBOXSF_FARPTR_2_FLAT  2ah, 1*4      ; pcdfsd
     VBOXSF_FARPTR_2_FLAT  2eh, 0*4      ; pcdfsi
     call    NAME(FS32_OPENCREATE)
 VBOXSF_TO_16        FS_OPENCREATE
@@ -1111,7 +1475,8 @@ VBOXSF_TO_32        FS_PATHINFO, 8*4
     movzx   eax, word [ebp + 10h]       ; iCurDirEnd
     mov     [esp + 4*4], eax
     VBOXSF_FARPTR_2_FLAT  12h, 3*4      ; pszName
-    VBOXSF_PCDFSD_2_FLAT  16h, 2*4      ; pcdfsd
+    ;VBOXSF_PCDFSD_2_FLAT  16h, 2*4      ; pcdfsd
+    VBOXSF_FARPTR_2_FLAT  16h, 2*4      ; pcdfsd
     VBOXSF_FARPTR_2_FLAT  1ah, 1*4      ; pcdfsi
     movzx   edx, word [ebp + 1eh]       ; flag
     mov     [esp], edx
@@ -1135,9 +1500,10 @@ VBOXSF_EP16_END FS_PROCESSNAME
 ; @cproto int FS_READ(PSFFSI psffsi, PVBOXSFFSD psffsd, PBYTE pbData, PUSHORT pcbData, USHORT IOflag)
 VBOXSF_EP16_BEGIN   FS_READ, 'FS_READ'
 VBOXSF_TO_32        FS_READ, 6*4        ; extra local for ULONG cbDataTmp.
-    movzx   ecx, word [ebp + 08h]       ; IOflag
+    push    es
+    movzx   ecx, word [ebp + 0ah]       ; IOflag
     mov     [esp + 4*4], ecx
-    les     dx, [ebp + 0ah]             ; cbDataTmp = *pcbData;
+    les     dx, [ebp + 0ch]             ; cbDataTmp = *pcbData;
     movzx   edx, dx
     lea     ecx, [esp + 5*4]            ; pcbData = &cbDataTmp
     movzx   eax, word [es:edx]
@@ -1145,12 +1511,13 @@ VBOXSF_TO_32        FS_READ, 6*4        ; extra local for ULONG cbDataTmp.
     mov     [esp + 3*4], ecx
     mov     edx, DATA32
     mov     es, edx
-    VBOXSF_FARPTR_2_FLAT  0eh, 2*4      ; pbData
-    VBOXSF_PSFFSD_2_FLAT  12h, 1*4      ; psffsd
-    VBOXSF_FARPTR_2_FLAT  16h, 0*4      ; psffsi
+    VBOXSF_FARPTR_2_FLAT  10h, 2*4      ; pbData
+    ;VBOXSF_PSFFSD_2_FLAT  12h, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  14h, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  18h, 0*4      ; psffsi
     call    FS32_READ
 
-    les     dx, [ebp + 0ah]             ; *pcbData = cbDataTmp;
+    les     dx, [ebp + 0ch]             ; *pcbData = cbDataTmp;
     movzx   edx, dx
     mov     cx, [esp + 5*4]
     mov     [es:edx], cx
@@ -1172,7 +1539,8 @@ VBOXSF_TO_32        FS_RMDIR, 4*4
     movzx   edx, word [ebp + 08h]       ; iCurDirEnd
     mov     [esp + 3*4], edx
     VBOXSF_FARPTR_2_FLAT  0ah, 2*4      ; pszName
-    VBOXSF_PCDFSD_2_FLAT  0eh, 1*4      ; pcdfsd
+    ;VBOXSF_PCDFSD_2_FLAT  0eh, 1*4      ; pcdfsd
+    VBOXSF_FARPTR_2_FLAT  0eh, 1*4      ; pcdfsd
     VBOXSF_FARPTR_2_FLAT  12h, 0*4      ; pcdfsi
     call    NAME(FS32_RMDIR)
 VBOXSF_TO_16        FS_RMDIR
@@ -1185,7 +1553,8 @@ VBOXSF_EP16_END     FS_RMDIR
 ;
 VBOXSF_EP16_BEGIN FS_SETSWAP, 'FS_SETSWAP'
 VBOXSF_TO_32        FS_SETSWAP, 2*4
-    VBOXSF_PSFFSD_2_FLAT  08h, 1*4      ; psffsd
+    ;VBOXSF_PSFFSD_2_FLAT  08h, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  08h, 1*4      ; psffsd
     VBOXSF_FARPTR_2_FLAT  0ch, 0*4      ; psffsi
     call    NAME(FS32_SETSWAP)
 VBOXSF_TO_16        FS_SETSWAP
@@ -1209,12 +1578,27 @@ VBOXSF_EP16_END     FS_SHUTDOWN
 
 
 ;;
+; @cproto int FS_VERIFYUNCNAME(USHORT flag, PCSZ pszName)
+;
+VBOXSF_EP16_BEGIN   FS_VERIFYUNCNAME, 'FS_VERIFYUNCNAME'
+VBOXSF_TO_32        FS_VERIFYUNCNAME, 2*4
+    VBOXSF_FARPTR_2_FLAT  08h, 1*4      ; pszName
+    movzx   edx, word [ebp + 0ch]       ; flag
+    mov     [esp + 0*4], edx
+    call    NAME(FS32_VERIFYUNCNAME)
+VBOXSF_TO_16        FS_VERIFYUNCNAME
+    retf    6h
+VBOXSF_EP16_END     FS_VERIFYUNCNAME
+
+
+;;
 ; @cproto int FS_WRITE(PSFFSI psffsi, PVBOXSFFSD psffsd, PBYTE pbData, PUSHORT pcbData, USHORT IOflag)
 VBOXSF_EP16_BEGIN   FS_WRITE, 'FS_WRITE'
 VBOXSF_TO_32        FS_WRITE, 6*4       ; extra local for ULONG cbDataTmp.
-    movzx   ecx, word [ebp + 08h]       ; IOflag
+    push    es
+    movzx   ecx, word [ebp + 0ah]       ; IOflag
     mov     [esp + 4*4], ecx
-    les     dx, [ebp + 0ah]             ; cbDataTmp = *pcbData;
+    les     dx, [ebp + 0ch]             ; cbDataTmp = *pcbData;
     movzx   edx, dx
     lea     ecx, [esp + 5*4]            ; pcbData = &cbDataTmp
     movzx   eax, word [es:edx]
@@ -1222,12 +1606,13 @@ VBOXSF_TO_32        FS_WRITE, 6*4       ; extra local for ULONG cbDataTmp.
     mov     [esp + 3*4], ecx
     mov     edx, DATA32
     mov     es, edx
-    VBOXSF_FARPTR_2_FLAT  0eh, 2*4      ; pbData
-    VBOXSF_PSFFSD_2_FLAT  12h, 1*4      ; psffsd
-    VBOXSF_FARPTR_2_FLAT  16h, 0*4      ; psffsi
+    VBOXSF_FARPTR_2_FLAT  10h, 2*4      ; pbData
+    ;VBOXSF_PSFFSD_2_FLAT  12h, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  14h, 1*4      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  18h, 0*4      ; psffsi
     call    FS32_WRITE
 
-    les     dx, [ebp + 0ah]             ; *pcbData = cbDataTmp;
+    les     dx, [ebp + 0ch]             ; *pcbData = cbDataTmp;
     movzx   edx, dx
     mov     cx, [esp + 5*4]
     mov     [es:edx], cx
