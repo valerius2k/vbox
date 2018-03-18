@@ -40,7 +40,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *	@(#)ip.h	8.2 (Berkeley) 6/1/94
- *	$Id: ip.h $
+ *	$Id: ip.h,v 1.1.1.1 2006/05/30 06:12:48 hhzhou Exp $
  */
 
 #ifndef _NETINET_IP_H_

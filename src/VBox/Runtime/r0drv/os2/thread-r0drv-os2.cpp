@@ -98,8 +98,8 @@ RTDECL(bool) RTThreadYield(void)
 {
     switch (RTMpOs2GetApiExt())
     {
-        case ISCS_OS4_MP:
-            return KernYield();
+        //case ISCS_OS4_MP:
+        //    return KernYield();
 
         default:
             return RTR0Os2DHYield();
@@ -117,24 +117,49 @@ RTDECL(bool) RTThreadPreemptIsEnabled(RTTHREAD hThread)
 }
 
 
+#define MAX_VCPUS 32
+
 RTDECL(bool) RTThreadPreemptIsPending(RTTHREAD hThread)
 {
-    static uint32_t msecs = 0;
-    uint32_t msecs_prev;
+    /* array of msec counters per EMT */
+    static uint32_t msecs[MAX_VCPUS] = {0};
+    /* array of known EMT thread ID's */
+    static RTTHREAD vcpus[MAX_VCPUS] = {0};
+    uint32_t ms_prev, ms = 0;
+    RTTHREAD thread = RTThreadSelf();
+    bool found = false;
+    int i;
 
     Assert(hThread == NIL_RTTHREAD);
+    Assert(thread);
 
-    msecs_prev = msecs;
-    msecs = g_pGIS->msecs;
+    for (i = 0; i < MAX_VCPUS && vcpus[i]; i++)
+    {
+        if (vcpus[i] == thread)
+        {
+            found = true;
+            break;
+        }
+    }
+
+    Assert(i <= MAX_VCPUS);
+
+    /* if EMT is not found, then store its thread ID */
+    if (! found)
+        vcpus[i] = thread;
+
+    ms_prev = msecs[i];
+    ms = g_pGIS->msecs;
+    msecs[i] = ms;
 
     switch (RTMpOs2GetApiExt())
     {
-        case ISCS_OS4_MP:
-            if (KernGetReschedStatus())
-                return true;
-
-            if (KernGetTCReschedStatus())
-                return true;
+        //case ISCS_OS4_MP:
+        //    if (KernGetReschedStatus())
+        //        return true;
+        //
+        //    if (KernGetTCReschedStatus())
+        //        return true;
 
         default:
             union
@@ -158,7 +183,7 @@ RTDECL(bool) RTThreadPreemptIsPending(RTTHREAD hThread)
     }
 
     // if milliseconds are incremented since the last call
-    if (msecs != msecs_prev)
+    if (ms != ms_prev)
         return true;
 
     return false;

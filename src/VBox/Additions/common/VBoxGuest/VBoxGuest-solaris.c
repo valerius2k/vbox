@@ -252,11 +252,9 @@ int _fini(void)
     RTLogDestroy(RTLogRelSetDefaultInstance(NULL));
     RTLogDestroy(RTLogSetDefaultInstance(NULL));
 
-    if (!rc)
-    {
-        mutex_destroy(&g_LdiMtx);
-        RTR0Term();
-    }
+    mutex_destroy(&g_LdiMtx);
+
+    RTR0Term();
     return rc;
 }
 

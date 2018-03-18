@@ -1,4 +1,4 @@
-/* $Id: HBDMgmt-generic.cpp $ */
+/* $Id: HBDMgmt-generic.cpp 56967 2015-07-17 13:07:09Z vboxsync $ */
 /** @file
  * VBox storage devices: Host block device management API.
  */

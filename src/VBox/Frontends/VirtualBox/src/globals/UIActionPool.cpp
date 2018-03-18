@@ -462,14 +462,9 @@ protected:
         return QString("Close");
     }
 
-    QKeySequence defaultShortcut(UIActionPoolType actionPoolType) const
+    QKeySequence defaultShortcut(UIActionPoolType) const
     {
-        switch (actionPoolType)
-        {
-            case UIActionPoolType_Selector: break;
-            case UIActionPoolType_Runtime: return QKeySequence("Q");
-        }
-        return QKeySequence();
+        return QKeySequence("Q");
     }
 
     void retranslateUi()

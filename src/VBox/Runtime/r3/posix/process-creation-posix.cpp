@@ -40,9 +40,9 @@
 #include <fcntl.h>
 #include <signal.h>
 #include <grp.h>
-#include <pwd.h>
 #if defined(RT_OS_LINUX) || defined(RT_OS_SOLARIS)
 # include <crypt.h>
+# include <pwd.h>
 # include <shadow.h>
 #endif
 
@@ -70,15 +70,6 @@
 # include <sys/contract/process.h>
 # include <libcontract.h>
 #endif
-
-#ifndef RT_OS_SOLARIS
-# include <paths.h>
-#else
-# define _PATH_MAILDIR "/var/mail"
-# define _PATH_DEFPATH "/usr/bin:/bin"
-# define _PATH_STDPATH "/sbin:/usr/sbin:/bin:/usr/bin"
-#endif
-
 
 #include <iprt/process.h>
 #include "internal/iprt.h"
@@ -111,7 +102,7 @@ static int rtCheckCredentials(const char *pszUser, const char *pszPasswd, gid_t 
 
     pw = getpwnam(pszUser);
     if (!pw)
-        return VERR_AUTHENTICATION_FAILURE;
+        return VERR_PERMISSION_DENIED;
 
     if (!pszPasswd)
         pszPasswd = "";
@@ -135,7 +126,7 @@ static int rtCheckCredentials(const char *pszUser, const char *pszPasswd, gid_t 
         RTMemTmpFree(data);
     }
     if (!fCorrect)
-        return VERR_AUTHENTICATION_FAILURE;
+        return VERR_PERMISSION_DENIED;
 
     *pGid = pw->pw_gid;
     *pUid = pw->pw_uid;
@@ -146,7 +137,7 @@ static int rtCheckCredentials(const char *pszUser, const char *pszPasswd, gid_t 
     char szBuf[1024];
 
     if (getpwnam_r(pszUser, &pw, szBuf, sizeof(szBuf), &ppw) != 0 || ppw == NULL)
-        return VERR_AUTHENTICATION_FAILURE;
+        return VERR_PERMISSION_DENIED;
 
     if (!pszPasswd)
         pszPasswd = "";
@@ -159,7 +150,7 @@ static int rtCheckCredentials(const char *pszUser, const char *pszPasswd, gid_t 
 
     char *pszEncPasswd = crypt(pszPasswd, ppw->pw_passwd);
     if (strcmp(pszEncPasswd, ppw->pw_passwd))
-        return VERR_AUTHENTICATION_FAILURE;
+        return VERR_PERMISSION_DENIED;
 
     *pGid = ppw->pw_gid;
     *pUid = ppw->pw_uid;
@@ -167,7 +158,7 @@ static int rtCheckCredentials(const char *pszUser, const char *pszPasswd, gid_t 
 
 #else
     NOREF(pszUser); NOREF(pszPasswd); NOREF(pGid); NOREF(pUid);
-    return VERR_AUTHENTICATION_FAILURE;
+    return VERR_PERMISSION_DENIED;
 #endif
 }
 
@@ -283,138 +274,6 @@ RTR3DECL(int)   RTProcCreate(const char *pszExec, const char * const *papszArgs,
 
 
 /**
- * Adjust the profile environment after forking the child process and changing
- * the UID.
- *
- * @returns IRPT status code.
- * @param   hEnvToUse       The environment we're going to use with execve.
- * @param   fFlags          The process creation flags.
- * @param   hEnv            The environment passed in by the user.
- */
-static int rtProcPosixAdjustProfileEnvFromChild(RTENV hEnvToUse, uint32_t fFlags, RTENV hEnv)
-{
-    int rc = VINF_SUCCESS;
-#ifdef RT_OS_DARWIN
-    if (   RT_SUCCESS(rc)
-        && (!(fFlags & RTPROC_FLAGS_ENV_CHANGE_RECORD) || RTEnvExistEx(hEnv, "TMPDIR")) )
-    {
-        char szValue[_4K];
-        size_t cbNeeded = confstr(_CS_DARWIN_USER_TEMP_DIR, szValue, sizeof(szValue));
-        if (cbNeeded > 0 && cbNeeded < sizeof(szValue))
-        {
-            char *pszTmp;
-            rc = RTStrCurrentCPToUtf8(&pszTmp, szValue);
-            if (RT_SUCCESS(rc))
-            {
-                rc = RTEnvSetEx(hEnvToUse, "TMPDIR", pszTmp);
-                RTStrFree(pszTmp);
-            }
-        }
-        else
-            rc = VERR_BUFFER_OVERFLOW;
-    }
-#endif
-    return rc;
-}
-
-
-/**
- * Create a very very basic environment for a user.
- *
- * @returns IPRT status code.
- * @param   phEnvToUse  Where to return the created environment.
- * @param   pszUser     The user name for the profile.
- */
-static int rtProcPosixCreateProfileEnv(PRTENV phEnvToUse, const char *pszUser)
-{
-    struct passwd   Pwd;
-    struct passwd  *pPwd = NULL;
-    char            achBuf[_4K];
-    int             rc;
-    errno = 0;
-    if (pszUser)
-        rc = getpwnam_r(pszUser, &Pwd, achBuf, sizeof(achBuf), &pPwd);
-    else
-        rc = getpwuid_r(getuid(), &Pwd, achBuf, sizeof(achBuf), &pPwd);
-    if (rc == 0 && pPwd)
-    {
-        char *pszDir;
-        rc = RTStrCurrentCPToUtf8(&pszDir, pPwd->pw_dir);
-        if (RT_SUCCESS(rc))
-        {
-            char *pszShell;
-            rc = RTStrCurrentCPToUtf8(&pszShell, pPwd->pw_shell);
-            if (RT_SUCCESS(rc))
-            {
-                char *pszUserFree = NULL;
-                if (!pszUser)
-                {
-                    rc = RTStrCurrentCPToUtf8(&pszUserFree, pPwd->pw_name);
-                    if (RT_SUCCESS(rc))
-                        pszUser = pszUserFree;
-                }
-                if (RT_SUCCESS(rc))
-                {
-                    rc = RTEnvCreate(phEnvToUse);
-                    if (RT_SUCCESS(rc))
-                    {
-                        RTENV hEnvToUse = *phEnvToUse;
-
-                        rc = RTEnvSetEx(hEnvToUse, "HOME", pszDir);
-                        if (RT_SUCCESS(rc))
-                            rc = RTEnvSetEx(hEnvToUse, "SHELL", pszShell);
-                        if (RT_SUCCESS(rc))
-                            rc = RTEnvSetEx(hEnvToUse, "USER", pszUser);
-                        if (RT_SUCCESS(rc))
-                            rc = RTEnvSetEx(hEnvToUse, "LOGNAME", pszUser);
-
-                        if (RT_SUCCESS(rc))
-                            rc = RTEnvSetEx(hEnvToUse, "PATH", pPwd->pw_uid == 0 ? _PATH_STDPATH : _PATH_DEFPATH);
-
-                        if (RT_SUCCESS(rc))
-                        {
-                            RTStrPrintf(achBuf, sizeof(achBuf), "%s/%s", _PATH_MAILDIR, pszUser);
-                            rc = RTEnvSetEx(hEnvToUse, "MAIL", achBuf);
-                        }
-
-#ifdef RT_OS_DARWIN
-                        if (RT_SUCCESS(rc) && !pszUserFree)
-                        {
-                            size_t cbNeeded = confstr(_CS_DARWIN_USER_TEMP_DIR, achBuf, sizeof(achBuf));
-                            if (cbNeeded > 0 && cbNeeded < sizeof(achBuf))
-                            {
-                                char *pszTmp;
-                                rc = RTStrCurrentCPToUtf8(&pszTmp, achBuf);
-                                if (RT_SUCCESS(rc))
-                                {
-                                    rc = RTEnvSetEx(hEnvToUse, "TMPDIR", pszTmp);
-                                    RTStrFree(pszTmp);
-                                }
-                            }
-                            else
-                                rc = VERR_BUFFER_OVERFLOW;
-                        }
-#endif
-
-                        /** @todo load /etc/environment, /etc/profile.env and ~/.pam_environment? */
-
-                        if (RT_FAILURE(rc))
-                            RTEnvDestroy(hEnvToUse);
-                    }
-                    RTStrFree(pszUserFree);
-                }
-                RTStrFree(pszShell);
-            }
-            RTStrFree(pszDir);
-        }
-    }
-    else
-        rc = errno ? RTErrConvertFromErrno(errno) : VERR_ACCESS_DENIED;
-    return rc;
-}
-
-
-/**
  * RTPathTraverseList callback used by RTProcCreateEx to locate the executable.
  */
 static DECLCALLBACK(int) rtPathFindExec(char const *pchPath, size_t cchPath, void *pvUser1, void *pvUser2)
@@ -432,16 +291,6 @@ static DECLCALLBACK(int) rtPathFindExec(char const *pchPath, size_t cchPath, voi
     return VERR_TRY_AGAIN;
 }
 
-/**
- * Cleans up the environment on the way out.
- */
-static int rtProcPosixCreateReturn(int rc, RTENV hEnvToUse, RTENV hEnv)
-{
-    if (hEnvToUse != hEnv)
-        RTEnvDestroy(hEnvToUse);
-    return rc;
-}
-
 
 RTR3DECL(int)   RTProcCreateEx(const char *pszExec, const char * const *papszArgs, RTENV hEnv, uint32_t fFlags,
                                PCRTHANDLE phStdIn, PCRTHANDLE phStdOut, PCRTHANDLE phStdErr, const char *pszAsUser,
@@ -457,7 +306,10 @@ RTR3DECL(int)   RTProcCreateEx(const char *pszExec, const char * const *papszArg
     AssertReturn(!(fFlags & ~RTPROC_FLAGS_VALID_MASK), VERR_INVALID_PARAMETER);
     AssertReturn(!(fFlags & RTPROC_FLAGS_DETACHED) || !phProcess, VERR_INVALID_PARAMETER);
     AssertReturn(hEnv != NIL_RTENV, VERR_INVALID_PARAMETER);
+    const char * const *papszEnv = RTEnvGetExecEnvP(hEnv);
+    AssertPtrReturn(papszEnv, VERR_INVALID_HANDLE);
     AssertPtrReturn(papszArgs, VERR_INVALID_PARAMETER);
+    /** @todo search the PATH (add flag for this). */
     AssertPtrNullReturn(pszAsUser, VERR_INVALID_POINTER);
     AssertReturn(!pszAsUser || *pszAsUser, VERR_INVALID_PARAMETER);
     AssertReturn(!pszPassword || pszAsUser, VERR_INVALID_PARAMETER);
@@ -526,60 +378,26 @@ RTR3DECL(int)   RTProcCreateEx(const char *pszExec, const char * const *papszArg
     }
 
     /*
-     * Create the child environment if either RTPROC_FLAGS_PROFILE or
-     * RTPROC_FLAGS_ENV_CHANGE_RECORD are in effect.
-     */
-    RTENV hEnvToUse = hEnv;
-    if (   (fFlags & (RTPROC_FLAGS_ENV_CHANGE_RECORD | RTPROC_FLAGS_PROFILE))
-        && (   (fFlags & RTPROC_FLAGS_ENV_CHANGE_RECORD)
-            || hEnv == RTENV_DEFAULT) )
-    {
-        if (fFlags & RTPROC_FLAGS_PROFILE)
-            rc = rtProcPosixCreateProfileEnv(&hEnvToUse, pszAsUser);
-        else
-            rc = RTEnvClone(&hEnvToUse, RTENV_DEFAULT);
-        if (RT_SUCCESS(rc))
-        {
-            if ((fFlags & RTPROC_FLAGS_ENV_CHANGE_RECORD) && hEnv != RTENV_DEFAULT)
-                rc = RTEnvApplyChanges(hEnvToUse, hEnv);
-            if (RT_FAILURE(rc))
-                RTEnvDestroy(hEnvToUse);
-        }
-        if (RT_FAILURE(rc))
-            return rc;
-    }
-
-    /*
      * Check for execute access to the file.
      */
     char szRealExec[RTPATH_MAX];
     if (access(pszExec, X_OK))
     {
-        rc = errno;
         if (   !(fFlags & RTPROC_FLAGS_SEARCH_PATH)
-            || rc != ENOENT
+            || errno != ENOENT
             || RTPathHavePath(pszExec) )
-            rc = RTErrConvertFromErrno(rc);
-        else
-        {
-            /* search */
-            char *pszPath = RTEnvDupEx(hEnvToUse, "PATH");
-            rc = RTPathTraverseList(pszPath, ':', rtPathFindExec, (void *)pszExec, &szRealExec[0]);
-            RTStrFree(pszPath);
-            if (RT_SUCCESS(rc))
-                pszExec = szRealExec;
-            else
-                rc = rc == VERR_END_OF_STRING ? VERR_FILE_NOT_FOUND : rc;
-        }
+            return RTErrConvertFromErrno(errno);
 
+        /* search */
+        char *pszPath = RTEnvDupEx(hEnv, "PATH");
+        rc = RTPathTraverseList(pszPath, ':', rtPathFindExec, (void *)pszExec, &szRealExec[0]);
+        RTStrFree(pszPath);
         if (RT_FAILURE(rc))
-            return rtProcPosixCreateReturn(rc, hEnvToUse, hEnv);
+            return rc == VERR_END_OF_STRING ? VERR_FILE_NOT_FOUND : rc;
+        pszExec = szRealExec;
     }
 
     pid_t pid = -1;
-    const char * const *papszEnv = RTEnvGetExecEnvP(hEnvToUse);
-    AssertPtrReturn(papszEnv, rtProcPosixCreateReturn(VERR_INVALID_HANDLE, hEnvToUse, hEnv));
-
 
     /*
      * Take care of detaching the process.
@@ -599,7 +417,7 @@ RTR3DECL(int)   RTProcCreateEx(const char *pszExec, const char * const *papszArg
         {
             templateFd = rtSolarisContractPreFork();
             if (templateFd == -1)
-                return rtProcPosixCreateReturn(VERR_OPEN_FAILED, hEnvToUse, hEnv);
+                return VERR_OPEN_FAILED;
         }
 # endif /* RT_OS_SOLARIS */
         pid = fork();
@@ -608,7 +426,7 @@ RTR3DECL(int)   RTProcCreateEx(const char *pszExec, const char * const *papszArg
 # ifdef RT_OS_SOLARIS
             if (!(fFlags & RTPROC_FLAGS_SAME_CONTRACT))
                 rtSolarisContractPostForkChild(templateFd);
-# endif
+# endif /* RT_OS_SOLARIS */
             setsid(); /* see comment above */
 
             pid = -1;
@@ -616,10 +434,10 @@ RTR3DECL(int)   RTProcCreateEx(const char *pszExec, const char * const *papszArg
         }
         else
         {
-# ifdef RT_OS_SOLARIS
+#ifdef RT_OS_SOLARIS
             if (!(fFlags & RTPROC_FLAGS_SAME_CONTRACT))
                 rtSolarisContractPostForkParent(templateFd, pid);
-# endif
+#endif /* RT_OS_SOLARIS */
             if (pid > 0)
             {
                 /* Must wait for the temporary process to avoid a zombie. */
@@ -635,12 +453,12 @@ RTR3DECL(int)   RTProcCreateEx(const char *pszExec, const char * const *papszArg
 
                 /* Assume that something wasn't found. No detailed info. */
                 if (status)
-                    return rtProcPosixCreateReturn(VERR_PROCESS_NOT_FOUND, hEnvToUse, hEnv);
+                    return VERR_PROCESS_NOT_FOUND;
                 if (phProcess)
                     *phProcess = 0;
-                return rtProcPosixCreateReturn(VINF_SUCCESS, hEnvToUse, hEnv);
+                return VINF_SUCCESS;
             }
-            return rtProcPosixCreateReturn(RTErrConvertFromErrno(errno), hEnvToUse, hEnv);
+            return RTErrConvertFromErrno(errno);
         }
     }
 #endif
@@ -741,7 +559,7 @@ RTR3DECL(int)   RTProcCreateEx(const char *pszExec, const char * const *papszArg
                     _Exit(0);
                 if (phProcess)
                     *phProcess = pid;
-                return rtProcPosixCreateReturn(VINF_SUCCESS, hEnvToUse, hEnv);
+                return VINF_SUCCESS;
             }
         }
         /* For a detached process this happens in the temp process, so
@@ -758,7 +576,7 @@ RTR3DECL(int)   RTProcCreateEx(const char *pszExec, const char * const *papszArg
         {
             templateFd = rtSolarisContractPreFork();
             if (templateFd == -1)
-                return rtProcPosixCreateReturn(VERR_OPEN_FAILED, hEnvToUse, hEnv);
+                return VERR_OPEN_FAILED;
         }
 #endif /* RT_OS_SOLARIS */
         pid = fork();
@@ -808,25 +626,6 @@ RTR3DECL(int)   RTProcCreateEx(const char *pszExec, const char * const *papszArg
                 }
             }
 #endif
-
-            /*
-             * Some final profile environment tweaks, if running as user.
-             */
-            if (   (fFlags & RTPROC_FLAGS_PROFILE)
-                && pszAsUser
-                && (   (fFlags & RTPROC_FLAGS_ENV_CHANGE_RECORD)
-                    || hEnv == RTENV_DEFAULT) )
-            {
-                rc = rtProcPosixAdjustProfileEnvFromChild(hEnvToUse, fFlags, hEnv);
-                papszEnv = RTEnvGetExecEnvP(hEnvToUse);
-                if (RT_FAILURE(rc) || !papszEnv)
-                {
-                    if (fFlags & RTPROC_FLAGS_DETACHED)
-                        _Exit(126);
-                    else
-                        exit(126);
-                }
-            }
 
             /*
              * Unset the signal mask.
@@ -894,16 +693,16 @@ RTR3DECL(int)   RTProcCreateEx(const char *pszExec, const char * const *papszArg
                 _Exit(0);
             if (phProcess)
                 *phProcess = pid;
-            return rtProcPosixCreateReturn(VINF_SUCCESS, hEnvToUse, hEnv);
+            return VINF_SUCCESS;
         }
         /* For a detached process this happens in the temp process, so
          * it's not worth doing anything as this process must exit. */
         if (fFlags & RTPROC_FLAGS_DETACHED)
             _Exit(124);
-        return rtProcPosixCreateReturn(RTErrConvertFromErrno(errno), hEnvToUse, hEnv);
+        return RTErrConvertFromErrno(errno);
     }
 
-    return rtProcPosixCreateReturn(VERR_NOT_IMPLEMENTED, hEnvToUse, hEnv);
+    return VERR_NOT_IMPLEMENTED;
 }
 
 

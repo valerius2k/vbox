@@ -43,7 +43,7 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *	@(#)sysctl.h	8.1 (Berkeley) 6/2/93
- * $Id: sysctl.h $
+ * $Id: sysctl.h,v 1.1.1.1 2006/05/30 06:13:00 hhzhou Exp $
  */
 
 #ifndef _SYS_SYSCTL_H_

@@ -1854,7 +1854,8 @@ int UsbCardReader::SetAttrib(struct USBCARDREADER *pDrv,
         pThis->hReqQCardReaderCmd = NIL_RTREQQUEUE;
     }
 
-    pThis->pUsbCardReader->mpDrv = NULL;
+    /** @todo r=bird: why doesn't this set pThis->pUsbCardReader->mpDrv to NULL like
+     *        everyone else? */
     pThis->pUsbCardReader = NULL;
     LogFlowFuncLeave();
 }

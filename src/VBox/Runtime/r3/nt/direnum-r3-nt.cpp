@@ -349,10 +349,7 @@ static int rtDirNtFetchMore(PRTDIR pThis)
          *
          * Thus the mess.
          */
-        if (RT_MAKE_U64(RTNtCurrentPeb()->OSMinorVersion, RTNtCurrentPeb()->OSMajorVersion) > RT_MAKE_U64(0,5) /* > W2K */)
-            pThis->enmInfoClass = FileIdBothDirectoryInformation; /* Introduced in XP, from I can tell. */
-        else
-            pThis->enmInfoClass = FileBothDirectoryInformation;
+        pThis->enmInfoClass = FileIdBothDirectoryInformation;
         rcNt = NtQueryDirectoryFile(pThis->hDir,
                                     NULL /* Event */,
                                     NULL /* ApcRoutine */,

@@ -328,8 +328,8 @@ PRProcess * _PR_CreateOS2ProcessEx(
     }
 
     if (attr) {
-        if (attr->stdinFd || attr->stdoutFd || attr->stderrFd)
-            PR_ASSERT(!"Stdin/stdout redirection is not implemented");
+        //if (attr->stdinFd || attr->stdoutFd || attr->stderrFd)
+        //    PR_ASSERT(!"Stdin/stdout redirection is not implemented");
         if (attr->currentDirectory)
             PR_ASSERT(!"Setting current directory is not implemented");
     }

@@ -77,16 +77,16 @@
         <translation>De VirtualBox kernelmodules passen niet bij deze versie van VirtualBox. De installatie van VirtualBox is kennelijk niet goed gelukt. Deïnstalleer VirtualBox eerst volledig en installeer VirtualBox daarna opnieuw.</translation>
     </message>
     <message>
-        <source>The VirtualBox kernel modules do not match this version of VirtualBox. The installation of VirtualBox was apparently not successful. Executing&lt;br/&gt;&lt;br/&gt;  &lt;font color=blue&gt;&apos;/sbin/rcvboxdrv setup&apos;&lt;/font&gt;&lt;br/&gt;&lt;br/&gt;may correct this. Make sure that you do not mix the OSE version and the PUEL version of VirtualBox.</source>
-        <translation>De VirtualBox kernelmodules passen niet bij deze versie van VirtualBox. De installatie van VirtualBox is kennelijk niet goed gelukt. Uitvoeren van &lt;br/&gt;&lt;br/&gt;&lt;font color=blue&gt;&apos;/sbin/rcvboxdrv setup&apos;&lt;/font&gt;&lt;br/&gt;&lt;br/&gt; zou dit kunnen corrigeren. Controleer of u de OSE versie en de PUEL versie van VirtualBox niet hebt vermengd.</translation>
+        <source>The VirtualBox kernel modules do not match this version of VirtualBox. The installation of VirtualBox was apparently not successful. Executing&lt;br/&gt;&lt;br/&gt;  &lt;font color=blue&gt;&apos;/etc/init.d/vboxdrv setup&apos;&lt;/font&gt;&lt;br/&gt;&lt;br/&gt;may correct this. Make sure that you do not mix the OSE version and the PUEL version of VirtualBox.</source>
+        <translation>De VirtualBox kernelmodules passen niet bij deze versie van VirtualBox. De installatie van VirtualBox is kennelijk niet goed gelukt. Uitvoeren van &lt;br/&gt;&lt;br/&gt;&lt;font color=blue&gt;&apos;/etc/init.d/vboxdrv setup&apos;&lt;/font&gt;&lt;br/&gt;&lt;br/&gt; zou dit kunnen corrigeren. Controleer of u de OSE versie en de PUEL versie van VirtualBox niet hebt vermengd.</translation>
     </message>
     <message>
         <source>This error means that the kernel driver was either not able to allocate enough memory or that some mapping operation failed.</source>
         <translation>Deze fout betekent dat de kerneldriver óf te weinig geheugen kan reserveren óf dat uitvoeren van mapping mislukt is.</translation>
     </message>
     <message>
-        <source>The VirtualBox Linux kernel driver (vboxdrv) is either not loaded or there is a permission problem with /dev/vboxdrv. Please reinstall the kernel module by executing&lt;br/&gt;&lt;br/&gt;  &lt;font color=blue&gt;&apos;/sbin/rcvboxdrv setup&apos;&lt;/font&gt;&lt;br/&gt;&lt;br/&gt;as root. If it is available in your distribution, you should install the DKMS package first. This package keeps track of Linux kernel changes and recompiles the vboxdrv kernel module if necessary.</source>
-        <translation>De VirtualBox Linux-kerneldriver (vboxdrv) is niet geladen of er is een permissie-probleem met /dev/vboxdrv. Herinstalleer de kernelmodule door &lt;br/&gt;&lt;/br&gt;..&lt;font color=blue&gt;&apos;/sbin/rcvboxdrv setup&apos; &lt;/font&gt;&lt;br/&gt;&lt;br/&gt;als root uit te voeren. Indien in uw distributie aanwezig, installeer dan eerst het DKMS pakket. Dit pakket houdt Linux kernelveranderingen bij en hercompileert indien nodig de vboxdrv-kernelmodule.</translation>
+        <source>The VirtualBox Linux kernel driver (vboxdrv) is either not loaded or there is a permission problem with /dev/vboxdrv. Please reinstall the kernel module by executing&lt;br/&gt;&lt;br/&gt;  &lt;font color=blue&gt;&apos;/etc/init.d/vboxdrv setup&apos;&lt;/font&gt;&lt;br/&gt;&lt;br/&gt;as root. If it is available in your distribution, you should install the DKMS package first. This package keeps track of Linux kernel changes and recompiles the vboxdrv kernel module if necessary.</source>
+        <translation>De VirtualBox Linux-kerneldriver (vboxdrv) is niet geladen of er is een permissie-probleem met /dev/vboxdrv. Herinstalleer de kernelmodule door &lt;br/&gt;&lt;/br&gt;..&lt;font color=blue&gt;&apos;/etc/init.d/vboxdrv setup&apos; &lt;/font&gt;&lt;br/&gt;&lt;br/&gt;als root uit te voeren. Indien in uw distributie aanwezig, installeer dan eerst het DKMS pakket. Dit pakket houdt Linux kernelveranderingen bij en hercompileert indien nodig de vboxdrv-kernelmodule.</translation>
     </message>
     <message>
         <source>Frame Size: %1x%2, Frame Rate: %3fps, Bit Rate: %4kbps</source>
@@ -962,7 +962,7 @@
     </message>
     <message>
         <source>&amp;Full-screen Mode</source>
-        <translation>&amp;Schermvullende modus</translation>
+        <translation>&amp;Sschermvullende modus</translation>
     </message>
     <message>
         <source>Switch between normal and full-screen mode</source>
@@ -6188,8 +6188,7 @@
     </message>
     <message>
         <source>Remove disk from virtual drive</source>
-        <translatorcomment>zonder &apos;het&apos; ervoor is het &apos;virtueel station&apos; en niet &apos;virtuele station&apos;</translatorcomment>
-        <translation>Schijf van virtueel station verwijderen</translation>
+        <translation>Verwijder schijf van virtuele station</translation>
     </message>
     <message>
         <source>Choose a virtual floppy disk file...</source>
@@ -6397,7 +6396,7 @@
     </message>
     <message>
         <source>Remove Disk from Virtual Drive</source>
-        <translation>Schijf van virtueel station verwijderen</translation>
+        <translation>Verwijder schijf van virtuele station</translation>
     </message>
     <message>
         <source>Choose Virtual Floppy Disk File...</source>
@@ -8681,7 +8680,7 @@
     </message>
     <message>
         <source>Encryption password for &lt;nobr&gt;ID = &apos;%1&apos;&lt;/nobr&gt; is invalid.</source>
-        <translation>Ongeldig versleutelwachtwoord voor &lt;nobr&gt;ID = &apos;%1&apos;&lt;/nobr&gt;.</translation>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
@@ -10230,7 +10229,7 @@
     </message>
     <message>
         <source>Export Virtual Appliance</source>
-        <translation>Exporteer Virtual Appliance</translation>
+        <translation>Exporteer Virtual Applicance</translation>
     </message>
     <message>
         <source>Restore Defaults</source>
@@ -10250,7 +10249,7 @@
     </message>
     <message>
         <source>Appliance settings</source>
-        <translation>Instellingen Appliance</translation>
+        <translation>Instellingen Appiance</translation>
     </message>
     <message>
         <source>Please choose where to create the virtual appliance. You can create it on your own computer, on the Sun Cloud service or on an S3 storage server.</source>
@@ -10334,7 +10333,7 @@
     </message>
     <message>
         <source>Appliance &amp;settings</source>
-        <translation>In&amp;stellingen Appliance</translation>
+        <translation>In&amp;stellingen Appiance</translation>
     </message>
     <message>
         <source>&amp;Destination</source>
@@ -10466,7 +10465,7 @@
     </message>
     <message>
         <source>Appliance settings</source>
-        <translation>Instellingen Appliance</translation>
+        <translation>Instellingen Appiance</translation>
     </message>
     <message>
         <source>These are the virtual machines contained in the appliance and the suggested settings of the imported VirtualBox machines. You can change many of the properties shown by double-clicking on the items and disable others using the check boxes below.</source>
@@ -10474,7 +10473,7 @@
     </message>
     <message>
         <source>Import Virtual Appliance</source>
-        <translation>Importeer Virtual Appliance</translation>
+        <translation>Importeer Virtual Applicance</translation>
     </message>
     <message>
         <source>Choose a virtual appliance file to import...</source>

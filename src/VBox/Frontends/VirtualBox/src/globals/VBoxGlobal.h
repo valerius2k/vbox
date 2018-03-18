@@ -64,10 +64,6 @@ class QSpinBox;
 class UIMediumEnumerator;
 class UIMedium;
 class UIIconPoolGeneral;
-class UIThreadPool;
-#ifdef Q_WS_X11
-class UIDesktopWidgetWatchdog;
-#endif /* Q_WS_X11 */
 
 // VBoxGlobal class
 ////////////////////////////////////////////////////////////////////////////////
@@ -120,10 +116,7 @@ public:
     bool isSeparateProcess() const { return m_fSeparateProcess; }
 
 #ifdef Q_WS_MAC
-    /** Mac OS X: Returns #MacOSXRelease determined using <i>uname</i> call. */
-    static MacOSXRelease determineOsRelease();
-    /** Mac OS X: Returns #MacOSXRelease determined during VBoxGlobal prepare routine. */
-    MacOSXRelease osRelease() const { return m_osRelease; }
+    static MacOSXRelease osRelease();
 #endif /* Q_WS_MAC */
 
     /** Try to acquire COM cleanup protection token for reading. */
@@ -142,37 +135,6 @@ public:
 
     /** Returns the VBoxSVC availability value. */
     bool isVBoxSVCAvailable() const { return m_fVBoxSVCAvailable; }
-
-    /** Returns the thread-pool instance. */
-    UIThreadPool* threadPool() const { return m_pThreadPool; }
-
-    /** @name Host-screen geometry stuff
-      * @{ */
-        /** Returns the number of host-screens currently available on the system. */
-        int screenCount() const;
-
-        /** Returns the index of the screen which contains contains @a pWidget. */
-        int screenNumber(const QWidget *pWidget) const;
-        /** Returns the index of the screen which contains contains @a point. */
-        int screenNumber(const QPoint &point) const;
-
-        /** Returns the geometry of the host-screen with @a iHostScreenIndex.
-          * @note The default screen is used if @a iHostScreenIndex is -1. */
-        const QRect screenGeometry(int iHostScreenIndex = -1) const;
-        /** Returns the available-geometry of the host-screen with @a iHostScreenIndex.
-          * @note The default screen is used if @a iHostScreenIndex is -1. */
-        const QRect availableGeometry(int iHostScreenIndex = -1) const;
-
-        /** Returns the geometry of the host-screen which contains @a pWidget. */
-        const QRect screenGeometry(const QWidget *pWidget) const;
-        /** Returns the available-geometry of the host-screen which contains @a pWidget. */
-        const QRect availableGeometry(const QWidget *pWidget) const;
-
-        /** Returns the geometry of the host-screen which contains @a point. */
-        const QRect screenGeometry(const QPoint &point) const;
-        /** Returns the available-geometry of the host-screen which contains @a point. */
-        const QRect availableGeometry(const QPoint &point) const;
-    /** @} */
 
     VBoxGlobalSettings &settings() { return gset; }
     bool setSettings (VBoxGlobalSettings &gs);
@@ -524,11 +486,6 @@ private:
 
     bool mValid;
 
-#ifdef Q_WS_MAC
-    /** Mac OS X: Holds the #MacOSXRelease determined using <i>uname</i> call. */
-    MacOSXRelease m_osRelease;
-#endif /* Q_WS_MAC */
-
     /** COM cleanup protection token. */
     QReadWriteLock m_comCleanupProtectionToken;
 
@@ -564,41 +521,33 @@ private:
 #ifdef Q_WS_X11
     /** X11: Holds the type of the Window Manager we are running under. */
     X11WMType m_enmWindowManagerType;
-
-    /** @name Host-screen geometry stuff
-      * @{ */
-        /** X11: Holds the desktop-widget watchdog instance aware of host-screen geometry changes. */
-        UIDesktopWidgetWatchdog *m_pDesktopWidgetWatchdog;
-    /** @} */
 #endif /* Q_WS_X11 */
 
     /** The --aggressive-caching / --no-aggressive-caching option. */
     bool mAgressiveCaching;
     /** The --restore-current option. */
     bool mRestoreCurrentSnapshot;
-
     /** @name Ad-hoc VM reconfiguration.
      * @{ */
-        /** Floppy image. */
-        QString m_strFloppyImage;
-        /** DVD image. */
-        QString m_strDvdImage;
+    /** Floppy image. */
+    QString m_strFloppyImage;
+    /** DVD image. */
+    QString m_strDvdImage;
     /** @} */
-
     /** @name VMM options
      * @{ */
-        /** The --disable-patm option. */
-        bool mDisablePatm;
-        /** The --disable-csam option. */
-        bool mDisableCsam;
-        /** The --recompile-supervisor option. */
-        bool mRecompileSupervisor;
-        /** The --recompile-user option. */
-        bool mRecompileUser;
-        /** The --execute-all-in-iem option. */
-        bool mExecuteAllInIem;
-        /** The --warp-factor option value. */
-        uint32_t mWarpPct;
+    /** The --disable-patm option. */
+    bool mDisablePatm;
+    /** The --disable-csam option. */
+    bool mDisableCsam;
+    /** The --recompile-supervisor option. */
+    bool mRecompileSupervisor;
+    /** The --recompile-user option. */
+    bool mRecompileUser;
+    /** The --execute-all-in-iem option. */
+    bool mExecuteAllInIem;
+    /** The --warp-factor option value. */
+    uint32_t mWarpPct;
     /** @} */
 
 #ifdef VBOX_WITH_DEBUGGER_GUI
@@ -649,8 +598,6 @@ private:
 
     /** General icon-pool. */
     UIIconPoolGeneral *m_pIconPool;
-    /** Holds the thread-pool instance. */
-    UIThreadPool *m_pThreadPool;
 
     /* API: Instance stuff: */
     static bool m_sfCleanupInProgress;

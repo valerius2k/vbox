@@ -2070,6 +2070,7 @@ void remR3RecordCall(CPUX86State *env)
 #endif
 }
 
+#define DEEP_SYNC_SEGMENT_REG /* add by linsh for VT */
 
 /**
  * Syncs the internal REM state with the VM.
@@ -2096,7 +2097,14 @@ REMR3DECL(int)  REMR3State(PVM pVM, PVMCPU pVCpu)
     uint8_t                 u8TrapNo;
     uint32_t                uCpl;
     int                     rc;
+#ifdef DEEP_SYNC_SEGMENT_REG /* add by linsh for VT */
 
+	VBOXGDTR	GDTR;
+	RTGCPTR 	GCPtrGDT;
+	unsigned	iGDT;
+	unsigned	cGDTs;
+
+#endif
     STAM_PROFILE_START(&pVM->rem.s.StatsState, a);
     Log2(("REMR3State:\n"));
 
@@ -2418,6 +2426,52 @@ REMR3DECL(int)  REMR3State(PVM pVM, PVMCPU pVCpu)
     SYNC_IN_SREG(&pVM->rem.s.Env, GS, &pVM->rem.s.Env.segs[R_GS], &pCtx->gs);
     /** @todo need to find a way to communicate potential GDT/LDT changes and thread switches. The selector might
      * be the same but not the base/limit. */
+#ifdef DEEP_SYNC_SEGMENT_REG /* add by linsh for VT */
+ 
+/*
+ *Check for the base address of the SegmentCache
+ */
+#define DEEP_SYNC_SEG_REG(a_pRemSReg,a_SReg,a_pVBoxSReg,a_pGDTE,a_Sel) \
+	    do \
+        { \
+        	if (a_Sel == (((a_pVBoxSReg)->Sel) >> 3)/* && (a_Sel == 6 || a_Sel == 7) */) \
+        	{ \
+				if ((a_pRemSReg)->base != X86DESC_BASE(a_pGDTE) ) \
+				{ \
+					Log2(("REMR3State: " #a_SReg " base had changed from %08x to %08x!\n", \
+					(a_pRemSReg)->base, X86DESC_BASE(a_pGDTE))); \
+					(a_pRemSReg)->base  = X86DESC_BASE(a_pGDTE); \
+					(a_pRemSReg)->limit = X86DESC_LIMIT_G(a_pGDTE); \
+				} \
+        	} \
+        } while (0)
+
+	/* Get the GDTR */
+	CPUMGetGuestGDTR(pVCpu, &GDTR);
+	if (GDTR.cbGdt < sizeof(X86DESC))
+	{
+		Log2(("REMR3State: No GDT entries...\n"));
+		return VINF_SUCCESS;
+	}
+
+	GCPtrGDT = GDTR.pGdt;
+	cGDTs = ((unsigned)GDTR.cbGdt + 1) / sizeof(X86DESC);
+
+	for (iGDT = 0; iGDT < cGDTs; iGDT++, GCPtrGDT += sizeof(X86DESC))
+	{
+		X86DESC GDTE;
+		int rc = PGMPhysSimpleReadGCPtr(pVCpu, &GDTE, GCPtrGDT, sizeof(GDTE));
+		if (RT_SUCCESS(rc))
+		{
+			if (GDTE.Gen.u1Present)
+			{
+				Log2(("REMR3State: iGDT:%d,base:%08x,limit:%08x\n",iGDT,X86DESC_BASE(&GDTE),X86DESC_LIMIT_G(&GDTE))); 
+				DEEP_SYNC_SEG_REG(&pVM->rem.s.Env.segs[R_GS], GS, &pCtx->gs, &GDTE, iGDT );
+			}
+		}
+	}
+	
+#endif
 
     /*
      * Check for traps.

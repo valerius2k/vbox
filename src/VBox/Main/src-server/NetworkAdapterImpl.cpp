@@ -81,6 +81,8 @@ HRESULT NetworkAdapter::init(Machine *aParent, ULONG aSlot)
     mNATEngine->init(aParent, this);
     /* mPeer is left null */
 
+    m_fModified = false;
+
     mData.allocate();
 
     /* initialize data */
@@ -126,8 +128,6 @@ HRESULT NetworkAdapter::init(Machine *aParent, NetworkAdapter *aThat, bool aResh
     AssertReturn(autoInitSpan.isOk(), E_FAIL);
 
     unconst(mParent) = aParent;
-    /* mPeer is left null */
-
     unconst(mNATEngine).createObject();
     mNATEngine->init(aParent, this, aThat->mNATEngine);
 
@@ -179,7 +179,6 @@ HRESULT NetworkAdapter::initCopy(Machine *aParent, NetworkAdapter *aThat)
     unconst(mNATEngine).createObject();
     mNATEngine->initCopy(aParent, this, aThat->mNATEngine);
 
-    /* sanity */
     AutoCaller thatCaller(aThat);
     AssertComRCReturnRC(thatCaller.rc());
 
@@ -256,6 +255,7 @@ HRESULT NetworkAdapter::setAdapterType(NetworkAdapterType_T aAdapterType)
         mData.backup();
         mData->mAdapterType = aAdapterType;
 
+        m_fModified = true;
         // leave the lock before informing callbacks
         alock.release();
 
@@ -303,6 +303,7 @@ HRESULT NetworkAdapter::setEnabled(BOOL aEnabled)
         mData.backup();
         mData->mEnabled = aEnabled;
 
+        m_fModified = true;
         // leave the lock before informing callbacks
         alock.release();
 
@@ -392,8 +393,10 @@ HRESULT NetworkAdapter::setMACAddress(const com::Utf8Str &aMACAddress)
     HRESULT rc = i_updateMacAddress(aMACAddress);
     if (SUCCEEDED(rc))
     {
+        m_fModified = true;
         // leave the lock before informing callbacks
         alock.release();
+
 
         AutoWriteLock mlock(mParent COMMA_LOCKVAL_SRC_POS);       // mParent is const, no need to lock
         mParent->i_setModified(Machine::IsModified_NetworkAdapters);
@@ -445,6 +448,7 @@ HRESULT NetworkAdapter::setAttachmentType(NetworkAttachmentType_T aAttachmentTyp
         NetworkAttachmentType_T oldAttachmentType = mData->mAttachmentType;
         mData->mAttachmentType = aAttachmentType;
 
+        m_fModified = true;
         // leave the lock before informing callbacks
         alock.release();
 
@@ -496,6 +500,7 @@ HRESULT NetworkAdapter::setBridgedInterface(const com::Utf8Str &aBridgedInterfac
         mData.backup();
         mData->mBridgedInterface = aBridgedInterface;
 
+        m_fModified = true;
         // leave the lock before informing callbacks
         alock.release();
 
@@ -543,6 +548,8 @@ HRESULT NetworkAdapter::setHostOnlyInterface(const com::Utf8Str &aHostOnlyInterf
         mData.backup();
         mData->mHostOnlyInterface = aHostOnlyInterface;
 
+        m_fModified = true;
+
         // leave the lock before informing callbacks
         alock.release();
 
@@ -589,6 +596,7 @@ HRESULT NetworkAdapter::setInternalNetwork(const com::Utf8Str &aInternalNetwork)
         mData.backup();
         mData->mInternalNetwork = aInternalNetwork;
 
+        m_fModified = true;
         // leave the lock before informing callbacks
         alock.release();
 
@@ -637,6 +645,7 @@ HRESULT NetworkAdapter::setNATNetwork(const com::Utf8Str &aNATNetwork)
         Bstr oldNatNetworkName = mData->mNATNetwork;
         mData->mNATNetwork = aNATNetwork;
 
+        m_fModified = true;
         // leave the lock before informing callbacks
         alock.release();
 
@@ -710,6 +719,7 @@ HRESULT NetworkAdapter::setCableConnected(BOOL aConnected)
         mData.backup();
         mData->mCableConnected = aConnected;
 
+        m_fModified = true;
         // leave the lock before informing callbacks
         alock.release();
 
@@ -747,6 +757,7 @@ HRESULT NetworkAdapter::setLineSpeed(ULONG aSpeed)
         mData.backup();
         mData->mLineSpeed = aSpeed;
 
+        m_fModified = true;
         // leave the lock before informing callbacks
         alock.release();
 
@@ -796,6 +807,7 @@ HRESULT NetworkAdapter::setPromiscModePolicy(NetworkAdapterPromiscModePolicy_T a
         {
             mData.backup();
             mData->mPromiscModePolicy = aPromiscModePolicy;
+            m_fModified = true;
 
             alock.release();
             mParent->i_setModifiedLock(Machine::IsModified_NetworkAdapters);
@@ -830,6 +842,7 @@ HRESULT NetworkAdapter::setTraceEnabled(BOOL aEnabled)
         mData.backup();
         mData->mTraceEnabled = aEnabled;
 
+        m_fModified = true;
         // leave the lock before informing callbacks
         alock.release();
 
@@ -867,6 +880,7 @@ HRESULT NetworkAdapter::setTraceFile(const com::Utf8Str &aTraceFile)
         mData.backup();
         mData->mTraceFile = aTraceFile;
 
+        m_fModified = true;
         // leave the lock before informing callbacks
         alock.release();
 
@@ -912,6 +926,7 @@ HRESULT NetworkAdapter::setBootPriority(ULONG aBootPriority)
         mData.backup();
         mData->mBootPriority = aBootPriority;
 
+        m_fModified = true;
         // leave the lock before informing callbacks
         alock.release();
 
@@ -1077,6 +1092,9 @@ HRESULT NetworkAdapter::i_loadSettings(BandwidthControl *bwctl,
     rc = COMSETTER(AttachmentType)(data.mode);
     if (FAILED(rc)) return rc;
 
+    // after loading settings, we are no longer different from the XML on disk
+    m_fModified = false;
+
     return S_OK;
 }
 
@@ -1115,6 +1133,7 @@ HRESULT NetworkAdapter::i_saveSettings(settings::NetworkAdapter &data)
 
     data.mode = mData->mAttachmentType;
 
+    mNATEngine->i_commit();
     mNATEngine->i_saveSettings(data.nat);
 
     data.strBridgedName = mData->mBridgedInterface;
@@ -1128,6 +1147,9 @@ HRESULT NetworkAdapter::i_saveSettings(settings::NetworkAdapter &data)
 
     data.strNATNetworkName = mData->mNATNetwork;
 
+    // after saving settings, we are no longer different from the XML on disk
+    m_fModified = false;
+
     return S_OK;
 }
 
@@ -1139,7 +1161,7 @@ bool NetworkAdapter::i_isModified() {
 
     AutoWriteLock alock(this COMMA_LOCKVAL_SRC_POS);
 
-    bool fChanged = mData.isBackedUp();
+    bool fChanged = m_fModified;
     fChanged |= (mData->mAdapterType == NetworkAttachmentType_NAT? mNATEngine->i_isModified() : false);
     return fChanged;
 }
@@ -1154,8 +1176,6 @@ void NetworkAdapter::i_rollback()
     AssertComRCReturnVoid(autoCaller.rc());
 
     AutoWriteLock alock(this COMMA_LOCKVAL_SRC_POS);
-
-    mNATEngine->i_rollback();
 
     mData.rollback();
 }
@@ -1177,8 +1197,6 @@ void NetworkAdapter::i_commit()
     /* lock both for writing since we modify both (mPeer is "master" so locked
      * first) */
     AutoMultiWriteLock2 alock(mPeer, this COMMA_LOCKVAL_SRC_POS);
-
-    mNATEngine->i_commit();
 
     if (mData.isBackedUp())
     {
@@ -1206,8 +1224,6 @@ void NetworkAdapter::i_copyFrom(NetworkAdapter *aThat)
     /* sanity too */
     AutoCaller thatCaller(aThat);
     AssertComRCReturnVoid(thatCaller.rc());
-
-    mNATEngine->i_copyFrom(aThat->mNATEngine);
 
     /* peer is not modified, lock it for reading (aThat is "master" so locked
      * first) */
@@ -1328,6 +1344,7 @@ HRESULT NetworkAdapter::setBandwidthGroup(const ComPtr<IBandwidthGroup> &aBandwi
 
         i_updateBandwidthGroup(pBwGroup);
 
+        m_fModified = true;
         // leave the lock before informing callbacks
         alock.release();
 

@@ -25,22 +25,16 @@
 /* COM includes: */
 #include "COMEnums.h"
 
-/** Settings configuration namespace. */
+/** Settings configuration namespace: */
 namespace UISettingsDefs
 {
-    /** Configuration access levels. */
+    /** Configuration access levels: */
     enum ConfigurationAccessLevel
     {
-        /** Configuration is not accessible. */
         ConfigurationAccessLevel_Null,
-        /** Configuration is accessible fully. */
-        ConfigurationAccessLevel_Full,
-        /** Configuration is accessible partially, machine is in @a powered_off state. */
-        ConfigurationAccessLevel_Partial_PoweredOff,
-        /** Configuration is accessible partially, machine is in @a saved state. */
-        ConfigurationAccessLevel_Partial_Saved,
-        /** Configuration is accessible partially, machine is in @a running state. */
-        ConfigurationAccessLevel_Partial_Running,
+        ConfigurationAccessLevel_Saved,
+        ConfigurationAccessLevel_Runtime,
+        ConfigurationAccessLevel_Full
     };
 
     /** Determines configuration access level for passed @a sessionState and @a machineState. */

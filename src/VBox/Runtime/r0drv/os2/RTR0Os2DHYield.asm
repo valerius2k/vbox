@@ -80,7 +80,7 @@ BEGINCODE16
 GLOBALNAME RTR0Os2DHYield_16
     call far [ss:ebp - 4]
 
-    ;jmp far dword NAME(RTR0Os2DHVMGlobalToProcess_32) wrt FLAT
+    ;jmp far dword NAME(RTR0Os2DHYield_32) wrt FLAT
     db      066h
     db      0eah
     dd      NAME(RTR0Os2DHYield_32) ;wrt FLAT

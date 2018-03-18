@@ -361,10 +361,6 @@ HRESULT Machine::init(VirtualBox *aParent,
             for (ULONG slot = 0; slot < RT_ELEMENTS(mSerialPorts); ++slot)
                 mSerialPorts[slot]->i_applyDefaults(aOsType);
 
-            /* Apply parallel port defaults */
-            for (ULONG slot = 0; slot < RT_ELEMENTS(mParallelPorts); ++slot)
-                mParallelPorts[slot]->i_applyDefaults();
-
             /* Let the OS type select 64-bit ness. */
             mHWData->mLongMode = aOsType->i_is64Bit()
                                ? settings::Hardware::LongMode_Enabled : settings::Hardware::LongMode_Disabled;
@@ -5350,9 +5346,8 @@ void Machine::i_deleteConfigHandler(DeleteConfigTask &task)
                     RTFileDelete(log.c_str());
                 }
 #if defined(RT_OS_WINDOWS)
-                log = Utf8StrFmt("%s%cVBoxStartup.log", logFolder.c_str(), RTPATH_DELIMITER);
-                RTFileDelete(log.c_str());
-                log = Utf8StrFmt("%s%cVBoxHardening.log", logFolder.c_str(), RTPATH_DELIMITER);
+                log = Utf8StrFmt("%s%cVBoxStartup.log",
+                                 logFolder.c_str(), RTPATH_DELIMITER);
                 RTFileDelete(log.c_str());
 #endif
 
@@ -6599,7 +6594,7 @@ HRESULT Machine::queryLogFilename(ULONG aIdx, com::Utf8Str &aFilename)
 {
     AutoReadLock alock(this COMMA_LOCKVAL_SRC_POS);
 
-    Utf8Str log = i_getLogFilename(aIdx);
+    Utf8Str log = i_queryLogFilename(aIdx);
     if (!RTFileExists(log.c_str()))
         log.setNull();
     aFilename = log;
@@ -6615,7 +6610,7 @@ HRESULT Machine::readLog(ULONG aIdx, LONG64 aOffset, LONG64 aSize, std::vector<B
     AutoReadLock alock(this COMMA_LOCKVAL_SRC_POS);
 
     HRESULT rc = S_OK;
-    Utf8Str log = i_getLogFilename(aIdx);
+    Utf8Str log = i_queryLogFilename(aIdx);
 
     /* do not unnecessarily hold the lock while doing something which does
      * not need the lock and potentially takes a long time. */
@@ -7297,36 +7292,31 @@ void Machine::i_getLogFolder(Utf8Str &aLogFolder)
 /**
  *  Returns the full path to the machine's log file for an given index.
  */
-Utf8Str Machine::i_getLogFilename(ULONG idx)
+Utf8Str Machine::i_queryLogFilename(ULONG idx) /** @todo r=bird: Misnamed. Should be i_getLogFilename as it cannot fail.
+                                                   See VBox-CodingGuidelines.cpp, Compulsory seciont, line 79. */
 {
     Utf8Str logFolder;
     getLogFolder(logFolder);
     Assert(logFolder.length());
-
     Utf8Str log;
     if (idx == 0)
-        log = Utf8StrFmt("%s%cVBox.log", logFolder.c_str(), RTPATH_DELIMITER);
-#if defined(RT_OS_WINDOWS) && defined(VBOX_WITH_HARDENING)
-    else if (idx == 1)
-        log = Utf8StrFmt("%s%cVBoxHardening.log", logFolder.c_str(), RTPATH_DELIMITER);
+        log = Utf8StrFmt("%s%cVBox.log",
+                         logFolder.c_str(), RTPATH_DELIMITER);
     else
-        log = Utf8StrFmt("%s%cVBox.log.%u", logFolder.c_str(), RTPATH_DELIMITER, idx - 1);
-#else
-    else
-        log = Utf8StrFmt("%s%cVBox.log.%u", logFolder.c_str(), RTPATH_DELIMITER, idx);
-#endif
+        log = Utf8StrFmt("%s%cVBox.log.%d",
+                         logFolder.c_str(), RTPATH_DELIMITER, idx);
     return log;
 }
 
 /**
- * Returns the full path to the machine's hardened log file.
+ * Returns the full path to the machine's (hardened) startup log file.
  */
-Utf8Str Machine::i_getHardeningLogFilename(void)
+Utf8Str Machine::i_getStartupLogFilename(void)
 {
     Utf8Str strFilename;
     getLogFolder(strFilename);
     Assert(strFilename.length());
-    strFilename.append(RTPATH_SLASH_STR "VBoxHardening.log");
+    strFilename.append(RTPATH_SLASH_STR "VBoxStartup.log");
     return strFilename;
 }
 
@@ -7512,30 +7502,24 @@ HRESULT Machine::i_launchVMProcess(IInternalSessionControl *aControl,
             RTStrFree(newEnvStr);
     }
 
-    /* Hardening logging */
+    /* Hardened startup logging */
 #if defined(RT_OS_WINDOWS) && defined(VBOX_WITH_HARDENING)
-    Utf8Str strSupHardeningLogArg("--sup-hardening-log=");
+    Utf8Str strSupStartLogArg("--sup-startup-log=");
     {
-        Utf8Str strHardeningLogFile = i_getHardeningLogFilename();
-        int vrc2 = RTFileDelete(strHardeningLogFile.c_str());
+        Utf8Str strStartupLogFile = i_getStartupLogFilename();
+        int vrc2 = RTFileDelete(strStartupLogFile.c_str());
         if (vrc2 == VERR_PATH_NOT_FOUND || vrc2 == VERR_FILE_NOT_FOUND)
         {
-            Utf8Str strStartupLogDir = strHardeningLogFile;
+            Utf8Str strStartupLogDir = strStartupLogFile;
             strStartupLogDir.stripFilename();
             RTDirCreateFullPath(strStartupLogDir.c_str(), 0755); /** @todo add a variant for creating the path to a
                                                                      file without stripping the file. */
         }
-        strSupHardeningLogArg.append(strHardeningLogFile);
-
-        /* Remove legacy log filename to avoid confusion. */
-        Utf8Str strOldStartupLogFile;
-        getLogFolder(strOldStartupLogFile);
-        strOldStartupLogFile.append(RTPATH_SLASH_STR "VBoxStartup.log");
-        RTFileDelete(strOldStartupLogFile.c_str());
+        strSupStartLogArg.append(strStartupLogFile);
     }
-    const char *pszSupHardeningLogArg = strSupHardeningLogArg.c_str();
+    const char *pszSupStartupLogArg = strSupStartLogArg.c_str();
 #else
-    const char *pszSupHardeningLogArg = NULL;
+    const char *pszSupStartupLogArg = NULL;
 #endif
 
     Utf8Str strCanonicalName;
@@ -7599,7 +7583,7 @@ HRESULT Machine::i_launchVMProcess(IInternalSessionControl *aControl,
         unsigned iArg = 6;
         if (fSeparate)
             apszArgs[iArg++] = "--separate";
-        apszArgs[iArg++] = pszSupHardeningLogArg;
+        apszArgs[iArg++] = pszSupStartupLogArg;
 
         vrc = RTProcCreate(szPath, apszArgs, env, 0, &pid);
     }
@@ -7634,7 +7618,7 @@ HRESULT Machine::i_launchVMProcess(IInternalSessionControl *aControl,
         unsigned iArg = 5;
         if (fSeparate)
             apszArgs[iArg++] = "--separate";
-        apszArgs[iArg++] = pszSupHardeningLogArg;
+        apszArgs[iArg++] = pszSupStartupLogArg;
 
         vrc = RTProcCreate(szPath, apszArgs, env, 0, &pid);
     }
@@ -7677,7 +7661,7 @@ HRESULT Machine::i_launchVMProcess(IInternalSessionControl *aControl,
         unsigned iArg = 7;
         if (!strFrontend.compare("capture", Utf8Str::CaseInsensitive))
             apszArgs[iArg++] = "--capture";
-        apszArgs[iArg++] = pszSupHardeningLogArg;
+        apszArgs[iArg++] = pszSupStartupLogArg;
 
 # ifdef RT_OS_WINDOWS
         vrc = RTProcCreate(szPath, apszArgs, env, RTPROC_FLAGS_NO_WINDOW, &pid);
@@ -7880,11 +7864,11 @@ bool Machine::i_checkForSpawnFailure()
         /* If the startup logfile exists and is of non-zero length, tell the
            user to look there for more details to encourage them to attach it
            when reporting startup issues. */
-        Utf8Str strHardeningLogFile = i_getHardeningLogFilename();
+        Utf8Str strStartupLogFile = i_getStartupLogFilename();
         uint64_t cbStartupLogFile = 0;
-        int vrc2 = RTFileQuerySize(strHardeningLogFile.c_str(), &cbStartupLogFile);
+        int vrc2 = RTFileQuerySize(strStartupLogFile.c_str(), &cbStartupLogFile);
         if (RT_SUCCESS(vrc2) && cbStartupLogFile > 0)
-            strExtraInfo.append(Utf8StrFmt(tr(".  More details may be available in '%s'"), strHardeningLogFile.c_str()));
+            strExtraInfo.append(Utf8StrFmt(tr(".  More details may be available in '%s'"), strStartupLogFile.c_str()));
 #endif
 
         if (RT_SUCCESS(vrc) && status.enmReason == RTPROCEXITREASON_NORMAL)

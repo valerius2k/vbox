@@ -21,6 +21,7 @@
 
 /* Qt includes: */
 # include <QApplication>
+# include <QDesktopWidget>
 # include <QMainWindow>
 # include <QTimer>
 # ifdef Q_WS_MAC
@@ -215,8 +216,6 @@ void UIMachineViewSeamless::adjustGuestScreenSize()
     {
         frameBuffer()->setAutoEnabled(false);
         sltPerformGuestResize(workingArea().size());
-        /* And remember the size to know what we are resizing out of when we exit: */
-        uisession()->setLastFullScreenSize(screenId(), workingArea().size());
     }
 }
 
@@ -225,7 +224,7 @@ QRect UIMachineViewSeamless::workingArea() const
     /* Get corresponding screen: */
     int iScreen = static_cast<UIMachineLogicSeamless*>(machineLogic())->hostScreenForGuestScreen(screenId());
     /* Return available geometry for that screen: */
-    return vboxGlobal().availableGeometry(iScreen);
+    return QApplication::desktop()->availableGeometry(iScreen);
 }
 
 QSize UIMachineViewSeamless::calculateMaxGuestSize() const

@@ -39,12 +39,18 @@
 #include <windows.h>
 #endif
 
-#if defined(XP_OS2)
+#if defined(XP_OS2) && !defined(QT_CORE_LIB)
 #define INCL_DOS
 #define INCL_DOSERRORS
+#if defined(OS2_PM_EVENT_QUEUES)
 #define INCL_WIN
+#endif
 #include <os2.h>
+#if defined(OS2_PM_EVENT_QUEUES)
 #define DefWindowProc WinDefWindowProc
+#endif
+#elif defined(XP_OS2) && defined(QT_CORE_LIB)
+#include <prtypes.h>
 #endif /* XP_OS2 */
 
 #include "nspr.h"
@@ -58,7 +64,7 @@
 #endif /* !XP_OS2 */
 #endif /* !Win32 */
 
-#if defined(XP_UNIX)
+#if defined(XP_UNIX) || ( defined(XP_OS2) && !defined(OS2_PM_EVENT_QUEUES) )
 /* for fcntl */
 #include <sys/types.h>
 #include <fcntl.h>
@@ -153,7 +159,7 @@ struct PLEventQueue {
     PRPackedBool        timerSet;
 #endif
 
-#if defined(XP_UNIX) && !defined(XP_MACOSX)
+#if ( defined(XP_UNIX) && !defined(XP_MACOSX) ) || ( defined(XP_OS2) && !defined(OS2_PM_EVENT_QUEUES) )
 #if defined(VMS)
     int                 efn;
 #else
@@ -161,7 +167,7 @@ struct PLEventQueue {
 #endif
     PLGetEventIDFunc    idFunc;
     void*               idFuncClosure;
-#elif defined(_WIN32) || defined(XP_OS2)
+#elif defined(_WIN32) || ( defined(XP_OS2) && defined(OS2_PM_EVENT_QUEUES) )
     HWND                eventReceiverWindow;
     PRBool              removeMsg;
 #elif defined(XP_BEOS)
@@ -189,7 +195,7 @@ static void        _md_CreateEventQueue( PLEventQueue *eventQueue );
 static PRInt32     _pl_GetEventCount(PLEventQueue* self);
 
 
-#if defined(_WIN32) || defined(XP_OS2)
+#if defined(_WIN32) || ( defined(XP_OS2) && defined(OS2_PM_EVENT_QUEUES) )
 #if defined(XP_OS2)
 ULONG _pr_PostEventMsgId;
 #else
@@ -255,7 +261,7 @@ static PLEventQueue * _pl_CreateEventQueue(const char *name,
 #if defined(_WIN32)
     self->timerSet = PR_FALSE;
 #endif
-#if defined(_WIN32) || defined(XP_OS2)
+#if defined(_WIN32) || ( defined(XP_OS2) && defined(OS2_PM_EVENT_QUEUES) )
     self->removeMsg = PR_TRUE;
 #endif
 
@@ -337,7 +343,7 @@ PL_PostEvent(PLEventQueue* self, PLEvent* event)
     mon = self->monitor;
     PR_EnterMonitor(mon);
 
-#if defined(XP_UNIX) && !defined(XP_MACOSX)
+#if ( defined(XP_UNIX) && !defined(XP_MACOSX) ) || ( defined(XP_OS2) && !defined(OS2_PM_EVENT_QUEUES) )
     if (self->idFunc && event)
         event->id = self->idFunc(self->idFuncClosure);
 #endif
@@ -662,7 +668,7 @@ PL_InitEvent(PLEvent* self, void* owner,
     self->handled = PR_FALSE;
     self->lock = NULL;
     self->condVar = NULL;
-#if defined(XP_UNIX) && !defined(XP_MACOSX)
+#if ( defined(XP_UNIX) && !defined(XP_MACOSX) ) || ( defined(XP_OS2) && !defined(OS2_PM_EVENT_QUEUES) )
     self->id = 0;
 #endif
 }
@@ -851,14 +857,21 @@ _pl_SetupNativeNotifier(PLEventQueue* self)
     PR_LOG(event_lm, PR_LOG_DEBUG,
            ("$$$ Allocated event flag %d", self->efn));
     return PR_SUCCESS;
-#elif defined(XP_UNIX) && !defined(XP_MACOSX)
+#elif ( defined(XP_UNIX) && !defined(XP_MACOSX) ) || ( defined(XP_OS2) && !defined(OS2_PM_EVENT_QUEUES) )
     int err;
     int flags;
 
     self->idFunc = 0;
     self->idFuncClosure = 0;
 
+#ifndef XP_OS2
     err = pipe(self->eventPipe);
+#else
+    /* use a pair for local sockets for non-blocking case,
+     * and for use with select(), instead of a pipe
+     */
+    err = socketpair(AF_LOCAL, SOCK_STREAM, 0, (int *)self->eventPipe);
+#endif
     if (err != 0) {
         return PR_FAILURE;
     }
@@ -867,6 +880,7 @@ _pl_SetupNativeNotifier(PLEventQueue* self)
     fcntl(self->eventPipe[1], F_SETFD, FD_CLOEXEC);
 #endif
 
+#ifndef XP_OS2
     /* make the pipe nonblocking */
     flags = fcntl(self->eventPipe[0], F_GETFL, 0);
     if (flags == -1) {
@@ -884,6 +898,20 @@ _pl_SetupNativeNotifier(PLEventQueue* self)
     if (err == -1) {
         goto failed;
     }
+#else
+    int val;
+    /* make the pipe nonblocking */
+    val = 1;
+    err = os2_ioctl(self->eventPipe[0], FIONBIO, (char *)&val, sizeof(val));
+    if (err == -1) {
+        goto failed;
+    }
+    val = 1;
+    err = os2_ioctl(self->eventPipe[1], FIONBIO, (char *)&val, sizeof(val));
+    if (err == -1) {
+        goto failed;
+    }
+#endif
     return PR_SUCCESS;
 
 failed:
@@ -929,7 +957,7 @@ _pl_CleanupNativeNotifier(PLEventQueue* self)
            ("$$$ Freeing event flag %d", self->efn));
         status = LIB$FREE_EF(&self->efn);
     }
-#elif defined(XP_UNIX) && !defined(XP_MACOSX)
+#elif ( defined(XP_UNIX) && !defined(XP_MACOSX) ) || ( defined(XP_OS2) && !defined(OS2_PM_EVENT_QUEUES) )
     close(self->eventPipe[0]);
     close(self->eventPipe[1]);
 #elif defined(_WIN32)
@@ -945,7 +973,7 @@ _pl_CleanupNativeNotifier(PLEventQueue* self)
      */
     SendMessage(self->eventReceiverWindow, WM_CLOSE, 0, 0);
 
-#elif defined(XP_OS2)
+#elif defined(XP_OS2) && defined(OS2_PM_EVENT_QUEUES)
     WinDestroyWindow(self->eventReceiverWindow);
 #elif defined(MAC_USE_CFRUNLOOPSOURCE)
 
@@ -1191,7 +1219,7 @@ _pl_NativeNotify(PLEventQueue* self)
 #endif
 
 
-#if defined(XP_OS2)
+#if defined(XP_OS2) && defined(OS2_PM_EVENT_QUEUES)
 static PRStatus
 _pl_NativeNotify(PLEventQueue* self)
 {
@@ -1213,7 +1241,7 @@ _pl_NativeNotify(PLEventQueue* self)
     status = SYS$SETEF(self->efn);
     return ($VMS_STATUS_SUCCESS(status)) ? PR_SUCCESS : PR_FAILURE;
 }/* --- end _pl_NativeNotify() --- */
-#elif defined(XP_UNIX) && !defined(XP_MACOSX)
+#elif ( defined(XP_UNIX) && !defined(XP_MACOSX) ) || ( defined(XP_OS2) && !defined(OS2_PM_EVENT_QUEUES) )
 
 static PRStatus
 _pl_NativeNotify(PLEventQueue* self)
@@ -1289,7 +1317,7 @@ _pl_NativeNotify(PLEventQueue* self)
 static PRStatus
 _pl_AcknowledgeNativeNotify(PLEventQueue* self)
 {
-#if defined(_WIN32) || defined(XP_OS2)
+#if defined(_WIN32) || ( defined(XP_OS2) && defined(OS2_PM_EVENT_QUEUES) )
 #ifdef XP_OS2
     QMSG aMsg;
 #else
@@ -1327,7 +1355,7 @@ _pl_AcknowledgeNativeNotify(PLEventQueue* self)
     */
     sys$clref(self->efn);
     return PR_SUCCESS;
-#elif defined(XP_UNIX) && !defined(XP_MACOSX)
+#elif ( defined(XP_UNIX) && !defined(XP_MACOSX) ) || ( defined(XP_OS2) && !defined(OS2_PM_EVENT_QUEUES) )
 
     PRInt32 count;
     unsigned char c;
@@ -1360,7 +1388,7 @@ PL_GetEventQueueSelectFD(PLEventQueue* self)
 
 #if defined(VMS)
     return -(self->efn);
-#elif defined(XP_UNIX) && !defined(XP_MACOSX)
+#elif ( defined(XP_UNIX) && !defined(XP_MACOSX) ) || ( defined(XP_OS2) && !defined(OS2_PM_EVENT_QUEUES) )
     return self->eventPipe[0];
 #else
     return -1;    /* other platforms don't handle this (yet) */
@@ -1420,7 +1448,7 @@ BOOL WINAPI DllMain (HINSTANCE hDLL, DWORD dwReason, LPVOID lpReserved)
 #endif
 
 
-#if defined(_WIN32) || defined(XP_OS2)
+#if defined(_WIN32) || ( defined(XP_OS2) && defined(OS2_PM_EVENT_QUEUES) )
 #ifdef XP_OS2
 MRESULT EXPENTRY
 _md_EventReceiverProc(HWND hwnd, ULONG uMsg, MPARAM wParam, MPARAM lParam)
@@ -1516,7 +1544,7 @@ static void _md_CreateEventQueue( PLEventQueue *eventQueue )
 } /* end _md_CreateEventQueue() */
 #endif /* Winxx */
 
-#if defined(XP_OS2)
+#if defined(XP_OS2) && defined(OS2_PM_EVENT_QUEUES)
 /*
 ** _md_CreateEventQueue() -- ModelDependent initializer
 */
@@ -1565,7 +1593,8 @@ static void _md_CreateEventQueue( PLEventQueue *eventQueue )
 } /* end _md_CreateEventQueue() */
 #endif /* XP_OS2 */
 
-#if (defined(XP_UNIX) && !defined(XP_MACOSX)) || defined(XP_BEOS)
+#if ( defined(XP_UNIX) && !defined(XP_MACOSX) ) || defined(XP_BEOS) || \
+    ( defined(XP_OS2) && !defined(OS2_PM_EVENT_QUEUES) )
 /*
 ** _md_CreateEventQueue() -- ModelDependent initializer
 */
@@ -1678,7 +1707,7 @@ static void _md_CreateEventQueue( PLEventQueue *eventQueue )
 
 /* extra functions for unix */
 
-#if defined(XP_UNIX) && !defined(XP_MACOSX)
+#if ( defined(XP_UNIX) && !defined(XP_MACOSX) ) || ( defined(XP_OS2) && !defined(OS2_PM_EVENT_QUEUES) )
 
 PR_IMPLEMENT(PRInt32)
 PL_ProcessEventsBeforeID(PLEventQueue *aSelf, unsigned long aID)

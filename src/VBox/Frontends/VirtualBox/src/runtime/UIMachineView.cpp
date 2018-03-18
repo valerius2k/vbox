@@ -285,9 +285,6 @@ void UIMachineView::sltHandleNotifyChange(int iWidth, int iHeight)
         {
             /* Assign new frame-buffer logical-size: */
             frameBuffer()->setScaledSize(size());
-
-            /* Forget the last full-screen size: */
-            uisession()->setLastFullScreenSize(screenId(), QSize(-1, -1));
         }
         /* For other than 'scale' mode: */
         else
@@ -295,10 +292,8 @@ void UIMachineView::sltHandleNotifyChange(int iWidth, int iHeight)
             /* Adjust maximum-size restriction for machine-view: */
             setMaximumSize(sizeHint());
 
-            /* Disable the resize hint override hack and forget the last full-screen size: */
+            /* Disable the resize hint override hack: */
             m_sizeHintOverride = QSize(-1, -1);
-            if (visualStateType() == UIVisualStateType_Normal)
-                uisession()->setLastFullScreenSize(screenId(), QSize(-1, -1));
 
             /* Force machine-window update own layout: */
             QCoreApplication::sendPostedEvents(0, QEvent::LayoutRequest);
@@ -853,17 +848,7 @@ UIMachineLogic* UIMachineView::machineLogic() const
 
 QSize UIMachineView::sizeHint() const
 {
-    /* Temporarily restrict the size to prevent a brief resize to the
-     * frame-buffer dimensions when we exit full-screen.  This is only
-     * applied if the frame-buffer is at full-screen dimensions and
-     * until the first machine view resize. */
-
-    /* Get the frame-buffer dimensions: */
-    QSize frameBufferSize(frameBuffer()->width(), frameBuffer()->height());
-    /* Take the scale-factor(s) into account: */
-    frameBufferSize = scaledForward(frameBufferSize);
-    /* Check against the last full-screen size. */
-    if (frameBufferSize == uisession()->lastFullScreenSize(screenId()) && m_sizeHintOverride.isValid())
+    if (m_sizeHintOverride.isValid() && uisession()->isGuestSupportsGraphics())
         return m_sizeHintOverride;
 
     /* Get frame-buffer size-hint: */
@@ -997,6 +982,9 @@ void UIMachineView::handleScaleChange()
         {
             /* Adjust maximum-size restriction for machine-view: */
             setMaximumSize(sizeHint());
+
+            /* Disable the resize hint override hack: */
+            m_sizeHintOverride = QSize(-1, -1);
 
             /* Force machine-window update own layout: */
             QCoreApplication::sendPostedEvents(0, QEvent::LayoutRequest);

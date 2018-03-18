@@ -49,6 +49,11 @@
 # include <set>
 #endif
 
+#if defined(RT_OS_OS2)
+# define  IOCTL_CDROMDISK2         0x82
+# define  CDROMDISK2_DRIVELETTERS  0x60
+#endif
+
 #ifdef VBOX_WITH_RESOURCE_USAGE_API
 # include "PerformanceImpl.h"
 #endif /* VBOX_WITH_RESOURCE_USAGE_API */
@@ -2093,7 +2098,8 @@ HRESULT Host::i_buildDVDDrivesList(MediaList &list)
                     OPEN_ACCESS_READONLY | OPEN_SHARE_DENYNONE, NULL))
             return VERR_NOT_FOUND;
 
-        DosDevIOCtl(hf, 0x82, 0x60, NULL, 0, &ulParamSize,
+        DosDevIOCtl(hf, IOCTL_CDROMDISK2, CDROMDISK2_DRIVELETTERS,
+                    NULL, 0, &ulParamSize,
                     (PVOID)&CDMap, sizeof(CDROMDeviceMap), &ulDataSize);
         DosClose(hf);
 

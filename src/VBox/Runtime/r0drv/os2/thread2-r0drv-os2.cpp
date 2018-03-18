@@ -62,12 +62,16 @@ DECLHIDDEN(int) rtThreadNativeSetPriority(PRTTHREADINT pThread, RTTHREADTYPE enm
 DECLHIDDEN(int) rtThreadNativeAdopt(PRTTHREADINT pThread)
 {
     NOREF(pThread);
+    /* There is nothing special that needs doing here, but the
+       user really better know what he's cooking. */
+    //return VINF_SUCCESS; // FreeBSD
     return VERR_NOT_IMPLEMENTED;
 }
 
 DECLHIDDEN(void) rtThreadNativeWaitKludge(PRTTHREADINT pThread)
 {
     NOREF(pThread);
+    //RTThreadSleep(1); // FreeBSD
 }
 
 

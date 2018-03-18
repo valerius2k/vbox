@@ -24,6 +24,7 @@
 # include <QTimer>
 # include <QMdiArea>
 # include <QMdiSubWindow>
+# include <QDesktopWidget>
 # include <QLabel>
 # include <QMenu>
 # include <QToolButton>

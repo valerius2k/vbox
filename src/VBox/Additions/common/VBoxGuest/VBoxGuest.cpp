@@ -1730,7 +1730,8 @@ static int vbgdIoCtl_CancelAllWaitEvents(PVBOXGUESTDEVEXT pDevExt, PVBOXGUESTSES
     if (!fCancelledOne)
         pSession->fPendingCancelWaitEvents = true;
     RTSpinlockRelease(pDevExt->EventSpinlock);
-    Assert(rc == 0);
+    AssertMsg(rc == 0, ("rc=%lu\n", rc));
+    //Assert(rc == 0); // vs
     NOREF(rc);
 
 #ifdef VBOXGUEST_USE_DEFERRED_WAKE_UP

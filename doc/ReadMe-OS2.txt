@@ -1,11 +1,11 @@
 VirtualBox for OS/2 OSE Edition BETA
 ====================================
 
-Version 5.0.6_OSE r141
+Version 5.0.51_OSE r159
 
-14.11.2016
+18.03.2018
 
-This is a build of VirtualBox 5.0.6_OSE_r141 Edition for OS/2.
+This is a build of VirtualBox 5.0.51_OSE_r159 Edition for OS/2.
 
 bww bitwise works GmbH. undertook the effort to provide an updated 
 version of VirtualBox for OS/2. Please note, that this version is not
@@ -137,4 +137,3 @@ Current Issues / TODOs
   - Shared clipboard.
   - Installer.
   - Very slow Resume after Pause in real mode guest applications.
-

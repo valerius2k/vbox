@@ -51,7 +51,7 @@
 /*
  *	@(#)resolv.h	8.1 (Berkeley) 6/2/93
  *	From Id: resolv.h,v 8.12 1998/04/28 19:36:46 halley Exp $
- *	$Id: resolv.h $
+ *	$Id: resolv.h,v 1.1.1.1 2003/11/19 01:48:35 kyu3 Exp $
  */
 
 #ifndef _RESOLV_H_

@@ -95,14 +95,12 @@ using namespace UIDefs /* if header included */;
 /** Mac OS X: Known OS releases. */
 enum MacOSXRelease
 {
-    MacOSXRelease_Old,
+    MacOSXRelease_Unknown,
     MacOSXRelease_SnowLeopard,
     MacOSXRelease_Lion,
     MacOSXRelease_MountainLion,
     MacOSXRelease_Mavericks,
-    MacOSXRelease_Yosemite,
-    MacOSXRelease_ElCapitan,
-    MacOSXRelease_New,
+    MacOSXRelease_Yosemite
 };
 #endif /* Q_WS_MAC */
 

@@ -725,6 +725,9 @@ void VBoxSDLFB::resizeGuest()
     }
     else
     {
+        if (! mBitsPerPixel) 
+            mBitsPerPixel = 32;
+
         mSurfVRAM = SDL_CreateRGBSurface(SDL_SWSURFACE, mGuestXRes, mGuestYRes, mBitsPerPixel,
                                          Rmask, Gmask, Bmask, Amask);
         LogFlow(("VBoxSDL:: using SDL_SWSURFACE\n"));

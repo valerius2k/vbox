@@ -533,16 +533,6 @@ public:
     /** @} */
 #endif /* DEBUG */
 
-    /** @name Virtual Machine: Log dialog
-      * @{ */
-        /** Returns log-window geometry using @a pWidget and @a defaultGeometry as hints. */
-        QRect logWindowGeometry(QWidget *pWidget, const QRect &defaultGeometry);
-        /** Returns whether log-window should be maximized or not. */
-        bool logWindowShouldBeMaximized();
-        /** Defines log-window @a geometry and @a fMaximized state. */
-        void setLogWindowGeometry(const QRect &geometry, bool fMaximized);
-    /** @} */
-
 private slots:
 
     /** Handles 'extra-data change' event: */
@@ -616,4 +606,3 @@ private:
 #define gEDataManager UIExtraDataManager::instance()
 
 #endif /* !___UIExtraDataManager_h___ */
-

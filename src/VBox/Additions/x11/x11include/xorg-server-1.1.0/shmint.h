@@ -1,5 +1,5 @@
 /*
- * $Id: shmint.h $
+ * $Id: shmint.h,v 3.2 2005/04/20 18:30:29 clee Exp $
  *
  * Copyright © 2003 Keith Packard
  *

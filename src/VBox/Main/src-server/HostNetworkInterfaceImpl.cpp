@@ -341,7 +341,7 @@ HRESULT HostNetworkInterface::getNetworkMask(com::Utf8Str &aNetworkMask)
 
 HRESULT HostNetworkInterface::getIPV6Supported(BOOL *aIPV6Supported)
 {
-#if defined(RT_OS_WINDOWS)
+#if defined(RT_OS_WINDOWS) || defined(RT_OS_OS2)
     *aIPV6Supported = FALSE;
 #else
     *aIPV6Supported = TRUE;

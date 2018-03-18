@@ -31,7 +31,7 @@
  * SUCH DAMAGE.
  *
  *	@(#)in_systm.h	8.1 (Berkeley) 6/10/93
- * $Id: in_systm.h $
+ * $Id: in_systm.h,v 1.1.1.1 2006/05/30 06:12:48 hhzhou Exp $
  */
 
 #ifndef _NETINET_IN_SYSTM_H_

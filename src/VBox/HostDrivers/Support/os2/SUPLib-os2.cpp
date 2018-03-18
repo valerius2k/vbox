@@ -30,6 +30,7 @@
 *********************************************************************************************************************************/
 #define INCL_BASE
 #define INCL_ERRORS
+#define INCL_DOSMEMMGR
 #include <os2.h>
 #undef RT_MAX
 
@@ -55,6 +56,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 
+#include <stdio.h>
 
 /*********************************************************************************************************************************
 *   Defined Constants And Macros                                                                                                 *
@@ -139,11 +141,42 @@ int suplibOsUninstall(void)
 int suplibOsIOCtl(PSUPLIBDATA pThis, uintptr_t uFunction, void *pvReq, size_t cbReq)
 {
     ULONG cbReturned = sizeof(SUPREQHDR);
-    int rc = DosDevIOCtl((HFILE)pThis->hDevice, SUP_CTL_CATEGORY, uFunction,
+    ULONG cbSize, fFlags, rc;
+    PSUPCALLSERVICE pReq = (PSUPCALLSERVICE)pvReq;
+    //ULONG cbRetIn  = (ULONG)pHdr->cbIn;
+    //ULONG cbRetOut = (ULONG)pHdr->cbOut; // hang!!!
+    //Assert(cbReq == RT_MAX(pReq->Hdr->cbIn, pReq->Hdr->cbOut));
+
+    /* Check if the buffer is committed first, to avoid returning ERROR_INVALID_PARAMETER */
+    /* if ( (DosQueryMem((PVOID)pReq->u.In.u64Arg, &cbSize, &fFlags) != NO_ERROR) ||
+         (cbSize < cbReturned) || (cbSize < cbReq) ||
+         !(fFlags & PAG_READ) || !(fFlags & PAG_WRITE) || !(fFlags & PAG_COMMIT) )
+        rc = ERROR_ACCESS_DENIED;
+    else */
+        //printf("DosDevIOCtl enter\n");
+        rc = DosDevIOCtl((HFILE)pThis->hDevice, SUP_CTL_CATEGORY, uFunction,
                          pvReq, cbReturned, &cbReturned,
                          NULL, 0, NULL);
+        //printf("DosDevIOCtl exit\n");
+
+    //                     pvReq, cbRetIn,  &cbRetIn,
+    //                     pvReq, cbRetOut, &cbRetOut);
+
+    // rc = DosDevIOCtl((HFILE)pThis->hDevice, SUP_CTL_CATEGORY, uFunction,
+    //                     pvReq, cbReturned, &cbReturned,
+    //                     NULL, 0, NULL);
+
     if (RT_LIKELY(rc == NO_ERROR))
         return VINF_SUCCESS;
+
+    //if (rc == ERROR_BUFFER_OVERFLOW)
+    //    rc = ERROR_ACCESS_DENIED;
+
+    // suplibOsIOCtl: rc=87, cbSize=5152, fFlags=13
+    // cbReturned=24, pHdr->cbIn=328, pHdr->cbOut=328
+
+    //printf("suplibOsIOCtl: rc=%lu, cbSize=%lu, fFlags=%lx\n", rc, cbSize, fFlags);
+    //printf("cbReturned=%lu, pHdr->cbIn=%u, pHdr->cbOut=%u\n", cbReturned, pHdr->cbIn, pHdr->cbOut);
     return RTErrConvertFromOS2(rc);
 }
 

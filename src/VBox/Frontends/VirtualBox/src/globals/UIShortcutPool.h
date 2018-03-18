@@ -122,7 +122,6 @@ private:
 
     /* Helpers: Shortcuts stuff: */
     void loadDefaults();
-    void loadDefaultsFor(const QString &strPoolExtraDataID);
     void loadOverrides();
     void loadOverridesFor(const QString &strPoolExtraDataID);
     void saveOverrides();

@@ -8776,7 +8776,7 @@ VBOXDDU_DECL(int) VDPrepareWithFilters(PVBOXHDD pDisk, PVDINTERFACE pVDIfsOperat
                         size_t cbPostRead = 0;
                         rc = pImage->Backend->pfnWrite(pImage->pBackendData, uOffset,
                                                        cbThisRead, &IoCtx, &cbThisWrite,
-                                                       &cbPreRead, &cbPostRead, 0);
+                                                       &cbPreRead, &cbPostRead, VD_WRITE_NO_ALLOC);
                         if (RT_FAILURE(rc))
                             break;
                         Assert(cbThisWrite == cbThisRead);

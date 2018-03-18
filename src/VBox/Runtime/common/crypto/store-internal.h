@@ -124,9 +124,6 @@ typedef struct RTCRSTOREPROVIDER
     /**
      * Adds a certificate to the store.
      *
-     * @returns IPRT status.
-     * @retval  VWRN_ALREADY_EXISTS if the certificate is already present and
-     *          RTCRCERTCTX_F_ADD_IF_NOT_FOUND was specified.
      * @param   pvProvider      The provider specific data.
      * @param   fFlags          RTCRCERTCTX_F_XXX.
      * @param   pbEncoded       The encoded certificate bytes.

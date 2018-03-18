@@ -20,6 +20,7 @@
 #else  /* !VBOX_WITH_PRECOMPILED_HEADERS */
 
 /* Qt includes: */
+# include <QDesktopWidget>
 # include <QDir>
 # include <QFileInfo>
 # include <QPainter>
@@ -943,7 +944,7 @@ void UIMachineLogic::prepareSessionConnections()
             this, SLOT(sltHandleVBoxSVCAvailabilityChange()));
 
     /* We should watch for requested modes: */
-    connect(uisession(), SIGNAL(sigInitialized()), this, SLOT(sltCheckForRequestedVisualStateType()), Qt::QueuedConnection);
+    connect(uisession(), SIGNAL(sigInitialized()), this, SLOT(sltCheckForRequestedVisualStateType()));
     connect(uisession(), SIGNAL(sigAdditionsStateChange()), this, SLOT(sltCheckForRequestedVisualStateType()));
 
     /* We should watch for console events: */

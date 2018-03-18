@@ -473,7 +473,8 @@ static DECLCALLBACK(int) drvHostSerialSendThread(PPDMDRVINS pDrvIns, PPDMTHREAD 
     while (pThread->enmState == PDMTHREADSTATE_RUNNING)
     {
         int rc = RTSemEventWait(pThis->SendSem, RT_INDEFINITE_WAIT);
-        AssertRCBreak(rc);
+        if (RT_FAILURE(rc))
+            break;
 
         /*
          * Write the character to the host device.
@@ -768,20 +769,9 @@ static DECLCALLBACK(int) drvHostSerialRecvThread(PPDMDRVINS pDrvIns, PPDMTHREAD 
             {
                 if (!ReadFile(pThis->hDeviceFile, abBuffer, sizeof(abBuffer), &dwNumberOfBytesTransferred, &pThis->overlappedRecv))
                 {
-                    dwRet = GetLastError();
-                    if (dwRet == ERROR_IO_PENDING)
-                    {
-                        if (GetOverlappedResult(pThis->hDeviceFile, &pThis->overlappedRecv, &dwNumberOfBytesTransferred, TRUE))
-                            dwRet = NO_ERROR;
-                        else
-                            dwRet = GetLastError();
-                    }
-                    if (dwRet != NO_ERROR)
-                    {
-                        rcThread = RTErrConvertFromWin32(dwRet);
-                        LogRel(("HostSerial#%d: Read failed with error %Rrc; terminating the worker thread.\n", pDrvIns->iInstance, rcThread));
-                        break;
-                    }
+                    rcThread = RTErrConvertFromWin32(GetLastError());
+                    LogRel(("HostSerial#%d: Read failed with error %Rrc; terminating the worker thread.\n", pDrvIns->iInstance, rcThread));
+                    break;
                 }
                 cbRemaining = dwNumberOfBytesTransferred;
             }

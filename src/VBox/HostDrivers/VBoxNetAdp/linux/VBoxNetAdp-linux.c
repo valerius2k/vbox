@@ -427,6 +427,7 @@ static int __init VBoxNetAdpLinuxInit(void)
  */
 static void __exit VBoxNetAdpLinuxUnload(void)
 {
+    int rc;
     Log(("VBoxNetAdpLinuxUnload\n"));
 
     /*
@@ -435,7 +436,11 @@ static void __exit VBoxNetAdpLinuxUnload(void)
 
     vboxNetAdpShutdown();
     /* Remove control device */
-    misc_deregister(&g_CtlDev);
+    rc = misc_deregister(&g_CtlDev);
+    if (rc < 0)
+    {
+        printk(KERN_ERR "misc_deregister failed with rc=%x\n", rc);
+    }
 
     RTR0Term();
 

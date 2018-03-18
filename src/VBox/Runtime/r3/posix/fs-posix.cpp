@@ -152,11 +152,7 @@ RTR3DECL(int) RTFsQueryProperties(const char *pszFsPath, PRTFSPROPERTIES pProper
              * Calc/fake the returned values.
              */
             pProperties->cbMaxComponent = StatVFS.f_namemax;
-#if defined(RT_OS_OS2) || defined(RT_OS_WINDOWS)
-            pProperties->fCaseSensitive = false;
-#else
             pProperties->fCaseSensitive = true;
-#endif
             pProperties->fCompressed = false;
             pProperties->fFileCompression = false;
             pProperties->fReadOnly = !!(StatVFS.f_flag & ST_RDONLY);
@@ -171,16 +167,6 @@ RTR3DECL(int) RTFsQueryProperties(const char *pszFsPath, PRTFSPROPERTIES pProper
     LogFlow(("RTFsQueryProperties(%p:{%s}, %p:{.cbMaxComponent=%u, .fReadOnly=%RTbool}): returns %Rrc\n",
              pszFsPath, pszFsPath, pProperties, pProperties->cbMaxComponent, pProperties->fReadOnly, rc));
     return rc;
-}
-
-
-RTR3DECL(bool) RTFsIsCaseSensitive(const char *pszFsPath)
-{
-#if defined(RT_OS_OS2) || defined(RT_OS_WINDOWS)
-    return false;
-#else
-    return true;
-#endif
 }
 
 

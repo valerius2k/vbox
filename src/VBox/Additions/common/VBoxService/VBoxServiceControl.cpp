@@ -129,12 +129,12 @@ static DECLCALLBACK(int) VBoxServiceControlOption(const char **ppszShort, int ar
 #ifdef DEBUG
     else if (!strcmp(argv[*pi], "--control-dump-stdout"))
     {
-        g_Session.fFlags |= VBOXSERVICECTRLSESSION_FLAG_DUMPSTDOUT;
+        g_Session.uFlags |= VBOXSERVICECTRLSESSION_FLAG_DUMPSTDOUT;
         rc = 0; /* Flag this command as parsed. */
     }
     else if (!strcmp(argv[*pi], "--control-dump-stderr"))
     {
-        g_Session.fFlags |= VBOXSERVICECTRLSESSION_FLAG_DUMPSTDERR;
+        g_Session.uFlags |= VBOXSERVICECTRLSESSION_FLAG_DUMPSTDERR;
         rc = 0; /* Flag this command as parsed. */
     }
 #endif
@@ -371,7 +371,7 @@ static int gstcntlHandleSessionOpen(PVBGLR3GUESTCTRLCMDCTX pHostCtx)
                                            ssInfo.szUser,     sizeof(ssInfo.szUser),
                                            ssInfo.szPassword, sizeof(ssInfo.szPassword),
                                            ssInfo.szDomain,   sizeof(ssInfo.szDomain),
-                                           &ssInfo.fFlags,    &ssInfo.uSessionID);
+                                           &ssInfo.uFlags,    &ssInfo.uSessionID);
     if (RT_SUCCESS(rc))
     {
         /* The session open call has the protocol version the host

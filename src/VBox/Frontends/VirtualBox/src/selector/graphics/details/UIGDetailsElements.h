@@ -1,10 +1,10 @@
 /* $Id$ */
 /** @file
- * VBox Qt GUI - UIGDetailsElement[Name] classes declaration.
+ * VBox Qt GUI - UIGDetailsElements class declaration.
  */
 
 /*
- * Copyright (C) 2012-2015 Oracle Corporation
+ * Copyright (C) 2012-2013 Oracle Corporation
  *
  * This file is part of VirtualBox Open Source Edition (OSE), as
  * available from http://www.virtualbox.org. This file is free software;
@@ -15,74 +15,124 @@
  * hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
  */
 
-#ifndef ___UIGDetailsElements_h___
-#define ___UIGDetailsElements_h___
+#ifndef __UIGDetailsElements_h__
+#define __UIGDetailsElements_h__
+
+/* Qt includes: */
+#include <QThread>
 
 /* GUI includes: */
-#include "UIThreadPool.h"
 #include "UIGDetailsElement.h"
+
+/* COM includes: */
+#include "COMEnums.h"
+#include "CMachine.h"
 
 /* Forward declarations: */
 class UIGMachinePreview;
-class CNetworkAdapter;
 
-
-/** UITask extension used as update task for the details-element. */
-class UIGDetailsUpdateTask : public UITask
+/* Element update thread: */
+class UIGDetailsUpdateThread : public QThread
 {
     Q_OBJECT;
 
+signals:
+
+    /* Notifier: Prepare stuff: */
+    void sigComplete(const UITextTable &text);
+
 public:
 
-    /** Constructs update task taking @a machine as data. */
-    UIGDetailsUpdateTask(const CMachine &machine);
+    /* Constructor: */
+    UIGDetailsUpdateThread(const CMachine &machine);
+
+protected:
+
+    /* Internal API: Machine stuff: */
+    const CMachine& machine() const { return m_machine; }
+
+private:
+
+    /* Variables: */
+    const CMachine &m_machine;
 };
 
-/** UIGDetailsElement extension used as a wrapping interface to
-  * extend base-class with async functionality performed by the COM worker-threads. */
+/* Details element interface: */
 class UIGDetailsElementInterface : public UIGDetailsElement
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs details-element interface for passed @a pParent set.
-      * @param type    brings the details-element type this element belongs to.
-      * @param fOpened brings whether the details-element should be visually opened. */
-    UIGDetailsElementInterface(UIGDetailsSet *pParent, DetailsElementType type, bool fOpened);
+    /* Constructor/destructor: */
+    UIGDetailsElementInterface(UIGDetailsSet *pParent, DetailsElementType elementType, bool fOpened);
+    ~UIGDetailsElementInterface();
 
 protected:
 
-    /** Performs translation. */
-    virtual void retranslateUi();
-
-    /** Updates appearance. */
-    virtual void updateAppearance();
-
-    /** Creates update task. */
-    virtual UITask* createUpdateTask() = 0;
+    /* Helpers: Update stuff: */
+    void updateAppearance();
+    virtual UIGDetailsUpdateThread* createUpdateThread() = 0;
 
 private slots:
 
-    /** Handles the signal about update @a pTask is finished. */
-    virtual void sltUpdateAppearanceFinished(UITask *pTask);
+    /* Handler: Update stuff: */
+    virtual void sltUpdateAppearanceFinished(const UITextTable &newText);
 
 private:
 
-    /** Holds the instance of the update task. */
-    UITask *m_pTask;
+    /* Helpers: Cleanup stuff: */
+    void cleanupThread();
+
+    /* Variables: */
+    UIGDetailsUpdateThread *m_pThread;
 };
 
 
-/** UIGDetailsElementInterface extension for the details-element type 'Preview'. */
+/* Thread 'General': */
+class UIGDetailsUpdateThreadGeneral : public UIGDetailsUpdateThread
+{
+    Q_OBJECT;
+
+public:
+
+    /* Constructor: */
+    UIGDetailsUpdateThreadGeneral(const CMachine &machine);
+
+private:
+
+    /* Helpers: Prepare stuff: */
+    void run();
+};
+
+/* Element 'General': */
+class UIGDetailsElementGeneral : public UIGDetailsElementInterface
+{
+    Q_OBJECT;
+
+public:
+
+    /* Constructor: */
+    UIGDetailsElementGeneral(UIGDetailsSet *pParent, bool fOpened);
+
+private:
+
+    /* Helper: Translate stuff: */
+    void retranslateUi();
+
+    /* Helper: Update stuff: */
+    UIGDetailsUpdateThread* createUpdateThread();
+};
+
+
+/* Element 'Preview': */
 class UIGDetailsElementPreview : public UIGDetailsElement
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs details-element interface for passed @a pParent set.
-      * @param fOpened brings whether the details-element should be opened. */
+    /* Constructor: */
     UIGDetailsElementPreview(UIGDetailsSet *pParent, bool fOpened);
 
 private slots:
@@ -92,461 +142,419 @@ private slots:
 
 private:
 
-    /** Performs translation. */
-    virtual void retranslateUi();
+    /* Helper: Translate stuff: */
+    void retranslateUi();
 
-    /** Returns minimum width hint. */
+    /* Helpers: Layout stuff: */
     int minimumWidthHint() const;
-    /** Returns minimum height hint.
-      * @param fClosed allows to specify whether the hint should
-      *                be calculated for the closed element. */
     int minimumHeightHint(bool fClosed) const;
-    /** Updates layout. */
     void updateLayout();
 
-    /** Updates appearance. */
+    /* Helper: Update stuff: */
     void updateAppearance();
 
-    /** Holds the instance of VM preview. */
+    /* Variables: */
     UIGMachinePreview *m_pPreview;
 };
 
 
-/** UITask extension used as update task for the details-element type 'General'. */
-class UIGDetailsUpdateTaskGeneral : public UIGDetailsUpdateTask
+/* Thread 'System': */
+class UIGDetailsUpdateThreadSystem : public UIGDetailsUpdateThread
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs update task passing @a machine to the base-class. */
-    UIGDetailsUpdateTaskGeneral(const CMachine &machine)
-        : UIGDetailsUpdateTask(machine) {}
+    /* Constructor: */
+    UIGDetailsUpdateThreadSystem(const CMachine &machine);
 
 private:
 
-    /** Contains update task body. */
+    /* Helpers: Prepare stuff: */
     void run();
 };
 
-/** UIGDetailsElementInterface extension for the details-element type 'General'. */
-class UIGDetailsElementGeneral : public UIGDetailsElementInterface
-{
-    Q_OBJECT;
-
-public:
-
-    /** Constructs details-element object for passed @a pParent set.
-      * @param fOpened brings whether the details-element should be visually opened. */
-    UIGDetailsElementGeneral(UIGDetailsSet *pParent, bool fOpened)
-        : UIGDetailsElementInterface(pParent, DetailsElementType_General, fOpened) {}
-
-private:
-
-    /** Creates update task for this element. */
-    UITask* createUpdateTask() { return new UIGDetailsUpdateTaskGeneral(machine()); }
-};
-
-
-/** UITask extension used as update task for the details-element type 'System'. */
-class UIGDetailsUpdateTaskSystem : public UIGDetailsUpdateTask
-{
-    Q_OBJECT;
-
-public:
-
-    /** Constructs update task passing @a machine to the base-class. */
-    UIGDetailsUpdateTaskSystem(const CMachine &machine)
-        : UIGDetailsUpdateTask(machine) {}
-
-private:
-
-    /** Contains update task body. */
-    void run();
-};
-
-/** UIGDetailsElementInterface extension for the details-element type 'System'. */
+/* Element 'System': */
 class UIGDetailsElementSystem : public UIGDetailsElementInterface
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs details-element object for passed @a pParent set.
-      * @param fOpened brings whether the details-element should be visually opened. */
-    UIGDetailsElementSystem(UIGDetailsSet *pParent, bool fOpened)
-        : UIGDetailsElementInterface(pParent, DetailsElementType_System, fOpened) {}
+    /* Constructor: */
+    UIGDetailsElementSystem(UIGDetailsSet *pParent, bool fOpened);
 
 private:
 
-    /** Creates update task for this element. */
-    UITask* createUpdateTask() { return new UIGDetailsUpdateTaskSystem(machine()); }
+    /* Helper: Translate stuff: */
+    void retranslateUi();
+
+    /* Helper: Update stuff: */
+    UIGDetailsUpdateThread* createUpdateThread();
 };
 
 
-/** UITask extension used as update task for the details-element type 'Display'. */
-class UIGDetailsUpdateTaskDisplay : public UIGDetailsUpdateTask
+/* Thread 'Display': */
+class UIGDetailsUpdateThreadDisplay : public UIGDetailsUpdateThread
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs update task passing @a machine to the base-class. */
-    UIGDetailsUpdateTaskDisplay(const CMachine &machine)
-        : UIGDetailsUpdateTask(machine) {}
+    /* Constructor: */
+    UIGDetailsUpdateThreadDisplay(const CMachine &machine);
 
 private:
 
-    /** Contains update task body. */
+    /* Helpers: Prepare stuff: */
     void run();
 };
 
-/** UIGDetailsElementInterface extension for the details-element type 'Display'. */
+/* Element 'Display': */
 class UIGDetailsElementDisplay : public UIGDetailsElementInterface
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs details-element object for passed @a pParent set.
-      * @param fOpened brings whether the details-element should be visually opened. */
-    UIGDetailsElementDisplay(UIGDetailsSet *pParent, bool fOpened)
-        : UIGDetailsElementInterface(pParent, DetailsElementType_Display, fOpened) {}
+    /* Constructor: */
+    UIGDetailsElementDisplay(UIGDetailsSet *pParent, bool fOpened);
 
 private:
 
-    /** Creates update task for this element. */
-    UITask* createUpdateTask() { return new UIGDetailsUpdateTaskDisplay(machine()); }
+    /* Helper: Translate stuff: */
+    void retranslateUi();
+
+    /* Helper: Update stuff: */
+    UIGDetailsUpdateThread* createUpdateThread();
 };
 
 
-/** UITask extension used as update task for the details-element type 'Storage'. */
-class UIGDetailsUpdateTaskStorage : public UIGDetailsUpdateTask
+/* Thread 'Storage': */
+class UIGDetailsUpdateThreadStorage : public UIGDetailsUpdateThread
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs update task passing @a machine to the base-class. */
-    UIGDetailsUpdateTaskStorage(const CMachine &machine)
-        : UIGDetailsUpdateTask(machine) {}
+    /* Constructor: */
+    UIGDetailsUpdateThreadStorage(const CMachine &machine);
 
 private:
 
-    /** Contains update task body. */
+    /* Helpers: Prepare stuff: */
     void run();
 };
 
-/** UIGDetailsElementInterface extension for the details-element type 'Storage'. */
+/* Element 'Storage': */
 class UIGDetailsElementStorage : public UIGDetailsElementInterface
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs details-element object for passed @a pParent set.
-      * @param fOpened brings whether the details-element should be visually opened. */
-    UIGDetailsElementStorage(UIGDetailsSet *pParent, bool fOpened)
-        : UIGDetailsElementInterface(pParent, DetailsElementType_Storage, fOpened) {}
+    /* Constructor: */
+    UIGDetailsElementStorage(UIGDetailsSet *pParent, bool fOpened);
 
 private:
 
-    /** Creates update task for this element. */
-    UITask* createUpdateTask() { return new UIGDetailsUpdateTaskStorage(machine()); }
+    /* Helper: Translate stuff: */
+    void retranslateUi();
+
+    /* Helper: Update stuff: */
+    UIGDetailsUpdateThread* createUpdateThread();
 };
 
 
-/** UITask extension used as update task for the details-element type 'Audio'. */
-class UIGDetailsUpdateTaskAudio : public UIGDetailsUpdateTask
+/* Thread 'Audio': */
+class UIGDetailsUpdateThreadAudio : public UIGDetailsUpdateThread
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs update task passing @a machine to the base-class. */
-    UIGDetailsUpdateTaskAudio(const CMachine &machine)
-        : UIGDetailsUpdateTask(machine) {}
+    /* Constructor: */
+    UIGDetailsUpdateThreadAudio(const CMachine &machine);
 
 private:
 
-    /** Contains update task body. */
+    /* Helpers: Prepare stuff: */
     void run();
 };
 
-/** UIGDetailsElementInterface extension for the details-element type 'Audio'. */
+/* Element 'Audio': */
 class UIGDetailsElementAudio : public UIGDetailsElementInterface
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs details-element object for passed @a pParent set.
-      * @param fOpened brings whether the details-element should be visually opened. */
-    UIGDetailsElementAudio(UIGDetailsSet *pParent, bool fOpened)
-        : UIGDetailsElementInterface(pParent, DetailsElementType_Audio, fOpened) {}
+    /* Constructor: */
+    UIGDetailsElementAudio(UIGDetailsSet *pParent, bool fOpened);
 
 private:
 
-    /** Creates update task for this element. */
-    UITask* createUpdateTask() { return new UIGDetailsUpdateTaskAudio(machine()); }
+    /* Helper: Translate stuff: */
+    void retranslateUi();
+
+    /* Helper: Update stuff: */
+    UIGDetailsUpdateThread* createUpdateThread();
 };
 
 
-/** UITask extension used as update task for the details-element type 'Network'. */
-class UIGDetailsUpdateTaskNetwork : public UIGDetailsUpdateTask
+/* Thread 'Network': */
+class UIGDetailsUpdateThreadNetwork : public UIGDetailsUpdateThread
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs update task passing @a machine to the base-class. */
-    UIGDetailsUpdateTaskNetwork(const CMachine &machine)
-        : UIGDetailsUpdateTask(machine) {}
+    /* Constructor: */
+    UIGDetailsUpdateThreadNetwork(const CMachine &machine);
 
 private:
 
-    /** Contains update task body. */
+    /* Helpers: Prepare stuff: */
     void run();
-
-    /** Summarizes generic properties. */
     static QString summarizeGenericProperties(const CNetworkAdapter &adapter);
 };
 
-/** UIGDetailsElementInterface extension for the details-element type 'Network'. */
+/* Element 'Network': */
 class UIGDetailsElementNetwork : public UIGDetailsElementInterface
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs details-element object for passed @a pParent set.
-      * @param fOpened brings whether the details-element should be visually opened. */
-    UIGDetailsElementNetwork(UIGDetailsSet *pParent, bool fOpened)
-        : UIGDetailsElementInterface(pParent, DetailsElementType_Network, fOpened) {}
+    /* Constructor: */
+    UIGDetailsElementNetwork(UIGDetailsSet *pParent, bool fOpened);
 
 private:
 
-    /** Creates update task for this element. */
-    UITask* createUpdateTask() { return new UIGDetailsUpdateTaskNetwork(machine()); }
+    /* Helper: Translate stuff: */
+    void retranslateUi();
+
+    /* Helper: Update stuff: */
+    UIGDetailsUpdateThread* createUpdateThread();
 };
 
 
-/** UITask extension used as update task for the details-element type 'Serial'. */
-class UIGDetailsUpdateTaskSerial : public UIGDetailsUpdateTask
+/* Thread 'Serial': */
+class UIGDetailsUpdateThreadSerial : public UIGDetailsUpdateThread
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs update task passing @a machine to the base-class. */
-    UIGDetailsUpdateTaskSerial(const CMachine &machine)
-        : UIGDetailsUpdateTask(machine) {}
+    /* Constructor: */
+    UIGDetailsUpdateThreadSerial(const CMachine &machine);
 
 private:
 
-    /** Contains update task body. */
+    /* Helpers: Prepare stuff: */
     void run();
 };
 
-/** UIGDetailsElementInterface extension for the details-element type 'Serial'. */
+/* Element 'Serial': */
 class UIGDetailsElementSerial : public UIGDetailsElementInterface
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs details-element object for passed @a pParent set.
-      * @param fOpened brings whether the details-element should be visually opened. */
-    UIGDetailsElementSerial(UIGDetailsSet *pParent, bool fOpened)
-        : UIGDetailsElementInterface(pParent, DetailsElementType_Serial, fOpened) {}
+    /* Constructor: */
+    UIGDetailsElementSerial(UIGDetailsSet *pParent, bool fOpened);
 
 private:
 
-    /** Creates update task for this element. */
-    UITask* createUpdateTask() { return new UIGDetailsUpdateTaskSerial(machine()); }
+    /* Helper: Translate stuff: */
+    void retranslateUi();
+
+    /* Helper: Update stuff: */
+    UIGDetailsUpdateThread* createUpdateThread();
 };
 
 
 #ifdef VBOX_WITH_PARALLEL_PORTS
-/** UITask extension used as update task for the details-element type 'Parallel'. */
-class UIGDetailsUpdateTaskParallel : public UIGDetailsUpdateTask
+/* Thread 'Parallel': */
+class UIGDetailsUpdateThreadParallel : public UIGDetailsUpdateThread
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs update task passing @a machine to the base-class. */
-    UIGDetailsUpdateTaskParallel(const CMachine &machine)
-        : UIGDetailsUpdateTask(machine) {}
+    /* Constructor: */
+    UIGDetailsUpdateThreadParallel(const CMachine &machine);
 
 private:
 
-    /** Contains update task body. */
+    /* Helpers: Prepare stuff: */
     void run();
 };
 
-/** UIGDetailsElementInterface extension for the details-element type 'Parallel'. */
+/* Element 'Parallel': */
 class UIGDetailsElementParallel : public UIGDetailsElementInterface
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs details-element object for passed @a pParent set.
-      * @param fOpened brings whether the details-element should be visually opened. */
-    UIGDetailsElementParallel(UIGDetailsSet *pParent, bool fOpened)
-        : UIGDetailsElementInterface(pParent, DetailsElementType_Parallel, fOpened) {}
+    /* Constructor: */
+    UIGDetailsElementParallel(UIGDetailsSet *pParent, bool fOpened);
 
 private:
 
-    /** Creates update task for this element. */
-    UITask* createUpdateTask() { return new UIGDetailsUpdateTaskParallel(machine()); }
+    /* Helper: Translate stuff: */
+    void retranslateUi();
+
+    /* Helper: Update stuff: */
+    UIGDetailsUpdateThread* createUpdateThread();
 };
 #endif /* VBOX_WITH_PARALLEL_PORTS */
 
 
-/** UITask extension used as update task for the details-element type 'USB'. */
-class UIGDetailsUpdateTaskUSB : public UIGDetailsUpdateTask
+/* Thread 'USB': */
+class UIGDetailsUpdateThreadUSB : public UIGDetailsUpdateThread
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs update task passing @a machine to the base-class. */
-    UIGDetailsUpdateTaskUSB(const CMachine &machine)
-        : UIGDetailsUpdateTask(machine) {}
+    /* Constructor: */
+    UIGDetailsUpdateThreadUSB(const CMachine &machine);
 
 private:
 
-    /** Contains update task body. */
+    /* Helpers: Prepare stuff: */
     void run();
 };
 
-/** UIGDetailsElementInterface extension for the details-element type 'USB'. */
+/* Element 'USB': */
 class UIGDetailsElementUSB : public UIGDetailsElementInterface
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs details-element object for passed @a pParent set.
-      * @param fOpened brings whether the details-element should be visually opened. */
-    UIGDetailsElementUSB(UIGDetailsSet *pParent, bool fOpened)
-        : UIGDetailsElementInterface(pParent, DetailsElementType_USB, fOpened) {}
+    /* Constructor: */
+    UIGDetailsElementUSB(UIGDetailsSet *pParent, bool fOpened);
 
 private:
 
-    /** Creates update task for this element. */
-    UITask* createUpdateTask() { return new UIGDetailsUpdateTaskUSB(machine()); }
+    /* Helper: Translate stuff: */
+    void retranslateUi();
+
+    /* Helper: Update stuff: */
+    UIGDetailsUpdateThread* createUpdateThread();
 };
 
 
-/** UITask extension used as update task for the details-element type 'SF'. */
-class UIGDetailsUpdateTaskSF : public UIGDetailsUpdateTask
+/* Thread 'SF': */
+class UIGDetailsUpdateThreadSF : public UIGDetailsUpdateThread
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs update task passing @a machine to the base-class. */
-    UIGDetailsUpdateTaskSF(const CMachine &machine)
-        : UIGDetailsUpdateTask(machine) {}
+    /* Constructor: */
+    UIGDetailsUpdateThreadSF(const CMachine &machine);
 
 private:
 
-    /** Contains update task body. */
+    /* Helpers: Prepare stuff: */
     void run();
 };
 
-/** UIGDetailsElementInterface extension for the details-element type 'SF'. */
+/* Element 'SF': */
 class UIGDetailsElementSF : public UIGDetailsElementInterface
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs details-element object for passed @a pParent set.
-      * @param fOpened brings whether the details-element should be visually opened. */
-    UIGDetailsElementSF(UIGDetailsSet *pParent, bool fOpened)
-        : UIGDetailsElementInterface(pParent, DetailsElementType_SF, fOpened) {}
+    /* Constructor: */
+    UIGDetailsElementSF(UIGDetailsSet *pParent, bool fOpened);
 
 private:
 
-    /** Creates update task for this element. */
-    UITask* createUpdateTask() { return new UIGDetailsUpdateTaskSF(machine()); }
+    /* Helper: Translate stuff: */
+    void retranslateUi();
+
+    /* Helper: Update stuff: */
+    UIGDetailsUpdateThread* createUpdateThread();
 };
 
 
-/** UITask extension used as update task for the details-element type 'UI'. */
-class UIGDetailsUpdateTaskUI : public UIGDetailsUpdateTask
+/* Thread 'UI': */
+class UIGDetailsUpdateThreadUI : public UIGDetailsUpdateThread
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs update task passing @a machine to the base-class. */
-    UIGDetailsUpdateTaskUI(const CMachine &machine)
-        : UIGDetailsUpdateTask(machine) {}
+    /* Constructor: */
+    UIGDetailsUpdateThreadUI(const CMachine &machine);
 
 private:
 
-    /** Contains update task body. */
+    /* Helpers: Prepare stuff: */
     void run();
 };
 
-/** UIGDetailsElementInterface extension for the details-element type 'UI'. */
+/* Element 'UI': */
 class UIGDetailsElementUI : public UIGDetailsElementInterface
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs details-element object for passed @a pParent set.
-      * @param fOpened brings whether the details-element should be visually opened. */
-    UIGDetailsElementUI(UIGDetailsSet *pParent, bool fOpened)
-        : UIGDetailsElementInterface(pParent, DetailsElementType_UI, fOpened) {}
+    /* Constructor: */
+    UIGDetailsElementUI(UIGDetailsSet *pParent, bool fOpened);
 
 private:
 
-    /** Creates update task for this element. */
-    UITask* createUpdateTask() { return new UIGDetailsUpdateTaskUI(machine()); }
+    /* Helper: Translate stuff: */
+    void retranslateUi();
+
+    /* Helper: Update stuff: */
+    UIGDetailsUpdateThread* createUpdateThread();
 };
 
 
-/** UITask extension used as update task for the details-element type 'Description'. */
-class UIGDetailsUpdateTaskDescription : public UIGDetailsUpdateTask
+/* Thread 'Description': */
+class UIGDetailsUpdateThreadDescription : public UIGDetailsUpdateThread
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs update task passing @a machine to the base-class. */
-    UIGDetailsUpdateTaskDescription(const CMachine &machine)
-        : UIGDetailsUpdateTask(machine) {}
+    /* Constructor: */
+    UIGDetailsUpdateThreadDescription(const CMachine &machine);
 
 private:
 
-    /** Contains update task body. */
+    /* Helpers: Prepare stuff: */
     void run();
 };
 
-/** UIGDetailsElementInterface extension for the details-element type 'Description'. */
+/* Element 'Description': */
 class UIGDetailsElementDescription : public UIGDetailsElementInterface
 {
     Q_OBJECT;
 
 public:
 
-    /** Constructs details-element object for passed @a pParent set.
-      * @param fOpened brings whether the details-element should be visually opened. */
-    UIGDetailsElementDescription(UIGDetailsSet *pParent, bool fOpened)
-        : UIGDetailsElementInterface(pParent, DetailsElementType_Description, fOpened) {}
+    /* Constructor: */
+    UIGDetailsElementDescription(UIGDetailsSet *pParent, bool fOpened);
 
 private:
 
-    /** Creates update task for this element. */
-    UITask* createUpdateTask() { return new UIGDetailsUpdateTaskDescription(machine()); }
+    /* Helper: Translate stuff: */
+    void retranslateUi();
+
+    /* Helper: Update stuff: */
+    UIGDetailsUpdateThread* createUpdateThread();
 };
 
-#endif /* !___UIGDetailsElements_h___ */
+#endif /* __UIGDetailsElements_h__ */
 

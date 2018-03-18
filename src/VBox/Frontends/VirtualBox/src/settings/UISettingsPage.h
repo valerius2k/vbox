@@ -124,10 +124,9 @@ public:
     ConfigurationAccessLevel configurationAccessLevel() const { return m_configurationAccessLevel; }
     virtual void setConfigurationAccessLevel(ConfigurationAccessLevel newConfigurationAccessLevel) { m_configurationAccessLevel = newConfigurationAccessLevel; polishPage(); }
     bool isMachineOffline() const { return configurationAccessLevel() == ConfigurationAccessLevel_Full; }
-    bool isMachinePoweredOff() const { return configurationAccessLevel() == ConfigurationAccessLevel_Partial_PoweredOff; }
-    bool isMachineSaved() const { return configurationAccessLevel() == ConfigurationAccessLevel_Partial_Saved; }
-    bool isMachineOnline() const { return configurationAccessLevel() == ConfigurationAccessLevel_Partial_Running; }
-    bool isMachineInValidMode() const { return isMachineOffline() || isMachinePoweredOff() || isMachineSaved() || isMachineOnline(); }
+    bool isMachineSaved() const { return configurationAccessLevel() == ConfigurationAccessLevel_Saved; }
+    bool isMachineOnline() const { return configurationAccessLevel() == ConfigurationAccessLevel_Runtime; }
+    bool isMachineInValidMode() const { return isMachineOffline() || isMachineSaved() || isMachineOnline(); }
 
     /* Page changed: */
     virtual bool changed() const = 0;

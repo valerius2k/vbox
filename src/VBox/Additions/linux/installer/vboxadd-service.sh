@@ -36,7 +36,7 @@ elif [ -f /etc/SuSE-release ]; then
     PIDFILE="/var/run/vboxadd-service"
 elif [ -f /etc/debian_version ]; then
     system=debian
-    PIDFILE="/var/run/vboxadd-service.pid"
+    PIDFILE="/var/run/vboxadd-service"
 elif [ -f /etc/gentoo-release ]; then
     system=gentoo
     PIDFILE="/var/run/vboxadd-service"
@@ -93,7 +93,7 @@ fi
 
 if [ "$system" = "debian" ]; then
     daemon() {
-        start-stop-daemon --start --exec $1 -- $2 $3
+        start-stop-daemon --start --exec $1 -- $2
     }
 
     killproc() {
@@ -120,7 +120,7 @@ if [ "$system" = "gentoo" ]; then
         . /etc/init.d/functions.sh
     fi
     daemon() {
-        start-stop-daemon --start --exec $1 -- $2 $3
+        start-stop-daemon --start --exec $1 -- $2
     }
 
     killproc() {
@@ -146,7 +146,7 @@ fi
 
 if [ "$system" = "slackware" -o "$system" = "other" ]; then
     daemon() {
-        $1 $2 $3
+        $1 $2
     }
 
     killproc() {
@@ -171,7 +171,7 @@ fi
 if [ "$system" = "lfs" ]; then
     . /etc/rc.d/init.d/functions
     daemon() {
-        loadproc $1 $2 $3
+        loadproc $1 $2
     }
 
     fail_msg() {
@@ -212,8 +212,9 @@ start() {
             exit 1
         }
         testbinary
-        daemon $binary --pidfile $PIDFILE > /dev/null
+        daemon $binary > /dev/null
         RETVAL=$?
+        test $RETVAL -eq 0 && echo `pidof VBoxService` > $PIDFILE
         succ_msg
     fi
     return $RETVAL

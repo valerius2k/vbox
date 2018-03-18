@@ -276,6 +276,10 @@ typedef struct COREAUDIOSTREAMOUT
     AudioUnit                   audioUnit;
     /* A ring buffer for transferring data to the playback thread. */
     PRTCIRCBUF                  pBuf;
+    /* Temporary buffer for copying over audio data into Core Audio. */
+    void                       *pvPCMBuf;
+    /** Size of the temporary buffer. */
+    size_t                      cbPCMBuf;
     /* Initialization status tracker. Used when some of the device parameters
      * or the device itself is changed during the runtime. */
     volatile uint32_t           status;
@@ -1256,6 +1260,15 @@ static int drvHostCoreAudioInitOutput(PPDMAUDIOHSTSTRMOUT pHstStrmOut, uint32_t 
     rc = RTCircBufCreate(&pStreamOut->pBuf, cSamples << pHstStrmOut->Props.cShift);
     if (RT_SUCCESS(rc))
     {
+        /* Allocate temporary buffer. */
+        pStreamOut->cbPCMBuf = _4K; /** @todo Make this configurable. */
+        pStreamOut->pvPCMBuf = RTMemAlloc(pStreamOut->cbPCMBuf);
+        if (!pStreamOut->pvPCMBuf)
+            rc = VERR_NO_MEMORY;
+    }
+
+    if (RT_SUCCESS(rc))
+    {
         /*
          * Register callbacks.
          */
@@ -1490,46 +1503,50 @@ static DECLCALLBACK(int) drvHostCoreAudioPlayOut(PPDMIHOSTAUDIO pInterface, PPDM
 
     int rc = VINF_SUCCESS;
     uint32_t cbReadTotal = 0;
-    uint32_t cAvail = AudioMixBufAvail(&pHstStrmOut->MixBuf);
-    size_t cbAvail  = AUDIOMIXBUF_S2B(&pHstStrmOut->MixBuf, cAvail);
-    size_t cbToRead = RT_MIN(cbAvail, RTCircBufFree(pStreamOut->pBuf));
-    LogFlowFunc(("cbToRead=%zu\n", cbToRead));
 
-    while (cbToRead)
+    do
     {
+        size_t cbMixBuf = AudioMixBufSizeBytes(&pHstStrmOut->MixBuf);
+        size_t cbBuf    = RT_MIN(cbMixBuf, pStreamOut->cbPCMBuf);
+        size_t cbToRead = RT_MIN(cbBuf, RTCircBufFree(pStreamOut->pBuf));
+        LogFlowFunc(("cbToRead=%zu\n", cbToRead));
+
         uint32_t cRead, cbRead;
         uint8_t *puBuf;
-        size_t   cbCopy;
+        size_t   cbToWrite;
 
-        /* Try to acquire the necessary space from the ring buffer. */
-        RTCircBufAcquireWriteBlock(pStreamOut->pBuf, cbToRead, (void **)&puBuf, &cbCopy);
-        if (!cbCopy)
+        while (cbToRead)
         {
-            RTCircBufReleaseWriteBlock(pStreamOut->pBuf, cbCopy);
-            break;
-        }        
+            rc = AudioMixBufReadCirc(&pHstStrmOut->MixBuf,
+                                     pStreamOut->pvPCMBuf, cbToRead, &cRead);
+            if (   RT_FAILURE(rc)
+                || !cRead)
+                break;
 
-        Assert(cbCopy <= cbToRead);
+            cbRead = AUDIOMIXBUF_S2B(&pHstStrmOut->MixBuf, cRead);
 
-        rc = AudioMixBufReadCirc(&pHstStrmOut->MixBuf,
-                                 puBuf, cbCopy, &cRead);
+            /* Try to acquire the necessary space from the ring buffer. */
+            RTCircBufAcquireWriteBlock(pStreamOut->pBuf, cbRead, (void **)&puBuf, &cbToWrite);
+            if (!cbToWrite)
+            {
+                RTCircBufReleaseWriteBlock(pStreamOut->pBuf, cbToWrite);
+                break;
+            }
 
-        if (   RT_FAILURE(rc)
-            || !cRead)
-        {
-            RTCircBufReleaseWriteBlock(pStreamOut->pBuf, 0);
-            break;
+            /* Transfer data into stream's own ring buffer. The playback will operate on this
+             * own ring buffer separately. */
+            Assert(cbToWrite <= cbRead);
+            memcpy(puBuf, pStreamOut->pvPCMBuf, cbToWrite);
+
+            /* Release the ring buffer, so the read thread could start reading this data. */
+            RTCircBufReleaseWriteBlock(pStreamOut->pBuf, cbToWrite);
+
+            Assert(cbToRead >= cbRead);
+            cbToRead -= cbRead;
+            cbReadTotal += cbRead;
         }
-
-        cbRead = AUDIOMIXBUF_S2B(&pHstStrmOut->MixBuf, cRead);
-
-        /* Release the ring buffer, so the read thread could start reading this data. */
-        RTCircBufReleaseWriteBlock(pStreamOut->pBuf, cbRead);
-
-        Assert(cbToRead >= cbRead);
-        cbToRead -= cbRead;
-        cbReadTotal += cbRead;
     }
+    while (0);
 
     if (RT_SUCCESS(rc))
     {
@@ -1842,6 +1859,13 @@ static DECLCALLBACK(int) drvHostCoreAudioFiniOut(PPDMIHOSTAUDIO pInterface, PPDM
 
                 pStreamOut->audioUnit = NULL;
                 pStreamOut->deviceID  = kAudioDeviceUnknown;
+
+                if (pStreamOut->pvPCMBuf)
+                {
+                    RTMemFree(pStreamOut->pvPCMBuf);
+                    pStreamOut->pvPCMBuf = NULL;
+                    pStreamOut->cbPCMBuf = 0;
+                }
 
                 ASMAtomicXchgU32(&pStreamOut->status, CA_STATUS_UNINIT);
             }

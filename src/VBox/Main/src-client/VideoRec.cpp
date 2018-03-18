@@ -563,6 +563,7 @@ int VideoRecStrmInit(PVIDEORECCONTEXT pCtx, uint32_t uScreen, const char *pszFil
     if (rcv != VPX_CODEC_OK)
     {
         LogFlow(("Failed to initialize VP8 encoder %s", vpx_codec_err_to_string(rcv)));
+        LogRel(("Failed to initialize VP8 encoder %s, rcv=%d\n", vpx_codec_err_to_string(rcv), rcv)); //
         return VERR_INVALID_PARAMETER;
     }
 

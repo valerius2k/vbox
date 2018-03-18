@@ -114,12 +114,8 @@ static int vbsfBuildFullPath(SHFLCLIENTDATA *pClient, SHFLROOT root, PSHFLSTRING
 {
     char *pszHostPath = NULL;
     uint32_t fu32PathFlags = 0;
-    uint32_t fu32Options =   VBSF_O_PATH_CHECK_ROOT_ESCAPE
-                           | (fWildCard? VBSF_O_PATH_WILDCARD: 0)
-                           | (fPreserveLastComponent? VBSF_O_PATH_PRESERVE_LAST_COMPONENT: 0);
-
     int rc = vbsfPathGuestToHost(pClient, root, pPath, cbPath,
-                                 &pszHostPath, pcbFullPathRoot, fu32Options, &fu32PathFlags);
+                                 &pszHostPath, pcbFullPathRoot, fWildCard, fPreserveLastComponent, &fu32PathFlags);
     if (BIT_FLAG(pClient->fu32Flags, SHFL_CF_UTF8))
     {
         LogRel2(("SharedFolders: GuestToHost 0x%RX32 [%.*s]->[%s] %Rrc\n", fu32PathFlags, pPath->u16Length, &pPath->String.utf8[0], pszHostPath, rc));
@@ -1877,10 +1873,7 @@ int vbsfSymlink(SHFLCLIENTDATA *pClient, SHFLROOT root, SHFLSTRING *pNewPath, SH
     AssertRCReturn(rc, rc);
 
     /* Verify that the link target can be a valid host path, i.e. does not contain invalid characters. */
-    uint32_t fu32PathFlags = 0;
-    uint32_t fu32Options = 0;
-    rc = vbsfPathGuestToHost(pClient, root, pOldPath, pOldPath->u16Size + SHFLSTRING_HEADER_SIZE,
-                             &pszFullOldPath, NULL, fu32Options, &fu32PathFlags);
+    rc = vbsfBuildFullPath(pClient, root, pOldPath, pOldPath->u16Size + SHFLSTRING_HEADER_SIZE, &pszFullOldPath, NULL);
     if (RT_FAILURE(rc))
     {
         vbsfFreeFullPath(pszFullNewPath);

@@ -260,11 +260,9 @@ int _fini(void)
     /*
      * Undo the work done during start (in reverse order).
      */
-    int rc = mod_remove(&g_VBoxNetAdpSolarisModLinkage);
-    if (!rc)
-        RTR0Term();
+    RTR0Term();
 
-    return rc;
+    return mod_remove(&g_VBoxNetAdpSolarisModLinkage);
 }
 
 

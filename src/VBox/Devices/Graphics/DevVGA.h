@@ -230,26 +230,6 @@ typedef struct
     uint32_t        uPass;
 } VMSVGA_STATE_LOAD, *PVMSVGA_STATE_LOAD;
 
-/** Host screen viewport.
- * (4th quadrant with negated Y values - usual Windows and X11 world view.) */
-typedef struct VMSVGAVIEWPORT
-{
-    uint32_t        x;                  /**< x coordinate (left). */
-    uint32_t        y;                  /**< y coordinate (top). */
-    uint32_t        cx;                 /**< width. */
-    uint32_t        cy;                 /**< height. */
-    /** Right side coordinate (exclusive). Same as x + cx. */
-    uint32_t        xRight;
-    /** First quadrant low y coordinate.
-     * Same as y + cy - 1 in window coordinates. */
-    uint32_t        yLowWC;
-    /** First quadrant high y coordinate (exclusive) - yLowWC + cy.
-     * Same as y - 1 in window coordinates. */
-    uint32_t        yHighWC;
-    /** Alignment padding. */
-    uint32_t        uAlignment;
-} VMSVGAVIEWPORT;
-
 /** Pointer to the private VMSVGA ring-3 state structure.
  * @todo Still not entirely satisfired with the type name, but better than
  *       the previous lower/upper case only distinction. */
@@ -328,10 +308,14 @@ typedef struct VMSVGAState
     uint32_t                    u32MaxWidth;
     /** Maximum height supported. */
     uint32_t                    u32MaxHeight;
-    /** Viewport rectangle, i.e. what's currently visible of the target host
-     *  window.  This is usually (0,0)(uWidth,uHeight), but if the window is
-     *  shrunk and scrolling applied, both the origin and size may differ.  */
-    VMSVGAVIEWPORT              viewport;
+    /** Viewport rectangle */
+    struct
+    {
+        uint32_t                x;
+        uint32_t                y;
+        uint32_t                cx;
+        uint32_t                cy;
+    } viewport;
     /** Action flags */
     uint32_t                    u32ActionFlags;
     /** SVGA 3d extensions enabled or not. */

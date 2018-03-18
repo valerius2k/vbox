@@ -2156,7 +2156,6 @@ void UIActionPoolRuntime::preparePool()
 void UIActionPoolRuntime::prepareConnections()
 {
     /* Prepare connections: */
-    connect(gShortcutPool, SIGNAL(sigSelectorShortcutsReloaded()), this, SLOT(sltApplyShortcuts()));
     connect(gShortcutPool, SIGNAL(sigMachineShortcutsReloaded()), this, SLOT(sltApplyShortcuts()));
     connect(gEDataManager, SIGNAL(sigMenuBarConfigurationChange(const QString&)),
             this, SLOT(sltHandleConfigurationChange(const QString&)));
@@ -2985,10 +2984,10 @@ void UIActionPoolRuntime::updateMenuDebug()
 }
 #endif /* VBOX_WITH_DEBUGGER_GUI */
 
-void UIActionPoolRuntime::updateShortcuts()
+void UIActionPoolRuntime::retranslateUi()
 {
     /* Call to base-class: */
-    UIActionPool::updateShortcuts();
+    UIActionPool::retranslateUi();
     /* Create temporary Selector UI pool to do the same: */
     if (!m_fTemporary)
         UIActionPool::createTemporary(UIActionPoolType_Selector);

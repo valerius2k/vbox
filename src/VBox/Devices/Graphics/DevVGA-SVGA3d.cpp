@@ -1,4 +1,4 @@
-/* $Id: DevVGA-SVGA3d.cpp $ */
+/* $Id: DevVGA-SVGA3d.cpp 57358 2015-08-14 15:16:38Z vboxsync $ */
 /** @file
  * DevSVGA3d - VMWare SVGA device, 3D parts - Common core code.
  */

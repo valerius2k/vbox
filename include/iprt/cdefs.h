@@ -1465,7 +1465,6 @@
  * String constant tuple - string constant, strlen(string constant).
  *
  * @param   a_szConst   String constant.
- * @sa      RTSTRTUPLE
  */
 #define RT_STR_TUPLE(a_szConst)  a_szConst, (sizeof(a_szConst) - 1)
 

@@ -514,9 +514,10 @@ RTDECL(PRTLOGGER) RTLogDefaultInit(void)
         RTLogFlags(pLogger, "enabled unbuffered");
         pLogger->fDestFlags |= RTLOGDEST_DEBUGGER | RTLOGDEST_STDOUT;
 # endif
-# if 0 /* vboxdrv logging - ATTENTION: this is what we're referring to guys! Change to '# if 1'. */
-        RTLogGroupSettings(pLogger, "all=~0 -default.l6.l5.l4.l3");
-        RTLogFlags(pLogger, "enabled unbuffered tid");
+# if 1 /* vboxdrv logging - ATTENTION: this is what we're referring to guys! Change to '# if 1'. */
+        //RTLogGroupSettings(pLogger, "all=~0 -default.l6.l5.l4.l3");
+        RTLogGroupSettings(pLogger, "+all.e.l.f");
+        RTLogFlags(pLogger, "enabled unbuffered tid pid");
         pLogger->fDestFlags |= RTLOGDEST_DEBUGGER | RTLOGDEST_STDOUT;
 # endif
     }

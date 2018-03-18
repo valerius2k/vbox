@@ -81,12 +81,6 @@ private:
     QTextEdit* currentLogPage();
     QTextEdit* createLogPage(const QString &strPage);
 
-    /** Load settings helper. */
-    void loadSettings();
-
-    /** Save settings helper. */
-    void saveSettings();
-
     /* Array containing all VM Log Viewers: */
     static VMLogViewerMap m_viewers;
 
@@ -96,9 +90,6 @@ private:
     QITabWidget *m_pViewerContainer;
     UIVMLogViewerSearchPanel *m_pSearchPanel;
     LogBook m_book;
-
-    /** Current dialog geometry. */
-    QRect m_geometry;
 
     /* Buttons: */
     QPushButton *mBtnHelp;

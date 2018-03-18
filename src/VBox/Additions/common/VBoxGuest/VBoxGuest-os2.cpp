@@ -125,15 +125,15 @@ DECLASM(int) VBoxGuestOS2SetIRQ(uint8_t bIRQ);
  */
 DECLASM(int) VBoxGuestOS2Init(const char *pszArgs)
 {
-    Log(("VBoxGuestOS2Init: pszArgs='%s' MMIO=0x%RX32 IOPort=0x%RX16 Int=%#x Bus=%#x Dev=%#x Fun=%d\n",
-         pszArgs, g_PhysMMIOBase, g_IOPortBase, g_bInterruptLine, g_bPciBusNo, g_bPciDevFunNo >> 3, g_bPciDevFunNo & 7));
-
     /*
      * Initialize the runtime.
      */
     int rc = RTR0Init(0);
     if (RT_SUCCESS(rc))
     {
+        Log(("VBoxGuestOS2Init: pszArgs='%s' MMIO=0x%RX32 IOPort=0x%RX16 Int=%#x Bus=%#x Dev=%#x Fun=%d\n",
+             pszArgs, g_PhysMMIOBase, g_IOPortBase, g_bInterruptLine, g_bPciBusNo, g_bPciDevFunNo >> 3, g_bPciDevFunNo & 7));
+
         /*
          * Process the commandline. Later.
          */

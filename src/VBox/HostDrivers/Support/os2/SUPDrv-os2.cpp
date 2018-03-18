@@ -304,7 +304,7 @@ DECLASM(int) VBoxDrvIOCtl(uint16_t sfn, uint8_t iCat, uint8_t iFunction, void *p
      */
     if (RT_LIKELY(iCat == SUP_CTL_CATEGORY))
     {
-        Log(("VBoxDrvIOCtl: pSession=%p iFunction=%#x pvParm=%p pvData=%p *pcbParm=%d *pcbData=%d\n", pSession, iFunction, pvParm, pvData, *pcbParm, *pcbData));
+        //Log(("VBoxDrvIOCtl: pSession=%p iFunction=%#x pvParm=%p pvData=%p *pcbParm=%d *pcbData=%d\n", pSession, iFunction, pvParm, pvData, *pcbParm, *pcbData));
         Assert(pvParm);
         Assert(!pvData);
 
@@ -366,7 +366,7 @@ DECLASM(int) VBoxDrvIOCtl(uint16_t sfn, uint8_t iCat, uint8_t iFunction, void *p
         rc = VERR_NOT_SUPPORTED;
 
     supdrvSessionRelease(pSession);
-    Log2(("VBoxDrvIOCtl: returns %d\n", rc));
+    //Log2(("VBoxDrvIOCtl: returns %d\n", rc));
     return rc;
 }
 

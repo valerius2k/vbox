@@ -4,7 +4,11 @@ $(call set-vpath, $(SRC_PATH)/tests)
 
 CFLAGS=-Wall -O2 -g -fno-strict-aliasing
 #CFLAGS+=-msse2
-LDFLAGS=
+#ifdef __EMX__
+LDFLAGS=-Zomf -L/@unixroot/usr/lib -lcx
+#else
+#LDFLAGS=
+#endif
 
 ifeq ($(ARCH),i386)
 TESTS=linux-test testthread sha1-i386 test-i386
@@ -52,7 +56,7 @@ endif
 
 .PHONY: test-mmap
 test-mmap: test-mmap.c
-	$(CC) $(CFLAGS) -Wall -static -O2 $(LDFLAGS) -o $@ $<
+	$(CC) $(CFLAGS) -Wall -O2 $(LDFLAGS) -o $@ $<
 	-./test-mmap
 	-$(QEMU) ./test-mmap
 	-$(QEMU) -p 8192 ./test-mmap 8192

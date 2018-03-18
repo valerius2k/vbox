@@ -36,6 +36,13 @@
 
 #endif /* !defined(VBOX_WITH_XPCOM) */
 
+#ifdef RT_OS_OS2
+# define OS2EMX_PLAIN_CHAR
+# define INCL_BASE
+# define INCL_WIN
+# include <os2.h>
+#endif
+
 #include "VBox/com/com.h"
 #include "VBox/com/assert.h"
 #include "VBox/com/NativeEventQueue.h"

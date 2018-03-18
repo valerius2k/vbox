@@ -36,6 +36,8 @@ VBoxSharedClipboard_SOURCES = \
 VBoxSharedClipboard_SOURCES.win = \
 	VBoxClipboard-win.cpp \
 	VBoxSharedClipboard.rc
+VBoxSharedClipboard_SOURCES.os2 = \
+	VBoxClipboard-pm.cpp
 VBoxSharedClipboard_SOURCES.darwin = \
 	darwin.cpp \
 	$(PATH_ROOT)/src/VBox/GuestHost/SharedClipboard/clipboard-helper.cpp \
@@ -56,6 +58,8 @@ VBoxSharedClipboard_LIBS = \
 	$(LIB_VMM) \
 	$(LIB_RUNTIME) \
 	$(LIB_REM)
+VBoxSharedClipboard_LIBS.os2 = \
+	/@unixroot/usr/local/lib/uclip.lib
 if1of ($(KBUILD_TARGET), linux solaris freebsd)
  ifndef VBOX_HEADLESS
   VBoxSharedClipboard_LIBPATH = \

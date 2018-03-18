@@ -21,6 +21,7 @@
 
 /* Qt includes: */
 # include <QApplication>
+# include <QDesktopWidget>
 # include <QMenu>
 
 /* GUI includes: */
@@ -70,6 +71,7 @@ void UIMultiScreenLayout::update()
     CDisplay display = m_pMachineLogic->session().GetConsole().GetDisplay();
     bool fShouldWeAutoMountGuestScreens = gEDataManager->autoMountGuestScreensEnabled(vboxGlobal().managedVMUuid());
     LogRel(("GUI: UIMultiScreenLayout::update: GUI/AutomountGuestScreens is %s\n", fShouldWeAutoMountGuestScreens ? "enabled" : "disabled"));
+    QDesktopWidget *pDW = QApplication::desktop();
     foreach (int iGuestScreen, m_guestScreens)
     {
         /* Initialize variables: */
@@ -98,7 +100,7 @@ void UIMultiScreenLayout::update()
                 /* Get top-left corner position: */
                 QPoint topLeftPosition(geo.topLeft());
                 /* Check which host-screen the position belongs to: */
-                iHostScreen = vboxGlobal().screenNumber(topLeftPosition);
+                iHostScreen = pDW->screenNumber(topLeftPosition);
                 /* Revalidate: */
                 fValid =    iHostScreen >= 0 && iHostScreen < m_cHostScreens /* In the host screen bounds? */
                          && m_screenMap.key(iHostScreen, -1) == -1; /* Not taken already? */
@@ -254,7 +256,7 @@ void UIMultiScreenLayout::sltHandleScreenLayoutChange(int iRequestedGuestScreen,
 
 void UIMultiScreenLayout::calculateHostMonitorCount()
 {
-    m_cHostScreens = vboxGlobal().screenCount();
+    m_cHostScreens = QApplication::desktop()->screenCount();
 }
 
 void UIMultiScreenLayout::calculateGuestScreenCount()
@@ -293,9 +295,9 @@ quint64 UIMultiScreenLayout::memoryRequirements(const QMap<int, int> &screenLayo
     {
         QRect screen;
         if (m_pMachineLogic->visualStateType() == UIVisualStateType_Seamless)
-            screen = vboxGlobal().availableGeometry(screenLayout.value(iGuestScreen, 0));
+            screen = QApplication::desktop()->availableGeometry(screenLayout.value(iGuestScreen, 0));
         else
-            screen = vboxGlobal().screenGeometry(screenLayout.value(iGuestScreen, 0));
+            screen = QApplication::desktop()->screenGeometry(screenLayout.value(iGuestScreen, 0));
         KGuestMonitorStatus monitorStatus = KGuestMonitorStatus_Enabled;
         display.GetScreenResolution(iGuestScreen, width, height, guestBpp, xOrigin, yOrigin, monitorStatus);
         usedBits += screen.width() * /* display width */

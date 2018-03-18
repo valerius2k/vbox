@@ -356,23 +356,16 @@ PDMBOTHCBDECL(int) parallelIOPortWrite(PPDMDEVINS pDevIns, void *pvUser, RTIOPOR
 #ifndef IN_RING3
                     return VINF_IOM_R3_IOPORT_WRITE;
 #else
-                    if (RT_LIKELY(pThis->pDrvHostParallelConnector))
-                    {
-                        /* Set data direction. */
-                        if (u8 & LPT_CONTROL_ENABLE_BIDIRECT)
-                            rc = pThis->pDrvHostParallelConnector->pfnSetPortDirection(pThis->pDrvHostParallelConnector, false /* fForward */);
-                        else
-                            rc = pThis->pDrvHostParallelConnector->pfnSetPortDirection(pThis->pDrvHostParallelConnector, true /* fForward */);
-                        AssertRC(rc);
-
-                        u8 &= ~LPT_CONTROL_ENABLE_BIDIRECT; /* Clear bit. */
-
-                        rc = pThis->pDrvHostParallelConnector->pfnWriteControl(pThis->pDrvHostParallelConnector, u8);
-                        AssertRC(rc);
-                    }
+                    /* Set data direction. */
+                    if (u8 & LPT_CONTROL_ENABLE_BIDIRECT)
+                        rc = pThis->pDrvHostParallelConnector->pfnSetPortDirection(pThis->pDrvHostParallelConnector, false /* fForward */);
                     else
-                        u8 &= ~LPT_CONTROL_ENABLE_BIDIRECT; /* Clear bit. */
+                        rc = pThis->pDrvHostParallelConnector->pfnSetPortDirection(pThis->pDrvHostParallelConnector, true /* fForward */);
+                    AssertRC(rc);
+                    u8 &= ~LPT_CONTROL_ENABLE_BIDIRECT; /* Clear bit. */
 
+                    rc = pThis->pDrvHostParallelConnector->pfnWriteControl(pThis->pDrvHostParallelConnector, u8);
+                    AssertRC(rc);
                     pThis->regControl = u8;
 #endif
                 }
@@ -468,15 +461,11 @@ PDMBOTHCBDECL(int) parallelIOPortRead(PPDMDEVINS pDevIns, void *pvUser, RTIOPORT
                 break;
             case 2:
 #ifndef IN_RING3
-                rc = VINF_IOM_R3_IOPORT_READ;
+                 rc = VINF_IOM_R3_IOPORT_READ;
 #else
-                if (RT_LIKELY(pThis->pDrvHostParallelConnector))
-                {
-                    rc = pThis->pDrvHostParallelConnector->pfnReadControl(pThis->pDrvHostParallelConnector, &pThis->regControl);
-                    AssertRC(rc);
-                    pThis->regControl |= LPT_CONTROL_BIT6 | LPT_CONTROL_BIT7;
-                }
-
+                 rc = pThis->pDrvHostParallelConnector->pfnReadControl(pThis->pDrvHostParallelConnector, &pThis->regControl);
+                 AssertRC(rc);
+                 pThis->regControl |= LPT_CONTROL_BIT6 | LPT_CONTROL_BIT7;
                 *pu32 = pThis->regControl;
 #endif
                 break;
@@ -776,12 +765,6 @@ static DECLCALLBACK(int) parallelR3Construct(PPDMDEVINS pDevIns, int iInstance, 
     if (RT_SUCCESS(rc))
     {
         pThis->pDrvHostParallelConnector = PDMIBASE_QUERY_INTERFACE(pThis->pDrvBase, PDMIHOSTPARALLELCONNECTOR);
-
-        /* Set compatibility mode */
-        //pThis->pDrvHostParallelConnector->pfnSetMode(pThis->pDrvHostParallelConnector, PDM_PARALLEL_PORT_MODE_COMPAT);
-        /* Get status of control register */
-        pThis->pDrvHostParallelConnector->pfnReadControl(pThis->pDrvHostParallelConnector, &pThis->regControl);
-
         AssertMsgReturn(pThis->pDrvHostParallelConnector,
                         ("Configuration error: instance %d has no host parallel interface!\n", iInstance),
                         VERR_PDM_MISSING_INTERFACE);
@@ -798,6 +781,11 @@ static DECLCALLBACK(int) parallelR3Construct(PPDMDEVINS pDevIns, int iInstance, 
         return PDMDevHlpVMSetError(pDevIns, rc, RT_SRC_POS,
                                    N_("Parallel device %d cannot attach to host driver"), iInstance);
     }
+
+    /* Set compatibility mode */
+    //pThis->pDrvHostParallelConnector->pfnSetMode(pThis->pDrvHostParallelConnector, PDM_PARALLEL_PORT_MODE_COMPAT);
+    /* Get status of control register */
+    pThis->pDrvHostParallelConnector->pfnReadControl(pThis->pDrvHostParallelConnector, &pThis->regControl);
 
     return VINF_SUCCESS;
 }
@@ -822,7 +810,7 @@ const PDMDEVREG g_DeviceParallelPort =
     /* fClass */
     PDM_DEVREG_CLASS_PARALLEL,
     /* cMaxInstances */
-    2,
+    1,
     /* cbInstance */
     sizeof(PARALLELPORT),
     /* pfnConstruct */

@@ -90,48 +90,6 @@ typedef struct GuestDnDData
 } GuestDnDData;
 
 /**
- * Structure for keeping an URI object's context around.
- */
-typedef struct GuestDnDURIObjCtx
-{
-    GuestDnDURIObjCtx(void)
-        : pObjURI(NULL)
-        , fAllocated(false)
-        , fHeaderSent(false) { }
-
-    virtual ~GuestDnDURIObjCtx(void)
-    {
-        Reset();
-    }
-
-public:
-
-    void Reset(void)
-    {
-        if (   pObjURI
-            && fAllocated)
-        {
-            delete pObjURI;
-        }
-
-        pObjURI     = NULL;
-
-        fAllocated  = false;
-        fHeaderSent = false;
-    }
-
-
-    /** Pointer to current object being handled. */
-    DnDURIObject             *pObjURI;
-    /** Flag whether pObjURI needs deletion after use. */
-    bool                      fAllocated;
-    /** Flag whether the object's file header has been sent already. */
-    bool                      fHeaderSent;
-    /** @todo Add more statistics / information here. */
-
-} GuestDnDURIObjCtx;
-
-/**
  * Structure for keeping around URI (list) data.
  */
 typedef struct GuestDnDURIData
@@ -160,14 +118,14 @@ typedef struct GuestDnDURIData
         return VINF_SUCCESS;
     }
 
-    void * GetBufferMutable(void) { return pvScratchBuf; }
+    void *const GetBufferMutable(void) { return pvScratchBuf; }
 
     size_t GetBufferSize(void) { return cbScratchBuf; }
 
     void Reset(void)
     {
         lstURI.Clear();
-        objCtx.Reset();
+        objURI.Close();
 
         DnDDirDroppedFilesRollback(&mDropDir);
         DnDDirDroppedFilesClose(&mDropDir, true /* fRemove */);
@@ -182,12 +140,10 @@ typedef struct GuestDnDURIData
     }
 
     DNDDIRDROPPEDFILES              mDropDir;
-    /** (Non-recursive) List of URI objects to handle. */
+    /** (Non-recursive) List of root URI objects to receive. */
     DnDURIList                      lstURI;
-    /** Context to current object being handled.
-     *  As we currently do all transfers one after another we
-     *  only have one context at a time. */
-    GuestDnDURIObjCtx               objCtx;
+    /** Current object to receive. */
+    DnDURIObject                    objURI;
 
 protected:
 

@@ -643,7 +643,63 @@ static int getDefaultIfaceName(char *pszName)
     return VERR_INTERNAL_ERROR;
 }
 #endif /* RT_OS_LINUX */
+#ifdef RT_OS_OS2
+#define TCPV40HDRS
+#include <sys/sockio.h>
+#include <netinet/in.h>
+#include <net/route.h>
+#include <net/if.h>
+/**
+ * Obtain the name of the interface used for default routing.
+ *
+ * NOTE: Copied from Main/src-server/os2/NetIf-os2.cpp
+ *
+ * @returns VBox status code.
+ *
+ * @param   pszName     The buffer of IFNAMSIZ+1 length where to put the name.
+ */
+static int getDefaultIfaceName(char *pszName)
+{
+    struct rtentries rtent;
+    struct rtentry *rt_table;
+    int    rt_count;
+    int    sock = -1;
+    int    j;
 
+    sock = socket( AF_INET, SOCK_RAW, 0 );
+
+    if (sock == -1)
+        return VERR_INTERNAL_ERROR;
+
+    // get routing table
+    if ( os2_ioctl( sock, SIOSTATRT, (caddr_t)&rtent,
+                  sizeof(struct rtentries) ) == -1 )
+        return VERR_INTERNAL_ERROR;
+
+    rt_count = rtent.hostcount + rtent.netcount;
+    rt_table = rtent.rttable;
+
+    // search routing table for default route
+    for (j = 0; j < rt_count; j++)
+    {
+        struct sockaddr_in *addr = (struct sockaddr_in *)&(rt_table[j].rt_dst);
+        int dest = addr->sin_addr.s_addr;
+
+        addr = (struct sockaddr_in *)&(rt_table[j].rt_gateway);
+
+        if (! dest)
+        {
+            // found interface name
+            strcpy(pszName, rt_table[j].rt_ifp->if_name);
+            break;
+        }
+    }
+
+    soclose(sock);
+
+    return VINF_SUCCESS;
+}
+#endif
 
 /**
  *  Entry point.
@@ -677,6 +733,14 @@ extern "C" DECLEXPORT(int) TrustedMain(int argc, char **argv, char **envp)
     const char *pszIf = "en0";
 #elif defined(RT_OS_LINUX)
     char        szIf[IFNAMSIZ+1] = "eth0"; /* Reasonable default */
+    /*
+     * Try to update the default interface by consulting the routing table.
+     * If we fail we still have our reasonable default.
+     */
+    getDefaultIfaceName(szIf);
+    const char *pszIf = szIf;
+#elif defined(RT_OS_OS2)
+    char        szIf[IFNAMSIZ+1] = "lan0"; /* Reasonable default */
     /*
      * Try to update the default interface by consulting the routing table.
      * If we fail we still have our reasonable default.

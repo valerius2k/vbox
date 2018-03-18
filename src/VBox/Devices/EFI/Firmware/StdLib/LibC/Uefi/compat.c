@@ -24,7 +24,7 @@
  * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
  * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
- * $Id: compat.c $
+ * $Id: compat.c,v 1.1.1.1 2008/08/24 05:33:08 gmcgarry Exp $
 
  * Copyright (c) 1997, 2002 The NetBSD Foundation, Inc.
  * All rights reserved.

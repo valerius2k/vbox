@@ -597,7 +597,9 @@ db 'Switch_marker'
     ;
     ; When we arrive here we're in 64 bits mode in the intermediate context
     ;
-BITS 64 ; vs
+%ifdef __NASM__
+BITS 64
+%endif
 ALIGNCODE(16)
 GLOBALNAME ICEnterTarget
     ;DEBUG_CMOS_TRASH_AL 1fh
@@ -1517,7 +1519,11 @@ BEGINPROC vmm64On32TrapErrCode
     shr     eax, 12                     ; div by  16 * 256 (0x1000).
 %else
     ; hardcoded VCPU(0) for now...
-    mov     rbx, [NAME(pCpumIC) wrt rip]
+%ifdef __NASM__
+    mov     rbx, [rel NAME(pCpumIC)]
+%else
+    mov     rbx, [NAME(pCpumIC) wrt rip] ;;;;
+%endif
     mov     eax, [rbx + CPUM.offCPUMCPU0]
 %endif
     push    rax                         ; Save the offset for rbp later.
@@ -1527,7 +1533,11 @@ BEGINPROC vmm64On32TrapErrCode
     ;
     ; Deal with recursive traps due to vmxoff (lazy bird).
     ;
-    lea     rax, [.vmxoff_trap_location wrt rip]
+%ifdef __NASM__
+    lea     rax, [rel .vmxoff_trap_location]
+%else
+    lea     rax, [.vmxoff_trap_location wrt rip] ;;;;
+%endif
     cmp     rax, [rbp + 18h]
     je      .not_vmx_root
 

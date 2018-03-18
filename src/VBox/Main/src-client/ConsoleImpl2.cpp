@@ -2624,9 +2624,6 @@ int Console::i_configConstructorInner(PUVM pUVM, PVM pVM, AutoWriteLock *pAlock)
         /*
          * Parallel (LPT) Ports
          */
-        /* parallel enabled mask to be passed to dev ACPI */
-        uint16_t auParallelIoPortBase[SchemaDefs::ParallelPortCount] = {0};
-        uint8_t auParallelIrq[SchemaDefs::ParallelPortCount] = {0};
         InsertConfigNode(pDevices, "parallel", &pDev);
         for (ULONG ulInstance = 0; ulInstance < SchemaDefs::ParallelPortCount; ++ulInstance)
         {
@@ -2646,20 +2643,14 @@ int Console::i_configConstructorInner(PUVM pUVM, PVM pVM, AutoWriteLock *pAlock)
             ULONG ulIRQ;
             hrc = parallelPort->COMGETTER(IRQ)(&ulIRQ);                                     H();
             InsertConfigInteger(pCfg, "IRQ", ulIRQ);
-            auParallelIrq[ulInstance] = (uint8_t)ulIRQ;
             ULONG ulIOBase;
             hrc = parallelPort->COMGETTER(IOBase)(&ulIOBase);                               H();
             InsertConfigInteger(pCfg,   "IOBase", ulIOBase);
-            auParallelIoPortBase[ulInstance] = (uint16_t)ulIOBase;
-
+            InsertConfigNode(pInst,     "LUN#0", &pLunL0);
+            InsertConfigString(pLunL0,  "Driver", "HostParallel");
+            InsertConfigNode(pLunL0,    "Config", &pLunL1);
             hrc = parallelPort->COMGETTER(Path)(bstr.asOutParam());                         H();
-            if (!bstr.isEmpty())
-            {
-                InsertConfigNode(pInst,     "LUN#0", &pLunL0);
-                InsertConfigString(pLunL0,  "Driver", "HostParallel");
-                InsertConfigNode(pLunL0,    "Config", &pLunL1);
-                InsertConfigString(pLunL1,  "DevicePath", bstr);
-            }
+            InsertConfigString(pLunL1,  "DevicePath", bstr);
         }
 
         /*
@@ -2981,7 +2972,7 @@ int Console::i_configConstructorInner(PUVM pUVM, PVM pVM, AutoWriteLock *pAlock)
                 }
                 else
                 {
-                    LogRel(("Shared OpenGL service loaded -- 3D enabled\n"));
+                    LogRel(("Shared crOpenGL service loaded\n"));
 
                     /* Setup the service. */
                     VBOXHGCMSVCPARM parm;
@@ -3083,12 +3074,6 @@ int Console::i_configConstructorInner(PUVM pUVM, PVM pVM, AutoWriteLock *pAlock)
 
             InsertConfigInteger(pCfg,  "Serial1IoPortBase", auSerialIoPortBase[1]);
             InsertConfigInteger(pCfg,  "Serial1Irq", auSerialIrq[1]);
-
-            InsertConfigInteger(pCfg,  "Parallel0IoPortBase", auParallelIoPortBase[0]);
-            InsertConfigInteger(pCfg,  "Parallel0Irq", auParallelIrq[0]);
-
-            InsertConfigInteger(pCfg,  "Parallel1IoPortBase", auParallelIoPortBase[1]);
-            InsertConfigInteger(pCfg,  "Parallel1Irq", auParallelIrq[1]);
 
             InsertConfigNode(pInst,    "LUN#0", &pLunL0);
             InsertConfigString(pLunL0, "Driver",               "ACPIHost");
@@ -4957,6 +4942,15 @@ int Console::i_configNetwork(const char *pszDevice,
 
                 const char *pszTrunk = szTrunkName;
                 /* we're not releasing the INetCfg stuff here since we use it later to figure out whether it is wireless */
+
+# elif defined(RT_OS_OS2)
+                /* The name is on the form 'ifX: long name', chop it off at the colon. */
+                char szTrunk[8];
+                RTStrCopy(szTrunk, sizeof(szTrunk), pszBridgedIfName);
+                //char *pszColon = (char *)memchr(szTrunk, ':', sizeof(szTrunk));
+                //if (pszColon)
+                //    *pszColon = '\0';
+                const char *pszTrunk = szTrunk;
 
 # elif defined(RT_OS_LINUX) || defined(RT_OS_FREEBSD)
 #  if defined(RT_OS_FREEBSD)

@@ -56,8 +56,6 @@ typedef struct NULLAUDIOSTREAMOUT
     /** Note: Always must come first! */
     PDMAUDIOHSTSTRMOUT hw;
     uint64_t u64TicksLast;
-    uint64_t csPlayBuffer;
-    uint8_t *pu8PlayBuffer;
 } NULLAUDIOSTREAMOUT;
 
 typedef struct NULLAUDIOSTREAMIN
@@ -133,17 +131,8 @@ static DECLCALLBACK(int) drvHostNullAudioInitOut(PPDMIHOSTAUDIO pInterface,
     {
         NULLAUDIOSTREAMOUT *pNullStrmOut = (NULLAUDIOSTREAMOUT *)pHstStrmOut;
         pNullStrmOut->u64TicksLast = 0;
-        pNullStrmOut->csPlayBuffer = _1K;
-        pNullStrmOut->pu8PlayBuffer = (uint8_t *)RTMemAlloc(_1K << pHstStrmOut->Props.cShift);
-        if (pNullStrmOut->pu8PlayBuffer)
-        {
-            if (pcSamples)
-                *pcSamples = pNullStrmOut->csPlayBuffer;
-        }
-        else
-        {
-            rc = VERR_NO_MEMORY;
-        }
+        if (pcSamples)
+            *pcSamples = _1K;
     }
 
     return rc;
@@ -180,14 +169,10 @@ static DECLCALLBACK(int) drvHostNullAudioPlayOut(PPDMIHOSTAUDIO pInterface, PPDM
     if (cSamplesPlayed > csLive)
         cSamplesPlayed = csLive;
 
-    cSamplesPlayed = RT_MIN(cSamplesPlayed, pNullStrmOut->csPlayBuffer);
-
-    uint32_t csRead = 0;
-    AudioMixBufReadCirc(&pHstStrmOut->MixBuf, pNullStrmOut->pu8PlayBuffer, cSamplesPlayed << pHstStrmOut->Props.cShift, &csRead);
-    AudioMixBufFinish(&pHstStrmOut->MixBuf, csRead);
+    AudioMixBufFinish(&pHstStrmOut->MixBuf, cSamplesPlayed);
 
     if (pcSamplesPlayed)
-        *pcSamplesPlayed = csRead;
+        *pcSamplesPlayed = cSamplesPlayed;
 
     return VINF_SUCCESS;
 }
@@ -229,8 +214,6 @@ static DECLCALLBACK(int) drvHostNullAudioFiniIn(PPDMIHOSTAUDIO pInterface, PPDMA
 
 static DECLCALLBACK(int) drvHostNullAudioFiniOut(PPDMIHOSTAUDIO pInterface, PPDMAUDIOHSTSTRMOUT pHstStrmOut)
 {
-    NULLAUDIOSTREAMOUT *pNullStrmOut = (NULLAUDIOSTREAMOUT *)pHstStrmOut;
-    RTMemFree(pNullStrmOut->pu8PlayBuffer);
     return VINF_SUCCESS;
 }
 

@@ -124,7 +124,8 @@ static bool rtCrPemFindMarker(uint8_t const *pbContent, size_t cbContent, size_t
                  */
                 uint8_t const  *pbSavedContent = pbContent;
                 size_t  const   cbSavedContent = cbContent;
-                for (uint32_t iMarker = 0; iMarker < cMarkers; iMarker++)
+                uint32_t        iMarker = 0;
+                while (iMarker < cMarkers)
                 {
                     pbContent = pbSavedContent;
                     cbContent = cbSavedContent;
@@ -141,16 +142,13 @@ static bool rtCrPemFindMarker(uint8_t const *pbContent, size_t cbContent, size_t
                         pbContent += cchWord;
                         cbContent -= cchWord;
 
-                        if (!cbContent)
+                        if (!cbContent || !RT_C_IS_BLANK(*pbContent))
                             break;
-                        if (RT_C_IS_BLANK(*pbContent))
-                            do
-                            {
-                                pbContent++;
-                                cbContent--;
-                            } while (cbContent > 0 && RT_C_IS_BLANK(*pbContent));
-                        else if (cWords > 1 || pbContent[0] != '-')
-                            break;
+                        do
+                        {
+                            pbContent++;
+                            cbContent--;
+                        } while (cbContent > 0 && RT_C_IS_BLANK(*pbContent));
 
                         cWords--;
                         if (cWords == 0)
@@ -176,7 +174,7 @@ static bool rtCrPemFindMarker(uint8_t const *pbContent, size_t cbContent, size_t
                                     pbContent++, cbContent--;
                                 if (poffEnd)
                                     *poffEnd = pbContent - pbStart;
-                                if (ppMatch)
+                                if (*ppMatch)
                                     *ppMatch = &paMarkers[iMarker];
                                 return true;
                             }
@@ -263,38 +261,31 @@ static int rtCrPemDecodeBase64(uint8_t const *pbContent, size_t cbContent, void 
  * @param   pbFile              The file bytes to scan.
  * @param   cbFile              The number of bytes.
  */
-static bool rtCrPemIsBinaryBlob(uint8_t const *pbFile, size_t cbFile)
+static bool rtCrPemIsBinaryFile(uint8_t *pbFile, size_t cbFile)
 {
     /*
-     * Well formed PEM files should probably only contain 7-bit ASCII and
-     * restrict thenselfs to the following control characters:
+     * Assume a well formed PEM file contains only 7-bit ASCII and restricts
+     * itself to the following control characters:
      *      tab, newline, return, form feed
-     *
-     * However, if we wan't to read PEM files which contains human readable
-     * certificate details before or after each base-64 section, we can't stick
-     * to 7-bit ASCII.  We could say it must be UTF-8, but that's probably to
-     * limited too.  So, we'll settle for detecting binary files by control
-     * characters alone (safe enough for DER encoded stuff, I think).
      */
     while (cbFile-- > 0)
     {
         uint8_t const b = *pbFile++;
-        if (b < 32 && b != '\t' && b != '\n' && b != '\r' && b != '\f')
+        if (   b >= 0x7f
+            || (b < 32 && b != '\t' && b != '\n' && b != '\r' && b != '\f') )
         {
             /* Ignore EOT (4), SUB (26) and NUL (0) at the end of the file. */
             if (   (b == 4 || b == 26)
                 && (   cbFile == 0
                     || (   cbFile == 1
                         && *pbFile == '\0')))
-                return false;
-
+                return true;
             if (b == 0 && cbFile == 0)
-                return false;
-
-            return true;
+                return true;
+            return false;
         }
     }
-    return false;
+    return true;
 }
 
 
@@ -305,152 +296,123 @@ RTDECL(int) RTCrPemFreeSections(PCRTCRPEMSECTION pSectionHead)
         PRTCRPEMSECTION pFree = (PRTCRPEMSECTION)pSectionHead;
         pSectionHead = pSectionHead->pNext;
 
-        Assert(pFree->pMarker || !pFree->pszPreamble);
-
-        if (pFree->pbData)
+        if (pFree->pMarker)
         {
-            RTMemFree(pFree->pbData);
-            pFree->pbData = NULL;
-            pFree->cbData = 0;
-        }
+            if (pFree->pbData)
+            {
+                RTMemFree(pFree->pbData);
+                pFree->pbData = NULL;
+                pFree->cbData = 0;
+            }
 
-        if (pFree->pszPreamble)
-        {
-            RTMemFree(pFree->pszPreamble);
-            pFree->pszPreamble = NULL;
-            pFree->cchPreamble = 0;
+            if (pFree->pszPreamble)
+            {
+                RTMemFree(pFree->pszPreamble);
+                pFree->pszPreamble = NULL;
+                pFree->cchPreamble = 0;
+            }
         }
+        else
+        {
+            RTFileReadAllFree(pFree->pbData, pFree->cbData);
+            Assert(!pFree->pszPreamble);
+        }
+        pFree->pbData = NULL;
+        pFree->cbData = 0;
     }
     return VINF_SUCCESS;
 }
 
 
-RTDECL(int) RTCrPemParseContent(void const *pvContent, size_t cbContent, uint32_t fFlags,
-                                PCRTCRPEMMARKER paMarkers, size_t cMarkers,
-                                PCRTCRPEMSECTION *ppSectionHead, PRTERRINFO pErrInfo)
-{
-    /*
-     * Input validation.
-     */
-    AssertPtr(ppSectionHead);
-    *ppSectionHead = NULL;
-    AssertReturn(cbContent, VINF_EOF);
-    AssertPtr(pvContent);
-    AssertPtr(paMarkers);
-
-    /*
-     * Pre-allocate a section.
-     */
-    int rc = VINF_SUCCESS;
-    PRTCRPEMSECTION pSection = (PRTCRPEMSECTION)RTMemAllocZ(sizeof(*pSection));
-    if (pSection)
-    {
-        /*
-         * Try locate the first section.
-         */
-        uint8_t const  *pbContent = (uint8_t const *)pvContent;
-        size_t          offBegin, offEnd, offResume;
-        PCRTCRPEMMARKER pMatch;
-        if (   !rtCrPemIsBinaryBlob(pbContent, cbContent)
-            && rtCrPemFindMarkerSection(pbContent, cbContent, 0 /*offStart*/, paMarkers, cMarkers,
-                                        &pMatch, &offBegin, &offEnd, &offResume) )
-        {
-            PCRTCRPEMSECTION *ppNext = ppSectionHead;
-            for (;;)
-            {
-                //pSection->pNext       = NULL;
-                pSection->pMarker       = pMatch;
-                //pSection->pbData      = NULL;
-                //pSection->cbData      = 0;
-                //pSection->pszPreamble = NULL;
-                //pSection->cchPreamble = 0;
-
-                *ppNext = pSection;
-                ppNext = &pSection->pNext;
-
-                /* Decode the section. */
-                /** @todo copy the preamble as well. */
-                int rc2 = rtCrPemDecodeBase64(pbContent + offBegin, offEnd - offBegin,
-                                              (void **)&pSection->pbData, &pSection->cbData);
-                if (RT_FAILURE(rc2))
-                {
-                    pSection->pbData = NULL;
-                    pSection->cbData = 0;
-                    if (   rc2 == VERR_INVALID_BASE64_ENCODING
-                        && (fFlags & RTCRPEMREADFILE_F_CONTINUE_ON_ENCODING_ERROR))
-                        rc = -rc2;
-                    else
-                    {
-                        rc = rc2;
-                        break;
-                    }
-                }
-
-                /* More sections? */
-                if (   offResume + 12 >= cbContent
-                    || offResume      >= cbContent
-                    || !rtCrPemFindMarkerSection(pbContent, cbContent, offResume, paMarkers, cMarkers,
-                                                 &pMatch, &offBegin, &offEnd, &offResume) )
-                    break; /* No. */
-
-                /* Ok, allocate a new record for it. */
-                pSection = (PRTCRPEMSECTION)RTMemAllocZ(sizeof(*pSection));
-                if (RT_UNLIKELY(!pSection))
-                {
-                    rc = VERR_NO_MEMORY;
-                    break;
-                }
-            }
-            if (RT_SUCCESS(rc))
-                return rc;
-
-            RTCrPemFreeSections(*ppSectionHead);
-        }
-        else
-        {
-            /*
-             * No PEM section found.  Return the whole file as one binary section.
-             */
-            //pSection->pNext       = NULL;
-            //pSection->pMarker     = NULL;
-            pSection->pbData        = (uint8_t *)RTMemDup(pbContent, cbContent);
-            pSection->cbData        = cbContent;
-            //pSection->pszPreamble = NULL;
-            //pSection->cchPreamble = 0;
-            if (pSection->pbData)
-            {
-                *ppSectionHead = pSection;
-                return VINF_SUCCESS;
-            }
-
-            rc = VERR_NO_MEMORY;
-            RTMemFree(pSection);
-        }
-    }
-    else
-        rc = VERR_NO_MEMORY;
-    *ppSectionHead = NULL;
-    return rc;
-}
-
-
-
 RTDECL(int) RTCrPemReadFile(const char *pszFilename, uint32_t fFlags, PCRTCRPEMMARKER paMarkers, size_t cMarkers,
                             PCRTCRPEMSECTION *ppSectionHead, PRTERRINFO pErrInfo)
 {
-    *ppSectionHead = NULL;
-    AssertReturn(!(fFlags & ~RTCRPEMREADFILE_F_CONTINUE_ON_ENCODING_ERROR), VERR_INVALID_FLAGS);
+    AssertReturn(!fFlags, VERR_INVALID_FLAGS);
 
     size_t      cbContent;
-    void        *pvContent;
-    int rc = RTFileReadAllEx(pszFilename, 0, 64U*_1M, RTFILE_RDALL_O_DENY_WRITE, &pvContent, &cbContent);
+    uint8_t    *pbContent;
+    int rc = RTFileReadAllEx(pszFilename, 0, 64U*_1M, RTFILE_RDALL_O_DENY_WRITE, (void **)&pbContent, &cbContent);
     if (RT_SUCCESS(rc))
     {
-        rc = RTCrPemParseContent(pvContent, cbContent, fFlags, paMarkers, cMarkers, ppSectionHead, pErrInfo);
-        RTFileReadAllFree(pvContent, cbContent);
+        PRTCRPEMSECTION pSection = (PRTCRPEMSECTION)RTMemAllocZ(sizeof(*pSection));
+        if (pSection)
+        {
+            /*
+             * Try locate the first section.
+             */
+            size_t          offBegin, offEnd, offResume;
+            PCRTCRPEMMARKER pMatch;
+            if (   !rtCrPemIsBinaryFile(pbContent, cbContent)
+                && rtCrPemFindMarkerSection(pbContent, cbContent, 0 /*offStart*/, paMarkers, cMarkers,
+                                            &pMatch, &offBegin, &offEnd, &offResume) )
+            {
+                PCRTCRPEMSECTION *ppNext = ppSectionHead;
+                for (;;)
+                {
+                    //pSection->pNext         = NULL;
+                    pSection->pMarker           = pMatch;
+                    //pSection->pbData        = NULL;
+                    //pSection->cbData        = 0;
+                    //pSection->pszPreamble   = NULL;
+                    //pSection->cchPreamble   = 0;
+
+                    *ppNext = pSection;
+                    ppNext = &pSection->pNext;
+
+                    /* Decode the section. */
+                    /** @todo copy the preamble as well. */
+                    rc = rtCrPemDecodeBase64(pbContent + offBegin, offEnd - offBegin,
+                                             (void **)&pSection->pbData, &pSection->cbData);
+                    if (RT_FAILURE(rc))
+                    {
+                        pSection->pbData = NULL;
+                        pSection->cbData = 0;
+                        break;
+                    }
+
+                    /* More sections? */
+                    if (   offResume + 12 >= cbContent
+                        || offResume      >= cbContent
+                        || !rtCrPemFindMarkerSection(pbContent, cbContent, offResume, paMarkers, cMarkers,
+                                                     &pMatch, &offBegin, &offEnd, &offResume) )
+                        break; /* No. */
+
+                    /* Ok, allocate a new record for it. */
+                    pSection = (PRTCRPEMSECTION)RTMemAllocZ(sizeof(*pSection));
+                    if (RT_UNLIKELY(!pSection))
+                    {
+                        rc = VERR_NO_MEMORY;
+                        break;
+                    }
+                }
+                if (RT_SUCCESS(rc))
+                {
+                    RTFileReadAllFree(pbContent, cbContent);
+                    return rc;
+                }
+
+                RTCrPemFreeSections(*ppSectionHead);
+            }
+            else
+            {
+                /*
+                 * No PEM section found.  Return the whole file as one binary section.
+                 */
+                //pSection->pNext         = NULL;
+                //pSection->pMarker       = NULL;
+                pSection->pbData        = pbContent;
+                pSection->cbData        = cbContent;
+                //pSection->pszPreamble   = NULL;
+                //pSection->cchPreamble   = 0;
+                *ppSectionHead = pSection;
+                return VINF_SUCCESS;
+            }
+        }
+        else
+            rc = VERR_NO_MEMORY;
+        RTFileReadAllFree(pbContent, cbContent);
     }
-    else
-        rc = RTErrInfoSetF(pErrInfo, rc, "RTFileReadAllEx failed with %Rrc on '%s'", rc, pszFilename);
+    *ppSectionHead = NULL;
     return rc;
 }
 

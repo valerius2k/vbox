@@ -4,6 +4,8 @@ rem *** Put this file in the directory with VBox binaries  ***
 rem *** ================================================== ***
 @echo off
 @rem VAC path
+set comspec=d:\os2\cmd.exe
+set os2_shell=d:\os2\cmd.exe
 set vac=f:\dev\vac365
 set oldpath=%path%
 set olddpath=%dpath%

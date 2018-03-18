@@ -20,6 +20,7 @@
 #else  /* !VBOX_WITH_PRECOMPILED_HEADERS */
 
 /* Qt includes: */
+# include <QDesktopWidget>
 # include <QMainWindow>
 # include <QTimer>
 
@@ -174,7 +175,7 @@ QSize UIMachineViewScale::sizeHint() const
 
 QRect UIMachineViewScale::workingArea() const
 {
-    return vboxGlobal().availableGeometry(this);
+    return QApplication::desktop()->availableGeometry(this);
 }
 
 QSize UIMachineViewScale::calculateMaxGuestSize() const

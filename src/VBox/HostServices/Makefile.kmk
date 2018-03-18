@@ -28,7 +28,7 @@ if1of ($(KBUILD_TARGET), win linux solaris darwin freebsd)
   include $(PATH_SUB_CURRENT)/SharedOpenGL/Makefile.kmk
  endif
 endif
-if1of ($(KBUILD_TARGET), win linux solaris darwin freebsd)
+if1of ($(KBUILD_TARGET), win os2 linux solaris darwin freebsd)
  ifdef VBOX_WITH_SHARED_CLIPBOARD
   include $(PATH_SUB_CURRENT)/SharedClipboard/Makefile.kmk
  endif

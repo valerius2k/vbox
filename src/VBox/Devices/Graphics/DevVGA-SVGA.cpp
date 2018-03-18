@@ -534,7 +534,6 @@ static const char *vmsvgaFIFOCmdToString(uint32_t u32Cmd)
 }
 #endif
 
-#ifdef IN_RING3
 /**
  * @interface_method_impl{PDMIDISPLAYPORT::pfnSetViewport}
  */
@@ -543,44 +542,13 @@ DECLCALLBACK(void) vmsvgaPortSetViewport(PPDMIDISPLAYPORT pInterface, uint32_t u
     PVGASTATE pThis = RT_FROM_MEMBER(pInterface, VGASTATE, IPort);
 
     Log(("vmsvgaPortSetViewPort: screen %d (%d,%d)(%d,%d)\n", uScreenId, x, y, cx, cy));
-    VMSVGAVIEWPORT const OldViewport = pThis->svga.viewport;
 
-    if (x < pThis->svga.uWidth)
-    {
-        pThis->svga.viewport.x      = x;
-        pThis->svga.viewport.cx     = RT_MIN(cx, pThis->svga.uWidth - x);
-        pThis->svga.viewport.xRight = x + pThis->svga.viewport.cx;
-    }
-    else
-    {
-        pThis->svga.viewport.x      = pThis->svga.uWidth;
-        pThis->svga.viewport.cx     = 0;
-        pThis->svga.viewport.xRight = pThis->svga.uWidth;
-    }
-    if (y < pThis->svga.uHeight)
-    {
-        pThis->svga.viewport.y       = y;
-        pThis->svga.viewport.cy      = RT_MIN(cy, pThis->svga.uHeight - y);
-        pThis->svga.viewport.yLowWC  = pThis->svga.uHeight - y - pThis->svga.viewport.cy;
-        pThis->svga.viewport.yHighWC = pThis->svga.uHeight - y;
-    }
-    else
-    {
-        pThis->svga.viewport.y       = pThis->svga.uHeight;
-        pThis->svga.viewport.cy      = 0;
-        pThis->svga.viewport.yLowWC  = 0;
-        pThis->svga.viewport.yHighWC = 0;
-    }
-
-# ifdef VBOX_WITH_VMSVGA3D
-    /*
-     * Now inform the 3D backend.
-     */
-    if (pThis->svga.f3DEnabled)
-        vmsvga3dUpdateHostScreenViewport(pThis, uScreenId, &OldViewport);
-# endif
+    pThis->svga.viewport.x  = x;
+    pThis->svga.viewport.y  = y;
+    pThis->svga.viewport.cx = RT_MIN(cx, (uint32_t)pThis->svga.uWidth);
+    pThis->svga.viewport.cy = RT_MIN(cy, (uint32_t)pThis->svga.uHeight);
+    return;
 }
-#endif /* IN_RING3 */
 
 /**
  * Read port register
@@ -1059,11 +1027,8 @@ int vmsvgaChangeMode(PVGASTATE pThis)
     if (    pThis->svga.viewport.cx == 0
         &&  pThis->svga.viewport.cy == 0)
     {
-        pThis->svga.viewport.cx      = pThis->svga.uWidth;
-        pThis->svga.viewport.xRight  = pThis->svga.uWidth;
-        pThis->svga.viewport.cy      = pThis->svga.uHeight;
-        pThis->svga.viewport.yHighWC = pThis->svga.uHeight;
-        pThis->svga.viewport.yLowWC  = 0;
+        pThis->svga.viewport.cx = pThis->svga.uWidth;
+        pThis->svga.viewport.cy = pThis->svga.uHeight;
     }
     return VINF_SUCCESS;
 }

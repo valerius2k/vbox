@@ -43,6 +43,8 @@
 
 #include "internal/magics.h"
 
+#include <stdio.h>
+
 /** Converts semaphore to OS/2 handle. */
 #define SEM2HND(Sem) ((LHANDLE)(uintptr_t)Sem)
 
@@ -164,7 +166,7 @@ RTDECL(int)   RTSemEventDestroy(RTSEMEVENT hEventSem)
     return RTErrConvertFromOS2(rc);
 }
 
-
+#if 0
 RTDECL(int)   RTSemEventWaitNoResume(RTSEMEVENT hEventSem, RTMSINTERVAL cMillies)
 {
     /*
@@ -184,6 +186,46 @@ RTDECL(int)   RTSemEventWaitNoResume(RTSEMEVENT hEventSem, RTMSINTERVAL cMillies
             return RTErrConvertFromOS2(rc);
         }
     }
+}
+#endif
+
+
+#undef RTSemEventWaitNoResume
+RTDECL(int)   RTSemEventWaitNoResume(RTSEMEVENT hEventSem, RTMSINTERVAL cMillies)
+{
+    PCRTLOCKVALSRCPOS pSrcPos = NULL;
+
+    /*
+     * Validate input.
+     */
+    struct RTSEMEVENTINTERNAL *pThis = hEventSem;
+    AssertPtrReturn(pThis, VERR_INVALID_HANDLE);
+    AssertReturn(pThis->u32Magic == RTSEMEVENT_MAGIC, VERR_INVALID_HANDLE);
+
+    /*
+     * Wait for condition.
+     */
+#ifdef RTSEMEVENT_STRICT
+    RTTHREAD hThreadSelf = !(pThis->fFlags & RTSEMEVENT_FLAGS_BOOTSTRAP_HACK)
+                         ? RTThreadSelfAutoAdopt()
+                         : RTThreadSelf();
+    if (pThis->fEverHadSignallers)
+    {
+        int rc = DosWaitEventSem(pThis->hev, 0 /*Timeout*/);
+        if (rc != ERROR_TIMEOUT || cMillies == 0)
+            return RTErrConvertFromOS2(rc);
+        int rc9 = RTLockValidatorRecSharedCheckBlocking(&pThis->Signallers, hThreadSelf, pSrcPos, false,
+                                                        cMillies, RTTHREADSTATE_EVENT, true);
+        if (RT_FAILURE(rc9))
+            return rc9;
+    }
+#else
+    RTTHREAD hThreadSelf = RTThreadSelf();
+#endif
+    RTThreadBlocking(hThreadSelf, RTTHREADSTATE_EVENT, true);
+    int rc = DosWaitEventSem(pThis->hev, cMillies == RT_INDEFINITE_WAIT ? SEM_INDEFINITE_WAIT : cMillies);
+    RTThreadUnblocked(hThreadSelf, RTTHREADSTATE_EVENT);
+    return RTErrConvertFromOS2(rc);
 }
 
 
@@ -248,7 +290,10 @@ RTDECL(int)  RTSemEventMultiCreateEx(PRTSEMEVENTMULTI phEventMultiSem, uint32_t 
         pThis = (PRTSEMEVENTMULTIINTERNAL)RTMemAlloc(sizeof(*pThis));
 
         if (! pThis)
+        {
+            DosCloseEventSem(hev);
             return VERR_NO_MEMORY;
+        }
 
         pThis->hev = hev;
         pThis->u32Magic = RTSEMEVENTMULTI_MAGIC;
@@ -256,7 +301,7 @@ RTDECL(int)  RTSemEventMultiCreateEx(PRTSEMEVENTMULTI phEventMultiSem, uint32_t 
         return VINF_SUCCESS;
     }
 
-    return RTErrConvertFromOS2(rc);
+    //return RTErrConvertFromOS2(rc);
 }
 
 

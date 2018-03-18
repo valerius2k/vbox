@@ -4,7 +4,7 @@
  */
 
 /*
- * Copyright (C) 2006-2015 Oracle Corporation
+ * Copyright (C) 2006-2014 Oracle Corporation
  *
  * This file is part of VirtualBox Open Source Edition (OSE), as
  * available from http://www.virtualbox.org. This file is free software;
@@ -25,12 +25,12 @@
 #include "QIDialog.h"
 
 /* Forward declarations: */
+class QLabel;
+class QILabel;
+class QPushButton;
 class QCheckBox;
 class QIArrowSplitter;
 class QIDialogButtonBox;
-class QILabel;
-class QLabel;
-class QPushButton;
 
 /** Button types. */
 enum AlertButton
@@ -122,11 +122,8 @@ private slots:
 
 private:
 
-    /** Prepares message-box. */
+    /** Prepare routine. */
     void prepare();
-
-    /** Prepares focus. */
-    void prepareFocus();
 
     /** Push-button factory. */
     QPushButton* createButton(int iButton);
@@ -185,4 +182,3 @@ private:
 };
 
 #endif /* !___QIMessageBox_h___ */
-

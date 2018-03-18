@@ -1250,8 +1250,7 @@ RTDECL(bool) RTCrX509GeneralSubtree_ConstraintMatch(PCRTCRX509GENERALSUBTREE pCo
 static void rtCrx509TbsCertificate_AddKeyUsageFlags(PRTCRX509TBSCERTIFICATE pThis, PCRTCRX509EXTENSION pExtension)
 {
     AssertReturnVoid(pExtension->enmValue == RTCRX509EXTENSIONVALUE_BIT_STRING);
-    /* 3 = 1 byte for unused bit count, followed by one or two bytes containing actual bits. RFC-5280 defines bits 0 thru 8. */
-    AssertReturnVoid(pExtension->ExtnValue.pEncapsulated->cb <= 3);
+    AssertReturnVoid(pExtension->ExtnValue.pEncapsulated->cb <= 2);
     pThis->T3.fKeyUsage |= (uint32_t)RTAsn1BitString_GetAsUInt64((PCRTASN1BITSTRING)pExtension->ExtnValue.pEncapsulated);
 }
 

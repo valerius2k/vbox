@@ -44,6 +44,7 @@
 #include <os2.h>
 #include <usbcalls.h>
 
+#include <stdio.h>
 
 /*********************************************************************************************************************************
 *   Structures and Typedefs                                                                                                      *
@@ -136,6 +137,7 @@ static APIRET (APIENTRY *g_pfnUsbBulkWrite2)(USBHANDLE, UCHAR, UCHAR, BOOL, ULON
  */
 static int usbProxyOs2GlobalInit(void)
 {
+    printf("usbProxyOs2GlobalInit\n");
     int rc = DosLoadModule(NULL, 0, (PCSZ)"usbcalls", &g_hmod);
     rc = RTErrConvertFromOS2(rc);
     if (RT_SUCCESS(rc))
@@ -178,6 +180,7 @@ static PUSBPROXYURBOS2 usbProxyOs2UrbAlloc(PUSBPROXYDEV pProxyDev)
     PUSBPROXYURBOS2 pUrbOs2;
 
     RTCritSectEnter(&pDevOs2->CritSect);
+    printf("usbProxyOs2UrbAlloc\n");
 
     /*
      * Try remove a linux URB from the free list, if none there allocate a new one.
@@ -219,6 +222,7 @@ static void usbProxyOs2UrbFree(PUSBPROXYDEV pProxyDev, PUSBPROXYURBOS2 pUrbOs2)
     PUSBPROXYDEVOS2 pDevOs2 = USBPROXYDEV_2_DATA(pProxyDev, PUSBPROXYDEVOS2);
 
     RTCritSectEnter(&pDevOs2->CritSect);
+    printf("usbProxyOs2UrbFree\n");
 
     /*
      * Remove from the active list.
@@ -271,6 +275,7 @@ static DECLCALLBACK(int) usbProxyOs2AsyncThread(RTTHREAD Thread, void *pvProxyDe
      * We're always in the critsect, except when waiting or submitting a URB.
      */
     int rc = RTCritSectEnter(&pDevOs2->CritSect); AssertRC(rc);
+    printf("usbProxyOs2AsyncThread\n");
 
     while (!pDevOs2->fTerminate)
     {
@@ -296,6 +301,7 @@ static DECLCALLBACK(int) usbProxyOs2AsyncThread(RTTHREAD Thread, void *pvProxyDe
             //else
             //    pDevOs2->pInFlightTail = pUrbOs2;
             Log3(("%s: usbProxyOs2AsyncThread: pPickup\n", pUrbOs2->pUrb->pszDesc));
+            printf("%s: usbProxyOs2AsyncThread: pPickup\n", pUrbOs2->pUrb->pszDesc);
 
             RTCritSectLeave(&pDevOs2->CritSect);
 
@@ -330,6 +336,7 @@ static DECLCALLBACK(int) usbProxyOs2AsyncThread(RTTHREAD Thread, void *pvProxyDe
                 {
                     PVUSBSETUP pSetup = (PVUSBSETUP)&pbData[0];
                     Log2(("%s: usbProxyOs2AsyncThread: CtlrMsg\n", pUrb->pszDesc));
+                    printf("%s: usbProxyOs2AsyncThread: CtlrMsg\n", pUrb->pszDesc);
                     rc = g_pfnUsbCtrlMessage(pDevOs2->hDevice,  /** @todo this API must take a endpoint number! */
                                              pSetup->bmRequestType,
                                              pSetup->bRequest,
@@ -348,11 +355,13 @@ static DECLCALLBACK(int) usbProxyOs2AsyncThread(RTTHREAD Thread, void *pvProxyDe
                     if (pUrb->enmDir == VUSBDIRECTION_IN)
                     {
                         Log2(("%s: usbProxyOs2AsyncThread: BulkRead %d\n", pUrb->pszDesc, cbData));
+                        printf("%s: usbProxyOs2AsyncThread: BulkRead %d\n", pUrb->pszDesc, cbData);
                         rc = g_pfnUsbBulkRead2(pDevOs2->hDevice, pUrb->EndPt | 0x80, 0, !pUrb->fShortNotOk, &cbData, pbData, 500);//5*6000);
                     }
                     else
                     {
                         Log2(("%s: usbProxyOs2AsyncThread: BulkWrite %d\n", pUrb->pszDesc, cbData));
+                        printf("%s: usbProxyOs2AsyncThread: BulkWrite %d\n", pUrb->pszDesc, cbData);
                         rc = g_pfnUsbBulkWrite2(pDevOs2->hDevice, pUrb->EndPt, 0, !pUrb->fShortNotOk, cbData, pbData, 500);//5*6000);
                     }
                     break;
@@ -362,6 +371,7 @@ static DECLCALLBACK(int) usbProxyOs2AsyncThread(RTTHREAD Thread, void *pvProxyDe
                 case VUSBXFERTYPE_ISOC:
                 default:
                     Log2(("%s: usbProxyOs2AsyncThread: Unsupported\n", pUrb->pszDesc));
+                    printf("%s: usbProxyOs2AsyncThread: Unsupported\n", pUrb->pszDesc);
                     rc = USB_IORB_FAILED;
                     break;
             }
@@ -383,6 +393,7 @@ static DECLCALLBACK(int) usbProxyOs2AsyncThread(RTTHREAD Thread, void *pvProxyDe
             else
                 pUrb->enmStatus = VUSBSTATUS_STALL;
             Log2(("%s: usbProxyOs2AsyncThread: orc=%d enmStatus=%d cbData=%d \n", pUrb->pszDesc, orc, pUrb->enmStatus, pUrb->cbData)); NOREF(orc);
+            printf("%s: usbProxyOs2AsyncThread: orc=%d enmStatus=%d cbData=%d \n", pUrb->pszDesc, orc, pUrb->enmStatus, pUrb->cbData); NOREF(orc);
 
             /*
              * Retire it to the completed list
@@ -397,8 +408,10 @@ static DECLCALLBACK(int) usbProxyOs2AsyncThread(RTTHREAD Thread, void *pvProxyDe
                 pDevOs2->pTaxingHead = pUrbOs2;
             pDevOs2->pTaxingTail = pUrbOs2;
 
+            printf("RTSemEventSignal\n");
             RTSemEventSignal(pDevOs2->EventSyncWait);
             Log2(("%s: usbProxyOs2AsyncThread: orc=%d enmStatus=%d cbData=%d!\n", pUrb->pszDesc, orc, pUrb->enmStatus, pUrb->cbData)); NOREF(orc);
+            printf("%s: usbProxyOs2AsyncThread: orc=%d enmStatus=%d cbData=%d!\n", pUrb->pszDesc, orc, pUrb->enmStatus, pUrb->cbData); NOREF(orc);
         }
         else
         {
@@ -437,6 +450,7 @@ static DECLCALLBACK(int) usbProxyOs2Open(PUSBPROXYDEV pProxyDev, const char *psz
     /*
      * Lazy init.
      */
+    printf("usbProxyOs2Open\n");
 #ifdef DYNAMIC_USBCALLS
     if (!g_pfnUsbOpen)
     {
@@ -554,6 +568,7 @@ static bool g_fInitialized = false;
  */
 static DECLCALLBACK(void) usbProxyOs2Close(PUSBPROXYDEV pProxyDev)
 {
+    printf("usbProxyOs2Close\n");
     LogFlow(("usbProxyOs2Close: pProxyDev=%s\n", pProxyDev->pUsbIns->pszName));
     PUSBPROXYDEVOS2 pDevOs2 = USBPROXYDEV_2_DATA(pProxyDev, PUSBPROXYDEVOS2);
     Assert(pDevOs2);
@@ -603,6 +618,7 @@ static DECLCALLBACK(void) usbProxyOs2Close(PUSBPROXYDEV pProxyDev)
  */
 static DECLCALLBACK(int) usbProxyOs2Reset(PUSBPROXYDEV pProxyDev, bool fResetOnLinux)
 {
+    printf("usbProxyOs2Reset\n");
     return VINF_SUCCESS;
 }
 
@@ -620,6 +636,7 @@ static DECLCALLBACK(int) usbProxyOs2Reset(PUSBPROXYDEV pProxyDev, bool fResetOnL
 static DECLCALLBACK(int) usbProxyOs2SetConfig(PUSBPROXYDEV pProxyDev, int iCfg)
 {
     PUSBPROXYDEVOS2 pDevOs2 = USBPROXYDEV_2_DATA(pProxyDev, PUSBPROXYDEVOS2);
+    printf("usbProxyOs2SetConfig\n");
     LogFlow(("usbProxyOs2SetConfig: pProxyDev=%s cfg=%#x\n",
              pProxyDev->pUsbIns->pszName, iCfg));
 
@@ -647,6 +664,7 @@ static DECLCALLBACK(int) usbProxyOs2SetConfig(PUSBPROXYDEV pProxyDev, int iCfg)
 static DECLCALLBACK(int) usbProxyOs2ClaimInterface(PUSBPROXYDEV pProxyDev, int iIf)
 {
     LogFlow(("usbProxyOs2ClaimInterface: pProxyDev=%s ifnum=%#x\n", pProxyDev->pUsbIns->pszName, iIf));
+    printf("usbProxyOs2ClaimInterface\n");
     return true;
 }
 
@@ -658,6 +676,7 @@ static DECLCALLBACK(int) usbProxyOs2ClaimInterface(PUSBPROXYDEV pProxyDev, int i
 static DECLCALLBACK(int) usbProxyOs2ReleaseInterface(PUSBPROXYDEV pProxyDev, int iIf)
 {
     LogFlow(("usbProxyOs2ReleaseInterface: pProxyDev=%s ifnum=%#x\n", pProxyDev->pUsbIns->pszName, iIf));
+    printf("usbProxyOs2ReleaseInterface\n");
     return true;
 }
 
@@ -670,6 +689,7 @@ static DECLCALLBACK(int) usbProxyOs2ReleaseInterface(PUSBPROXYDEV pProxyDev, int
 static DECLCALLBACK(int) usbProxyOs2SetInterface(PUSBPROXYDEV pProxyDev, int iIf, int iAlt)
 {
     LogFlow(("usbProxyOs2SetInterface: pProxyDev=%p iIf=%#x iAlt=%#x\n", pProxyDev, iIf, iAlt));
+    printf("usbProxyOs2SetInterface\n");
     return true;
 }
 
@@ -680,6 +700,7 @@ static DECLCALLBACK(int) usbProxyOs2SetInterface(PUSBPROXYDEV pProxyDev, int iIf
 static DECLCALLBACK(int) usbProxyOs2ClearHaltedEp(PUSBPROXYDEV pProxyDev, unsigned int EndPt)
 {
     PUSBPROXYDEVOS2 pDevOs2 = USBPROXYDEV_2_DATA(pProxyDev, PUSBPROXYDEVOS2);
+    printf("usbProxyOs2ClearHaltedEp\n");
     LogFlow(("usbProxyOs2ClearHaltedEp: pProxyDev=%s EndPt=%x\n", pProxyDev->pUsbIns->pszName, EndPt));
 
     /*
@@ -705,6 +726,7 @@ static DECLCALLBACK(int) usbProxyOs2ClearHaltedEp(PUSBPROXYDEV pProxyDev, unsign
 static DECLCALLBACK(int) usbProxyOs2UrbQueue(PUSBPROXYDEV pProxyDev, PVUSBURB pUrb)
 {
     PUSBPROXYDEVOS2 pDevOs2 = USBPROXYDEV_2_DATA(pProxyDev, PUSBPROXYDEVOS2);
+    printf("usbProxyOs2UrbQueue\n");
     LogFlow(("usbProxyOs2UrbQueue: pProxyDev=%s pUrb=%p EndPt=%d cbData=%d\n",
              pProxyDev->pUsbIns->pszName, pUrb, pUrb->EndPt, pUrb->cbData));
 
@@ -774,6 +796,7 @@ static DECLCALLBACK(PVUSBURB) usbProxyOs2UrbReap(PUSBPROXYDEV pProxyDev, RTMSINT
 {
     PVUSBURB pUrb = NULL;
     PUSBPROXYDEVOS2 pDevOs2 = USBPROXYDEV_2_DATA(pProxyDev, PUSBPROXYDEVOS2);
+    printf("usbProxyOs2UrbReap\n");
 
     RTCritSectEnter(&pDevOs2->CritSect);
     for (;;)
@@ -800,6 +823,7 @@ static DECLCALLBACK(PVUSBURB) usbProxyOs2UrbReap(PUSBPROXYDEV pProxyDev, RTMSINT
 
         RTCritSectLeave(&pDevOs2->CritSect);
 
+        printf("RTSemEventWait\n");
         int rc = RTSemEventWait(pDevOs2->EventSyncWait, cMillies);
         Assert(RT_SUCCESS(rc) || rc == VERR_TIMEOUT); NOREF(rc);
         cMillies = 0;
@@ -819,6 +843,7 @@ static DECLCALLBACK(PVUSBURB) usbProxyOs2UrbReap(PUSBPROXYDEV pProxyDev, RTMSINT
  */
 static DECLCALLBACK(int) usbProxyOs2UrbCancel(PUSBPROXYDEV pProxyDev, PVUSBURB pUrb)
 {
+    printf("usbProxyOs2UrbCancel\n");
 #if 0
     PUSBPROXYURBOS2 pUrbOs2 = (PUSBPROXYURBOS2)pUrb->Dev.pvProxyUrb;
     if (pUrbOs2->pSplitHead)
@@ -853,6 +878,7 @@ static DECLCALLBACK(int) usbProxyOs2UrbCancel(PUSBPROXYDEV pProxyDev, PVUSBURB p
 
 static DECLCALLBACK(int) usbProxyOs2Wakeup(PUSBPROXYDEV pProxyDev)
 {
+    printf("usbProxyOs2Wakeup\n");
     return 1; // (???)
 }
 

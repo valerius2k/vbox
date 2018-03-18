@@ -1,4 +1,4 @@
-/* $Id: RTSystemIsInsideVM-amd64-x86.cpp $ */
+/* $Id: RTSystemIsInsideVM-amd64-x86.cpp 57358 2015-08-14 15:16:38Z vboxsync $ */
 /** @file
  * IPRT -
  */

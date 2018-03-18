@@ -48,10 +48,10 @@ RTDECL(uint64_t) RTTimeNanoTS(void)
 {
     switch (RTMpOs2GetApiExt())
     {
-        case ISCS_OS4_MP:
-            struct timespec time;
-            KernClockMonotonicGetTime(&time);
-            return time.tv_sec * UINT64_C(1000000000) + time.tv_nsec;
+        //case ISCS_OS4_MP:
+        //    struct timespec time;
+        //    KernClockMonotonicGetTime(&time);
+        //    return time.tv_sec * UINT64_C(1000000000) + time.tv_nsec;
 
         default:
             /** @remark OS/2 Ring-0: will wrap after 48 days. */

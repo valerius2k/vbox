@@ -1358,7 +1358,11 @@ static int stamR3RegisterU(PUVM pUVM, void *pvSample, PFNSTAMR3CALLBACKRESET pfn
         case STAMTYPE_COUNTER:
         case STAMTYPE_PROFILE:
         case STAMTYPE_PROFILE_ADV:
+#if HC_ARCH_BITS != 32
             AssertMsg(!((uintptr_t)pvSample & 7), ("%p - %s\n", pvSample, pszName));
+#else
+            AssertMsg(!((uintptr_t)pvSample & 3), ("%p - %s\n", pvSample, pszName));
+#endif
             break;
 
             /* 4 byte / 32-bit */

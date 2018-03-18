@@ -52,13 +52,11 @@ typedef enum RTLOGGROUP
 {
     /** Default logging group. */
     RTLOGGROUP_DEFAULT,
-    RTLOGGROUP_CRYPTO,
     RTLOGGROUP_DBG,
     RTLOGGROUP_DBG_DWARF,
     RTLOGGROUP_DIR,
     RTLOGGROUP_FILE,
     RTLOGGROUP_FS,
-    RTLOGGROUP_HTTP,
     RTLOGGROUP_LDR,
     RTLOGGROUP_PATH,
     RTLOGGROUP_PROCESS,
@@ -85,13 +83,11 @@ typedef enum RTLOGGROUP
  */
 #define RT_LOGGROUP_NAMES \
     "DEFAULT",      \
-    "RT_CRYPTO",    \
     "RT_DBG",       \
     "RT_DBG_DWARF", \
     "RT_DIR",       \
     "RT_FILE",      \
     "RT_FS",        \
-    "RT_HTTP", \
     "RT_LDR",       \
     "RT_PATH",      \
     "RT_PROCESS",   \
@@ -99,6 +95,8 @@ typedef enum RTLOGGROUP
     "RT_THREAD",    \
     "RT_TIME",      \
     "RT_TIMER",     \
+    "RT_13", \
+    "RT_14", \
     "RT_15", \
     "RT_16", \
     "RT_17", \
