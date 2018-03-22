@@ -145,8 +145,9 @@ RTDECL(int) RTMpCurSetIndexAndId(PRTCPUID pidCpu)
 RTDECL(RTCPUID) RTMpGetMaxCpuId(void)
 {
     static uint32_t num_cpus = 0;
+    static uint32_t bInitted = 0;
 
-    if (! num_cpus)
+    if (! bInitted)
     {
         /* APIRET */
         int rc;
@@ -164,6 +165,14 @@ RTDECL(RTCPUID) RTMpGetMaxCpuId(void)
         u.ulNumCpus &= 0x3f;
         Assert(0 < u.ulNumCpus);
         num_cpus = u.ulNumCpus;
+        bInitted = 1;
+    }
+
+    /* Disable SMP if no MP API's detected */
+    if (RTMpOs2GetApiExt() == ISCS_DEFAULT)
+    {
+        // return one CPU available
+        return 0;
     }
 
     return num_cpus - 1;

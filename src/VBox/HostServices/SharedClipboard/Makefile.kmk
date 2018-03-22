@@ -59,7 +59,7 @@ VBoxSharedClipboard_LIBS = \
 	$(LIB_RUNTIME) \
 	$(LIB_REM)
 VBoxSharedClipboard_LIBS.os2 = \
-	/@unixroot/usr/local/lib/uclip.lib
+	uclip
 if1of ($(KBUILD_TARGET), linux solaris freebsd)
  ifndef VBOX_HEADLESS
   VBoxSharedClipboard_LIBPATH = \
