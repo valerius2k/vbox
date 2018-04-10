@@ -60,6 +60,23 @@ uint32_t VBoxToOS2Attr(uint32_t fMode)
     return attr;
 }
 
+uint32_t OS2ToVBoxAttr(uint32_t attr)
+{
+    uint32_t fMode = 0;
+
+    if (attr & FILE_READONLY)
+        fMode |= RTFS_DOS_READONLY;
+    if (attr & FILE_HIDDEN)
+        fMode |= RTFS_DOS_HIDDEN;
+    if (attr & FILE_SYSTEM)
+        fMode |= RTFS_DOS_SYSTEM;
+    if (attr & FILE_DIRECTORY)
+        fMode |= RTFS_DOS_DIRECTORY;
+    if (attr & FILE_ARCHIVED)
+        fMode |= RTFS_DOS_ARCHIVED;
+
+    return fMode;
+}
 
 APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
                             PBYTE pbData, USHORT cbData, PUSHORT pcMatch,

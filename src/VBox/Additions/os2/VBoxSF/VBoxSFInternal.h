@@ -233,6 +233,7 @@ APIRET APIENTRY FSH32_WILDMATCH(char *pPat, char *pStr);
 RT_C_DECLS_END
 
 uint32_t VBoxToOS2Attr(uint32_t fMode);
+uint32_t OS2ToVBoxAttr(uint32_t attr);
 
 USHORT vbox_err_to_os2_err(int rc);
 

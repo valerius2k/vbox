@@ -409,16 +409,81 @@ DECLASM(int)
 FS32_MKDIR(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
            PBYTE pEABuf, ULONG flag)
 {
-    dprintf("VBOXSF: FS32_MKDIR(%s, flag)\n", pszName, flag);
-    return ERROR_NOT_SUPPORTED;
+    SHFLCREATEPARMS params;
+    APIRET hrc = NO_ERROR;
+    PVPFSI pvpfsi;
+    PVPFSD pvpfsd;
+    PVBOXSFVP pvboxsfvp;
+    PSHFLSTRING path;
+    char *pwsz;
+    int rc;
+
+    dprintf("VBOXSF: FS32_MKDIR(%s, %lu)\n", pszName, flag);
+
+    params.Handle = 0;
+    params.Info.cbObject = 0;
+    params.CreateFlags = SHFL_CF_DIRECTORY | SHFL_CF_ACT_CREATE_IF_NEW |
+        SHFL_CF_ACT_FAIL_IF_EXISTS | SHFL_CF_ACCESS_READ;
+
+    FSH32_GETVOLPARM(pcdfsi->cdi_hVPB, &pvpfsi, &pvpfsd);
+
+    pvboxsfvp = (PVBOXSFVP)pvpfsd;
+
+    pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
+    vboxsfStrToUtf8(pwsz, (char *)pszName);
+
+    path = make_shflstring((char *)pwsz);
+    rc = vboxCallCreate(&g_clientHandle, &pvboxsfvp->map, path, &params);
+    RTMemFree(path);
+    RTMemFree(pwsz);
+
+    /** @todo r=ramshankar: we should perhaps also check rc here and change
+     *        Handle initialization from 0 to SHFL_HANDLE_NIL. */
+    if (params.Handle == SHFL_HANDLE_NIL)
+    {
+        hrc = vbox_err_to_os2_err(rc);
+        goto FS32_MKDIREXIT;
+    }
+
+    vboxCallClose(&g_clientHandle, &pvboxsfvp->map, params.Handle);
+    hrc = NO_ERROR;
+
+FS32_MKDIREXIT:
+    dprintf(" => %d\n", hrc);
+    return hrc;
 }
 
 
 DECLASM(int)
 FS32_RMDIR(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd)
 {
+    APIRET hrc = NO_ERROR;
+    PVPFSI pvpfsi;
+    PVPFSD pvpfsd;
+    PVBOXSFVP pvboxsfvp;
+    PSHFLSTRING path;
+    char *pwsz;
+    int rc;
+
     dprintf("VBOXSF: FS32_RMDIR(%s)\n", pszName);
-    return ERROR_NOT_SUPPORTED;
+
+    FSH32_GETVOLPARM(pcdfsi->cdi_hVPB, &pvpfsi, &pvpfsd);
+
+    pvboxsfvp = (PVBOXSFVP)pvpfsd;
+
+    pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
+    vboxsfStrToUtf8(pwsz, (char *)pszName);
+
+    path = make_shflstring((char *)pwsz);
+    rc = vboxCallRemove(&g_clientHandle, &pvboxsfvp->map, path, SHFL_REMOVE_DIR);
+    RTMemFree(path);
+    RTMemFree(pwsz);
+
+    hrc = vbox_err_to_os2_err(rc);
+
+FS32_RMDIREXIT:
+    dprintf(" => %d\n", hrc);
+    return hrc;
 }
 
 
@@ -427,41 +492,705 @@ FS32_COPY(USHORT flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszSrc, USHORT iSrc
           PCSZ pszDst, USHORT iDstCurDirEnd, USHORT nameType)
 {
     dprintf("VBOXSF: FS32_COPY(%lx, %s, %s, %lx)\n", flag, pszSrc, pszDst, nameType);
-    return ERROR_NOT_SUPPORTED;
+    return ERROR_CANNOT_COPY;
 }
 
 
 DECLASM(int)
 FS32_MOVE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszSrc, USHORT iSrcCurDirEnd,
-          PCSZ pszDst, USHORT iDstCurDirEnd, USHORT type)
+          PCSZ pszDst, USHORT iDstCurDirEnd, USHORT flag)
 {
-    dprintf("VBOXSF: FS32_MOVE(%s, %s, %lx)\n", pszSrc, pszDst, type);
-    return ERROR_NOT_SUPPORTED;
+    APIRET hrc = NO_ERROR;
+    PVPFSI pvpfsi;
+    PVPFSD pvpfsd;
+    PVBOXSFVP pvboxsfvp;
+    PSHFLSTRING oldpath, newpath;
+    char *pwszFrom, *pwszTo;
+    int rc;
+
+    dprintf("VBOXSF: FS32_MOVE(%s, %s, %lx)\n", pszSrc, pszDst, flag);
+
+    FSH32_GETVOLPARM(pcdfsi->cdi_hVPB, &pvpfsi, &pvpfsd);
+
+    pvboxsfvp = (PVBOXSFVP)pvpfsd;
+
+    pwszFrom = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
+    pwszTo = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
+    vboxsfStrToUtf8(pwszFrom, (char *)pszSrc);
+    vboxsfStrToUtf8(pwszTo, (char *)pszDst);
+
+    oldpath = make_shflstring((char *)pwszFrom);
+    newpath = make_shflstring((char *)pwszTo);
+
+    rc = vboxCallRename(&g_clientHandle, &pvboxsfvp->map, oldpath, newpath, SHFL_RENAME_FILE | SHFL_RENAME_REPLACE_IF_EXISTS);
+    RTMemFree(oldpath);
+    RTMemFree(newpath);
+    RTMemFree(pwszFrom);
+    RTMemFree(pwszTo);
+
+    hrc = vbox_err_to_os2_err(rc);
+
+FS32_MOVEEXIT:
+    dprintf(" => %d\n", hrc);
+    return hrc;
 }
 
 
 DECLASM(int)
 FS32_DELETE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszFile, USHORT iCurDirEnd)
 {
+    APIRET hrc = NO_ERROR;
+    PVPFSI pvpfsi;
+    PVPFSD pvpfsd;
+    PVBOXSFVP pvboxsfvp;
+    PSHFLSTRING path;
+    char *pwsz;
+    int rc;
+
     dprintf("VBOXSF: FS32_DELETE(%s)\n", pszFile);
-    return ERROR_NOT_SUPPORTED;
+
+    FSH32_GETVOLPARM(pcdfsi->cdi_hVPB, &pvpfsi, &pvpfsd);
+
+    pvboxsfvp = (PVBOXSFVP)pvpfsd;
+
+    pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
+    vboxsfStrToUtf8(pwsz, (char *)pszFile);
+
+    path = make_shflstring((char *)pwsz);
+    rc = vboxCallRemove(&g_clientHandle, &pvboxsfvp->map, path, SHFL_REMOVE_FILE);
+    RTMemFree(path);
+    RTMemFree(pwsz);
+
+    hrc = vbox_err_to_os2_err(rc);
+
+FS32_DELETEEXIT:
+    dprintf(" => %d\n", hrc);
+    return hrc;
 }
 
 
 DECLASM(int)
 FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd, PUSHORT pAttr)
 {
+    SHFLCREATEPARMS params;
+    APIRET hrc = NO_ERROR;
+    PVPFSI pvpfsi;
+    PVPFSD pvpfsd;
+    PVBOXSFVP pvboxsfvp;
+    PSHFLDIRINFO file = NULL;
+    uint32_t len = sizeof(SHFLDIRINFO);
+    uint32_t num_files = 0;
+    uint32_t index = 0;
+    char *str, *p, *lastslash;
+    char *pszDirName;
+    PSHFLSTRING path, path2;
+    char *pwsz;
+    int rc;
+
     dprintf("VBOXSF: FS32_FILEATTRIBUTE(%lx, %s)\n", flag, pszName);
-    return ERROR_NOT_SUPPORTED;
+
+    FSH32_GETVOLPARM(pcdfsi->cdi_hVPB, &pvpfsi, &pvpfsd);
+
+    pvboxsfvp = (PVBOXSFVP)pvpfsd;
+
+    switch (flag)
+    {
+        case 0: // retrieve
+            pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
+            vboxsfStrToUtf8(pwsz, (char *)pszName);
+
+            path = make_shflstring((char *)pwsz);
+
+            str = (char *)RTMemAlloc(strlen((char *)pszName) + 1);
+
+            if (! str)
+            {
+                dprintf("Not enough memory 2\n");
+                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                goto FS32_FILEATTRIBUTEEXIT;
+            }
+
+            strcpy(str, (char *)pszName);
+
+            lastslash = p = str;
+
+            // get last backslash
+            do {
+                lastslash = p;
+                p = strchr(p + 1, '\\');
+            } while (p && p < str + strlen(str));
+
+            // cut off file part from directory part
+            str[lastslash - str + 1] = '\0';
+            pszDirName = str + 1;
+
+            dprintf("pszDirName=%s\n", pszDirName);
+
+            pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
+            vboxsfStrToUtf8(pwsz, (char *)pszDirName);
+
+            path = make_shflstring((char *)pwsz);
+            rc = vboxCallCreate(&g_clientHandle, &pvboxsfvp->map, path, &params);
+            free_shflstring(path);
+            RTMemFree(pwsz);
+            RTMemFree(str);
+
+            if (!RT_SUCCESS(rc))
+            {
+                dprintf("vboxCallCreate returned %d\n", rc);
+                free_shflstring(path);
+                hrc = vbox_err_to_os2_err(rc);
+                goto FS32_FILEATTRIBUTEEXIT;
+            }
+
+            dprintf("path=%s\n", pszName);
+            dprintf("pvboxsfvp->map=%x\n", pvboxsfvp->map);
+            dprintf("params.Handle=%x\n", params.Handle);
+            dprintf("len=%x\n", len);
+            dprintf("num_files=%x\n", num_files);
+
+            //path = make_shflstring(str);
+
+            rc = vboxCallFSInfo(&g_clientHandle, &pvboxsfvp->map, params.Handle,
+                                SHFL_INFO_GET | SHFL_INFO_FILE, &len, file);
+
+            hrc = vbox_err_to_os2_err(rc);
+
+            if (RT_FAILURE(rc))
+            {
+                dprintf("vboxCallFSInfo failed: %d\n", rc);
+                goto FS32_FILEATTRIBUTEEXIT;
+            }
+
+            vboxCallClose(&g_clientHandle, &pvboxsfvp->map, params.Handle);
+
+            *pAttr = VBoxToOS2Attr(file->Info.Attr.fMode);
+            break;
+
+        case 1: // set
+            hrc = ERROR_NOT_SUPPORTED;
+    }
+
+FS32_FILEATTRIBUTEEXIT:
+    dprintf(" => %d\n", hrc);
+    return hrc;
 }
 
 
 DECLASM(int)
-FS32_PATHINFO(USHORT flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnt,
+FS32_PATHINFO(USHORT flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
               USHORT level, PBYTE pData, USHORT cbData)
 {
+    APIRET hrc = NO_ERROR;
+    SHFLCREATEPARMS params = {0};
+    USHORT usNeededSize;
+    PVPFSI pvpfsi;
+    PVPFSD pvpfsd;
+    PVBOXSFVP pvboxsfvp;
+    PSHFLDIRINFO file = NULL;
+    uint32_t len = sizeof(SHFLDIRINFO);
+    uint32_t num_files = 0;
+    uint32_t index = 0;
+    char *str, *p, *lastslash;
+    char *pszDirName;
+    PSHFLSTRING path, path2;
+    char *pwsz, pwsz2;
+    int rc;
+
     dprintf("VBOXSF: FS32_PATHINFO(%x, %s, %x)\n", flag, pszName, level);
-    return ERROR_NOT_SUPPORTED;
+
+    FSH32_GETVOLPARM(pcdfsi->cdi_hVPB, &pvpfsi, &pvpfsd);
+
+    pvboxsfvp = (PVBOXSFVP)pvpfsd;
+
+    str = (char *)RTMemAlloc(strlen((char *)pszName) + 1);
+
+    if (! str)
+    {
+        dprintf("Not enough memory 2\n");
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_PATHINFOEXIT;
+    }
+
+    strcpy(str, (char *)pszName);
+
+    lastslash = p = str;
+
+    // get last backslash
+    do {
+        lastslash = p;
+        p = strchr(p + 1, '\\');
+    } while (p && p < str + strlen(str));
+
+    // cut off file part from directory part
+    str[lastslash - str + 1] = '\0';
+    pszDirName = str + 1;
+
+    dprintf("pszDirName=%s\n", pszDirName);
+
+    pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
+    vboxsfStrToUtf8(pwsz, (char *)pszDirName);
+
+    path = make_shflstring((char *)pwsz);
+    rc = vboxCallCreate(&g_clientHandle, &pvboxsfvp->map, path, &params);
+    RTMemFree(pwsz);
+    RTMemFree(str);
+
+    if (!RT_SUCCESS(rc))
+    {
+        dprintf("vboxCallCreate returned %d\n", rc);
+        free_shflstring(path);
+        hrc = vbox_err_to_os2_err(rc);
+        goto FS32_PATHINFOEXIT;
+    }
+
+    dprintf("path=%s\n", pszName);
+    dprintf("pvboxsfvp->map=%x\n", pvboxsfvp->map);
+    dprintf("params.Handle=%x\n", params.Handle);
+    dprintf("len=%x\n", len);
+    dprintf("num_files=%x\n", num_files);
+
+    //path = make_shflstring(str);
+
+    switch (flag)
+    {
+        case 0: // retrieve
+            {
+                switch (level)
+                {
+                    case FIL_STANDARD:
+                        usNeededSize = sizeof(FILESTATUS);
+                        break;
+
+                    case FIL_STANDARDL:
+                        usNeededSize = sizeof(FILESTATUS3L);
+                        break;
+
+                    case FIL_QUERYEASIZE:
+                        usNeededSize = sizeof(FILESTATUS2);
+                        break;
+
+                    case FIL_QUERYEASIZEL:
+                        usNeededSize = sizeof(FILESTATUS4L);
+                        break;
+
+                    case FIL_QUERYEASFROMLIST:
+                    case FIL_QUERYEASFROMLISTL:
+                    case 4:
+                        usNeededSize = sizeof(EAOP);
+                        break;
+
+                    default:
+                        hrc = ERROR_INVALID_LEVEL;
+                        goto FS32_PATHINFOEXIT;
+                }
+
+                if (cbData < usNeededSize)
+                {
+                    hrc = ERROR_BUFFER_OVERFLOW;
+                    goto FS32_PATHINFOEXIT;
+                }
+
+                file = (PSHFLDIRINFO)RTMemAlloc(len);
+
+                if (! file)
+                {
+                    dprintf("Not enough memory 1\n");
+                    hrc = ERROR_NOT_ENOUGH_MEMORY;
+                    goto FS32_PATHINFOEXIT;
+                }
+
+                dprintf("file=%x\n", file);
+
+                rc = vboxCallFSInfo(&g_clientHandle, &pvboxsfvp->map, params.Handle,
+                                    SHFL_INFO_GET | SHFL_INFO_FILE, &len, file);
+
+                hrc = vbox_err_to_os2_err(rc);
+
+                if (RT_FAILURE(rc))
+                {
+                    dprintf("vboxCallFSInfo failed: %d\n", rc);
+                    goto FS32_PATHINFOEXIT;
+                }
+
+                switch (level)
+                {
+                    case FIL_STANDARD:
+                        {
+                            FILESTATUS filestatus;
+                            RTTIME time;
+                            FDATE Date;
+                            FTIME Time;
+                            /* Creation time   */
+                            RTTimeExplode(&time, &file->Info.BirthTime);
+                            Date.day = time.u8MonthDay;
+                            Date.month = time.u8Month;
+                            Date.year = time.i32Year - 1980;
+                            Time.twosecs = time.u8Second / 2;
+                            Time.minutes = time.u8Minute;
+                            Time.hours = time.u8Hour;
+                            memcpy(&filestatus.fdateCreation, &Date, sizeof(USHORT));
+                            memcpy(&filestatus.ftimeCreation, &Time, sizeof(USHORT));
+                            /* Last access time   */
+                            RTTimeExplode(&time, &file->Info.AccessTime);
+                            Date.day = time.u8MonthDay;
+                            Date.month = time.u8Month;
+                            Date.year = time.i32Year - 1980;
+                            Time.twosecs = time.u8Second / 2;
+                            Time.minutes = time.u8Minute;
+                            Time.hours = time.u8Hour;
+                            memcpy(&filestatus.fdateLastAccess, &Date, sizeof(USHORT));
+                            memcpy(&filestatus.ftimeLastAccess, &Time, sizeof(USHORT));
+                            /* Last write time   */
+                            RTTimeExplode(&time, &file->Info.ModificationTime);
+                            Date.day = time.u8MonthDay;
+                            Date.month = time.u8Month;
+                            Date.year = time.i32Year - 1980;
+                            Time.twosecs = time.u8Second / 2;
+                            Time.minutes = time.u8Minute;
+                            Time.hours = time.u8Hour;
+                            memcpy(&filestatus.fdateLastWrite, &Date, sizeof(USHORT));
+                            memcpy(&filestatus.ftimeLastWrite, &Time, sizeof(USHORT));
+                            filestatus.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
+                            filestatus.cbFile = (ULONG)file->Info.cbObject;
+                            filestatus.cbFileAlloc = (ULONG)file->Info.cbAllocated;
+                            KernCopyOut(pData, &filestatus, sizeof(FILESTATUS));
+                            break;
+                        }
+ 
+                    case FIL_STANDARDL:
+                        {
+                            FILESTATUS3L filestatus;
+                            RTTIME time;
+                            FDATE Date;
+                            FTIME Time;
+                            /* Creation time   */
+                            RTTimeExplode(&time, &file->Info.BirthTime);
+                            Date.day = time.u8MonthDay;
+                            Date.month = time.u8Month;
+                            Date.year = time.i32Year - 1980;
+                            Time.twosecs = time.u8Second / 2;
+                            Time.minutes = time.u8Minute;
+                            Time.hours = time.u8Hour;
+                            memcpy(&filestatus.fdateCreation, &Date, sizeof(USHORT));
+                            memcpy(&filestatus.ftimeCreation, &Time, sizeof(USHORT));
+                            /* Last access time   */
+                            RTTimeExplode(&time, &file->Info.AccessTime);
+                            Date.day = time.u8MonthDay;
+                            Date.month = time.u8Month;
+                            Date.year = time.i32Year - 1980;
+                            Time.twosecs = time.u8Second / 2;
+                            Time.minutes = time.u8Minute;
+                            Time.hours = time.u8Hour;
+                            memcpy(&filestatus.fdateLastAccess, &Date, sizeof(USHORT));
+                            memcpy(&filestatus.ftimeLastAccess, &Time, sizeof(USHORT));
+                            /* Last write time   */
+                            RTTimeExplode(&time, &file->Info.ModificationTime);
+                            Date.day = time.u8MonthDay;
+                            Date.month = time.u8Month;
+                            Date.year = time.i32Year - 1980;
+                            Time.twosecs = time.u8Second / 2;
+                            Time.minutes = time.u8Minute;
+                            Time.hours = time.u8Hour;
+                            memcpy(&filestatus.fdateLastWrite, &Date, sizeof(USHORT));
+                            memcpy(&filestatus.ftimeLastWrite, &Time, sizeof(USHORT));
+                            filestatus.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
+                            filestatus.cbFile = file->Info.cbObject;
+                            filestatus.cbFileAlloc = file->Info.cbAllocated;
+                            KernCopyOut(pData, &filestatus, sizeof(FILESTATUS3L));
+                            break;
+                        }
+
+                    case FIL_QUERYEASIZE:
+                        {
+                            FILESTATUS2 filestatus;
+                            RTTIME time;
+                            FDATE Date;
+                            FTIME Time;
+                            /* Creation time   */
+                            RTTimeExplode(&time, &file->Info.BirthTime);
+                            Date.day = time.u8MonthDay;
+                            Date.month = time.u8Month;
+                            Date.year = time.i32Year - 1980;
+                            Time.twosecs = time.u8Second / 2;
+                            Time.minutes = time.u8Minute;
+                            Time.hours = time.u8Hour;
+                            memcpy(&filestatus.fdateCreation, &Date, sizeof(USHORT));
+                            memcpy(&filestatus.ftimeCreation, &Time, sizeof(USHORT));
+                            /* Last access time   */
+                            RTTimeExplode(&time, &file->Info.AccessTime);
+                            Date.day = time.u8MonthDay;
+                            Date.month = time.u8Month;
+                            Date.year = time.i32Year - 1980;
+                            Time.twosecs = time.u8Second / 2;
+                            Time.minutes = time.u8Minute;
+                            Time.hours = time.u8Hour;
+                            memcpy(&filestatus.fdateLastAccess, &Date, sizeof(USHORT));
+                            memcpy(&filestatus.ftimeLastAccess, &Time, sizeof(USHORT));
+                            /* Last write time   */
+                            RTTimeExplode(&time, &file->Info.ModificationTime);
+                            Date.day = time.u8MonthDay;
+                            Date.month = time.u8Month;
+                            Date.year = time.i32Year - 1980;
+                            Time.twosecs = time.u8Second / 2;
+                            Time.minutes = time.u8Minute;
+                            Time.hours = time.u8Hour;
+                            memcpy(&filestatus.fdateLastWrite, &Date, sizeof(USHORT));
+                            memcpy(&filestatus.ftimeLastWrite, &Time, sizeof(USHORT));
+                            filestatus.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
+                            filestatus.cbFile = (ULONG)file->Info.cbObject;
+                            filestatus.cbFileAlloc = (ULONG)file->Info.cbAllocated;
+                            filestatus.cbList = sizeof(filestatus.cbList);
+                            KernCopyOut(pData, &filestatus, sizeof(FILESTATUS2));
+                            break;
+                        }
+
+                    case FIL_QUERYEASIZEL:
+                        {
+                            FILESTATUS4L filestatus;
+                            RTTIME time;
+                            FDATE Date;
+                            FTIME Time;
+                            /* Creation time   */
+                            RTTimeExplode(&time, &file->Info.BirthTime);
+                            Date.day = time.u8MonthDay;
+                            Date.month = time.u8Month;
+                            Date.year = time.i32Year - 1980;
+                            Time.twosecs = time.u8Second / 2;
+                            Time.minutes = time.u8Minute;
+                            Time.hours = time.u8Hour;
+                            memcpy(&filestatus.fdateCreation, &Date, sizeof(USHORT));
+                            memcpy(&filestatus.ftimeCreation, &Time, sizeof(USHORT));
+                            /* Last access time   */
+                            RTTimeExplode(&time, &file->Info.AccessTime);
+                            Date.day = time.u8MonthDay;
+                            Date.month = time.u8Month;
+                            Date.year = time.i32Year - 1980;
+                            Time.twosecs = time.u8Second / 2;
+                            Time.minutes = time.u8Minute;
+                            Time.hours = time.u8Hour;
+                            memcpy(&filestatus.fdateLastAccess, &Date, sizeof(USHORT));
+                            memcpy(&filestatus.ftimeLastAccess, &Time, sizeof(USHORT));
+                            /* Last write time   */
+                            RTTimeExplode(&time, &file->Info.ModificationTime);
+                            Date.day = time.u8MonthDay;
+                            Date.month = time.u8Month;
+                            Date.year = time.i32Year - 1980;
+                            Time.twosecs = time.u8Second / 2;
+                            Time.minutes = time.u8Minute;
+                            Time.hours = time.u8Hour;
+                            memcpy(&filestatus.fdateLastWrite, &Date, sizeof(USHORT));
+                            memcpy(&filestatus.ftimeLastWrite, &Time, sizeof(USHORT));
+                            filestatus.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
+                            filestatus.cbFile = file->Info.cbObject;
+                            filestatus.cbFileAlloc = file->Info.cbAllocated;
+                            filestatus.cbList = sizeof(filestatus.cbList);
+                            KernCopyOut(pData, &filestatus, sizeof(FILESTATUS4L));
+                            break;
+                        }
+
+                    case FIL_QUERYEASFROMLIST:
+                    case FIL_QUERYEASFROMLISTL:
+                        {
+                            EAOP filestatus;
+                            KernCopyIn(&filestatus, pData, sizeof(EAOP));
+                            PFEALIST pFEA = filestatus.fpFEAList;
+                            // @todo: get empty EAs
+                            memset(pFEA, 0, (USHORT)pFEA->cbList);
+                            pFEA->cbList = sizeof(pFEA->cbList);
+                            KernCopyOut(pData, &filestatus, sizeof(FILESTATUS4L));
+                            break;
+                        }
+
+                    case 4:
+                        {
+                            EAOP filestatus;
+                            KernCopyIn(&filestatus, pData, sizeof(EAOP));
+                            PFEALIST pFEA = filestatus.fpFEAList;
+                            memset(pFEA, 0, (USHORT)pFEA->cbList);
+                            pFEA->cbList = sizeof(pFEA->cbList);
+                            KernCopyOut(pData, &filestatus, sizeof(FILESTATUS4L));
+                            break;
+                        }
+
+                    default:
+                        hrc = ERROR_INVALID_LEVEL;
+                        goto FS32_PATHINFOEXIT;
+                }
+
+                hrc = NO_ERROR;
+            }
+            break;
+
+        case 1: // set
+            {
+                file = (PSHFLDIRINFO)RTMemAlloc(len);
+
+                if (! file)
+                {
+                    hrc = ERROR_NOT_ENOUGH_MEMORY;
+                    goto FS32_PATHINFOEXIT;
+                }
+
+                switch (level)
+                {
+                    case FIL_STANDARD:
+                        {
+                            USHORT usMask;
+                            FILESTATUS filestatus;
+                            RTTIME time;
+                            FDATE Date;
+                            FTIME Time;
+
+                            if (cbData < sizeof(filestatus))
+                            {
+                                hrc = ERROR_INSUFFICIENT_BUFFER;
+                                goto FS32_PATHINFOEXIT;
+                            }
+
+                            KernCopyIn(&filestatus, pData, sizeof(filestatus));
+
+                            /* Creation time   */
+                            memcpy(&Date, &filestatus.fdateCreation, sizeof(USHORT));
+                            memcpy(&Time, &filestatus.ftimeCreation, sizeof(USHORT));
+                            time.u8MonthDay = Date.day;
+                            time.u8Month = Date.month;
+                            time.i32Year = Date.year + 1980;
+                            time.u8Second = Time.twosecs * 2;
+                            time.u8Minute = Time.minutes;
+                            time.u8Hour = Time.hours;
+                            RTTimeImplode(&file->Info.BirthTime, &time);
+                            /* Last access time   */
+                            memcpy(&Date, &filestatus.fdateLastAccess, sizeof(USHORT));
+                            memcpy(&Time, &filestatus.ftimeLastAccess, sizeof(USHORT));
+                            time.u8MonthDay = Date.day;
+                            time.u8Month = Date.month;
+                            time.i32Year = Date.year + 1980;
+                            time.u8Second = Time.twosecs * 2;
+                            time.u8Minute = Time.minutes;
+                            time.u8Hour = Time.hours;
+                            RTTimeImplode(&file->Info.AccessTime, &time);
+                            /* Last write time   */
+                            memcpy(&Date, &filestatus.fdateLastWrite, sizeof(USHORT));
+                            memcpy(&Time, &filestatus.ftimeLastWrite, sizeof(USHORT));
+                            time.u8MonthDay = Date.day;
+                            time.u8Month = Date.month;
+                            time.i32Year = Date.year + 1980;
+                            time.u8Second = Time.twosecs * 2;
+                            time.u8Minute = Time.minutes;
+                            time.u8Hour = Time.hours;
+                            RTTimeImplode(&file->Info.ModificationTime, &time);
+                            
+                            file->Info.cbObject = filestatus.cbFile;
+                            file->Info.cbAllocated = filestatus.cbFileAlloc;
+                            file->Info.Attr.fMode = OS2ToVBoxAttr(filestatus.attrFile);
+
+                            usMask = ~(FILE_READONLY | FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED);
+
+                            if (filestatus.attrFile & usMask)
+                            {
+                                hrc = ERROR_ACCESS_DENIED;
+                                goto FS32_PATHINFOEXIT;
+                            }
+
+                            break;
+                        }
+
+                    case FIL_STANDARDL:
+                        {
+                            USHORT usMask;
+                            FILESTATUS3L filestatus;
+                            RTTIME time;
+                            FDATE Date;
+                            FTIME Time;
+
+                            if (cbData < sizeof(filestatus))
+                            {
+                                hrc = ERROR_INSUFFICIENT_BUFFER;
+                                goto FS32_PATHINFOEXIT;
+                            }
+
+                            KernCopyIn(&filestatus, pData, sizeof(filestatus));
+
+                            /* Creation time   */
+                            memcpy(&Date, &filestatus.fdateCreation, sizeof(USHORT));
+                            memcpy(&Time, &filestatus.ftimeCreation, sizeof(USHORT));
+                            time.u8MonthDay = Date.day;
+                            time.u8Month = Date.month;
+                            time.i32Year = Date.year + 1980;
+                            time.u8Second = Time.twosecs * 2;
+                            time.u8Minute = Time.minutes;
+                            time.u8Hour = Time.hours;
+                            RTTimeImplode(&file->Info.BirthTime, &time);
+                            /* Last access time   */
+                            memcpy(&Date, &filestatus.fdateLastAccess, sizeof(USHORT));
+                            memcpy(&Time, &filestatus.ftimeLastAccess, sizeof(USHORT));
+                            time.u8MonthDay = Date.day;
+                            time.u8Month = Date.month;
+                            time.i32Year = Date.year + 1980;
+                            time.u8Second = Time.twosecs * 2;
+                            time.u8Minute = Time.minutes;
+                            time.u8Hour = Time.hours;
+                            RTTimeImplode(&file->Info.AccessTime, &time);
+                            /* Last write time   */
+                            memcpy(&Date, &filestatus.fdateLastWrite, sizeof(USHORT));
+                            memcpy(&Time, &filestatus.ftimeLastWrite, sizeof(USHORT));
+                            time.u8MonthDay = Date.day;
+                            time.u8Month = Date.month;
+                            time.i32Year = Date.year + 1980;
+                            time.u8Second = Time.twosecs * 2;
+                            time.u8Minute = Time.minutes;
+                            time.u8Hour = Time.hours;
+                            RTTimeImplode(&file->Info.ModificationTime, &time);
+                            
+                            file->Info.cbObject = filestatus.cbFile;
+                            file->Info.cbAllocated = filestatus.cbFileAlloc;
+                            file->Info.Attr.fMode = OS2ToVBoxAttr(filestatus.attrFile);
+
+                            usMask = ~(FILE_READONLY | FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED);
+
+                            if (filestatus.attrFile & usMask)
+                            {
+                                hrc = ERROR_ACCESS_DENIED;
+                                goto FS32_PATHINFOEXIT;
+                            }
+
+                            break;
+                        }
+
+                    case FIL_QUERYEASIZE:
+                    case FIL_QUERYEASIZEL:
+                        break;
+
+                    default:
+                        hrc = ERROR_INVALID_LEVEL;
+                }
+
+                rc = vboxCallFSInfo(&g_clientHandle, &pvboxsfvp->map, params.Handle,
+                                    SHFL_INFO_SET | SHFL_INFO_FILE, &len, file);
+
+                if (RT_FAILURE(rc))
+                {
+                    dprintf("vboxCallFSInfo failed: %d\n", rc);
+                    hrc = vbox_err_to_os2_err(rc);
+                    goto FS32_PATHINFOEXIT;
+                }
+            }
+            break;
+
+        default:
+            hrc = ERROR_INVALID_FUNCTION;
+    }
+
+FS32_PATHINFOEXIT:
+    if (file)
+        RTMemFree(file);
+
+    if (params.Handle)
+        vboxCallClose(&g_clientHandle, &pvboxsfvp->map, params.Handle);
+
+    dprintf(" => %d\n", hrc);
+    return hrc;
 }
 
 

@@ -1501,25 +1501,25 @@ VBOXSF_EP16_END FS_PROCESSNAME
 VBOXSF_EP16_BEGIN   FS_READ, 'FS_READ'
 VBOXSF_TO_32        FS_READ, 6*4        ; extra local for ULONG cbDataTmp.
     push    es
-    movzx   ecx, word [ebp + 0ah]       ; IOflag
-    mov     [esp + 4*4], ecx
-    les     dx, [ebp + 0ch]             ; cbDataTmp = *pcbData;
+    movzx   ecx, word [ebp + 08h]       ; IOflag
+    mov     [esp + 4*4 + 2], ecx
+    les     dx, [ebp + 0ah]             ; cbDataTmp = *pcbData;
     movzx   edx, dx
-    lea     ecx, [esp + 5*4]            ; pcbData = &cbDataTmp
+    lea     ecx, [esp + 5*4 + 2]            ; pcbData = &cbDataTmp
     movzx   eax, word [es:edx]
     mov     [ecx], eax
-    mov     [esp + 3*4], ecx
+    mov     [esp + 3*4 + 2], ecx
     mov     edx, DATA32
     mov     es, edx
-    VBOXSF_FARPTR_2_FLAT  10h, 2*4      ; pbData
+    VBOXSF_FARPTR_2_FLAT  0eh, 2*4 + 2      ; pbData
     ;VBOXSF_PSFFSD_2_FLAT  12h, 1*4      ; psffsd
-    VBOXSF_FARPTR_2_FLAT  14h, 1*4      ; psffsd
-    VBOXSF_FARPTR_2_FLAT  18h, 0*4      ; psffsi
+    VBOXSF_FARPTR_2_FLAT  10h, 1*4 + 2      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  14h, 0*4 + 2      ; psffsi
     call    FS32_READ
 
-    les     dx, [ebp + 0ch]             ; *pcbData = cbDataTmp;
+    les     dx, [ebp + 0ah]             ; *pcbData = cbDataTmp;
     movzx   edx, dx
-    mov     cx, [esp + 5*4]
+    mov     cx, [esp + 5*4 + 2]
     mov     [es:edx], cx
     mov     edx, DATA32
     mov     es, edx
@@ -1596,25 +1596,25 @@ VBOXSF_EP16_END     FS_VERIFYUNCNAME
 VBOXSF_EP16_BEGIN   FS_WRITE, 'FS_WRITE'
 VBOXSF_TO_32        FS_WRITE, 6*4       ; extra local for ULONG cbDataTmp.
     push    es
-    movzx   ecx, word [ebp + 0ah]       ; IOflag
-    mov     [esp + 4*4], ecx
-    les     dx, [ebp + 0ch]             ; cbDataTmp = *pcbData;
+    movzx   ecx, word [ebp + 08h]       ; IOflag
+    mov     [esp + 4*4 + 2], ecx
+    les     dx, [ebp + 0ah]             ; cbDataTmp = *pcbData;
     movzx   edx, dx
-    lea     ecx, [esp + 5*4]            ; pcbData = &cbDataTmp
+    lea     ecx, [esp + 5*4 + 2]            ; pcbData = &cbDataTmp
     movzx   eax, word [es:edx]
     mov     [ecx], eax
-    mov     [esp + 3*4], ecx
+    mov     [esp + 3*4 + 2], ecx
     mov     edx, DATA32
     mov     es, edx
-    VBOXSF_FARPTR_2_FLAT  10h, 2*4      ; pbData
+    VBOXSF_FARPTR_2_FLAT  0ch, 2*4 + 2      ; pbData
     ;VBOXSF_PSFFSD_2_FLAT  12h, 1*4      ; psffsd
-    VBOXSF_FARPTR_2_FLAT  14h, 1*4      ; psffsd
-    VBOXSF_FARPTR_2_FLAT  18h, 0*4      ; psffsi
+    VBOXSF_FARPTR_2_FLAT  10h, 1*4 + 2      ; psffsd
+    VBOXSF_FARPTR_2_FLAT  14h, 0*4 + 2      ; psffsi
     call    FS32_WRITE
 
-    les     dx, [ebp + 0ch]             ; *pcbData = cbDataTmp;
+    les     dx, [ebp + 0ah]             ; *pcbData = cbDataTmp;
     movzx   edx, dx
-    mov     cx, [esp + 5*4]
+    mov     cx, [esp + 5*4 + 2]
     mov     [es:edx], cx
     mov     edx, DATA32
     mov     es, edx

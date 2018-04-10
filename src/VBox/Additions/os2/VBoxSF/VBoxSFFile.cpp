@@ -447,20 +447,18 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                 dprintf("len=%x\n", len);
                 dprintf("num_files=%x\n", num_files);
 
-                //path = make_shflstring(str);
+                rc = vboxCallFSInfo(&g_clientHandle, &pvboxsfvp->map, params.Handle,
+                                    SHFL_INFO_GET | SHFL_INFO_FILE, &len, file);
 
-                rc = vboxCallDirInfo(&g_clientHandle, &pvboxsfvp->map, params.Handle,
-                                     psffsd->filebuf->path, 0, index, &len, file, &num_files);
-
-                vboxCallClose(&g_clientHandle, &pvboxsfvp->map, params.Handle);
-                free_shflstring(path);
+                hrc = vbox_err_to_os2_err(rc);
 
                 if (RT_FAILURE(rc))
                 {
-                    dprintf("vboxCallDirInfo failed: %d\n", rc);
-                    hrc = vbox_err_to_os2_err(rc);
+                    dprintf("vboxCallFSInfo failed: %d\n", rc);
                     goto FS32_FILEINFOEXIT;
                 }
+
+                vboxCallClose(&g_clientHandle, &pvboxsfvp->map, params.Handle);
 
                 if (level == FIL_STANDARD    || level == FIL_STANDARDL ||
                     level == FIL_QUERYEASIZE || level == FIL_QUERYEASIZEL)
@@ -719,12 +717,23 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                     goto FS32_FILEINFOEXIT;
                 }
 
+                file = (PSHFLDIRINFO)RTMemAlloc(len);
+
+                if (! file)
+                {
+                    hrc = ERROR_NOT_ENOUGH_MEMORY;
+                    goto FS32_FILEINFOEXIT;
+                }
+
                 switch (level)
                 {
                     case FIL_STANDARD:
                         {
                             USHORT usMask;
                             FILESTATUS filestatus;
+                            RTTIME time;
+                            FDATE Date;
+                            FTIME Time;
 
                             if (cbData < sizeof(filestatus))
                             {
@@ -733,6 +742,41 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             }
 
                             KernCopyIn(&filestatus, pData, sizeof(filestatus));
+
+                            /* Creation time   */
+                            memcpy(&Date, &filestatus.fdateCreation, sizeof(USHORT));
+                            memcpy(&Time, &filestatus.ftimeCreation, sizeof(USHORT));
+                            time.u8MonthDay = Date.day;
+                            time.u8Month = Date.month;
+                            time.i32Year = Date.year + 1980;
+                            time.u8Second = Time.twosecs * 2;
+                            time.u8Minute = Time.minutes;
+                            time.u8Hour = Time.hours;
+                            RTTimeImplode(&file->Info.BirthTime, &time);
+                            /* Last access time   */
+                            memcpy(&Date, &filestatus.fdateLastAccess, sizeof(USHORT));
+                            memcpy(&Time, &filestatus.ftimeLastAccess, sizeof(USHORT));
+                            time.u8MonthDay = Date.day;
+                            time.u8Month = Date.month;
+                            time.i32Year = Date.year + 1980;
+                            time.u8Second = Time.twosecs * 2;
+                            time.u8Minute = Time.minutes;
+                            time.u8Hour = Time.hours;
+                            RTTimeImplode(&file->Info.AccessTime, &time);
+                            /* Last write time   */
+                            memcpy(&Date, &filestatus.fdateLastWrite, sizeof(USHORT));
+                            memcpy(&Time, &filestatus.ftimeLastWrite, sizeof(USHORT));
+                            time.u8MonthDay = Date.day;
+                            time.u8Month = Date.month;
+                            time.i32Year = Date.year + 1980;
+                            time.u8Second = Time.twosecs * 2;
+                            time.u8Minute = Time.minutes;
+                            time.u8Hour = Time.hours;
+                            RTTimeImplode(&file->Info.ModificationTime, &time);
+                            
+                            file->Info.cbObject = filestatus.cbFile;
+                            file->Info.cbAllocated = filestatus.cbFileAlloc;
+                            file->Info.Attr.fMode = OS2ToVBoxAttr(filestatus.attrFile);
 
                             usMask = ~(FILE_READONLY | FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED);
 
@@ -780,6 +824,9 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                         {
                             USHORT usMask;
                             FILESTATUS3L filestatus;
+                            RTTIME time;
+                            FDATE Date;
+                            FTIME Time;
 
                             if (cbData < sizeof(filestatus))
                             {
@@ -788,6 +835,41 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             }
 
                             KernCopyIn(&filestatus, pData, sizeof(filestatus));
+
+                            /* Creation time   */
+                            memcpy(&Date, &filestatus.fdateCreation, sizeof(USHORT));
+                            memcpy(&Time, &filestatus.ftimeCreation, sizeof(USHORT));
+                            time.u8MonthDay = Date.day;
+                            time.u8Month = Date.month;
+                            time.i32Year = Date.year + 1980;
+                            time.u8Second = Time.twosecs * 2;
+                            time.u8Minute = Time.minutes;
+                            time.u8Hour = Time.hours;
+                            RTTimeImplode(&file->Info.BirthTime, &time);
+                            /* Last access time   */
+                            memcpy(&Date, &filestatus.fdateLastAccess, sizeof(USHORT));
+                            memcpy(&Time, &filestatus.ftimeLastAccess, sizeof(USHORT));
+                            time.u8MonthDay = Date.day;
+                            time.u8Month = Date.month;
+                            time.i32Year = Date.year + 1980;
+                            time.u8Second = Time.twosecs * 2;
+                            time.u8Minute = Time.minutes;
+                            time.u8Hour = Time.hours;
+                            RTTimeImplode(&file->Info.AccessTime, &time);
+                            /* Last write time   */
+                            memcpy(&Date, &filestatus.fdateLastWrite, sizeof(USHORT));
+                            memcpy(&Time, &filestatus.ftimeLastWrite, sizeof(USHORT));
+                            time.u8MonthDay = Date.day;
+                            time.u8Month = Date.month;
+                            time.i32Year = Date.year + 1980;
+                            time.u8Second = Time.twosecs * 2;
+                            time.u8Minute = Time.minutes;
+                            time.u8Hour = Time.hours;
+                            RTTimeImplode(&file->Info.ModificationTime, &time);
+                            
+                            file->Info.cbObject = filestatus.cbFile;
+                            file->Info.cbAllocated = filestatus.cbFileAlloc;
+                            file->Info.Attr.fMode = OS2ToVBoxAttr(filestatus.attrFile);
 
                             usMask = ~(FILE_READONLY | FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED);
 
@@ -839,23 +921,15 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                         hrc = ERROR_INVALID_LEVEL;
                 }
 
-                /* file = (PSHFLDIRINFO)RTMemAlloc(len);
-
-                if (! file)
-                {
-                    hrc = ERROR_NOT_ENOUGH_MEMORY;
-                    goto FS32_FILEINFOEXIT;
-                }
-
-                rc = vboxCallDirInfo(&g_clientHandle, &pvboxsfvp->map, psffsd->filebuf->handle,
-                                     psffsd->filebuf->path, 0, 0, &len, file, &num_files);
+                rc = vboxCallFSInfo(&g_clientHandle, &pvboxsfvp->map, psffsd->filebuf->handle,
+                                    SHFL_INFO_SET | SHFL_INFO_FILE, &len, file);
 
                 if (RT_FAILURE(rc))
                 {
-                    dprintf("vboxCallDirInfo failed: %d\n", rc);
+                    dprintf("vboxCallFSInfo failed: %d\n", rc);
                     hrc = vbox_err_to_os2_err(rc);
                     goto FS32_FILEINFOEXIT;
-                } */
+                }
             }
             break;
 
@@ -876,8 +950,43 @@ FS32_FILEINFOEXIT:
 DECLASM(int)
 FS32_NEWSIZEL(PSFFSI psffsi, PVBOXSFFSD psffsd, LONGLONG cbFile, ULONG IOflag)
 {
+    APIRET hrc = NO_ERROR;
+    PVPFSI pvpfsi;
+    PVPFSD pvpfsd;
+    PVBOXSFVP pvboxsfvp;
+    PSHFLFSOBJINFO pObjInfo = NULL;
+    PSHFLSTRING path;
+    uint32_t cbBuf = sizeof(SHFLFSOBJINFO);
+    int rc;
+
     dprintf("VBOXSF: FS32_NEWSIZEL(%lld, %lx)\n", cbFile, IOflag);
-    return ERROR_NOT_SUPPORTED;
+
+    FSH32_GETVOLPARM(psffsi->sfi_hVPB, &pvpfsi, &pvpfsd);
+
+    pvboxsfvp = (PVBOXSFVP)pvpfsd;
+
+    pObjInfo = (PSHFLFSOBJINFO)RTMemAlloc(cbBuf);
+    if (!pObjInfo)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_NEWSIZELEXIT;
+    }
+
+    memset(pObjInfo, 0, cbBuf);
+    pObjInfo->cbObject = cbFile;
+
+    rc = vboxCallFSInfo(&g_clientHandle, &pvboxsfvp->map, psffsd->filebuf->handle,
+                        SHFL_INFO_SET | SHFL_INFO_SIZE, &cbBuf, (PSHFLDIRINFO)pObjInfo);
+
+    hrc = vbox_err_to_os2_err(rc);
+
+FS32_NEWSIZELEXIT:
+    dprintf(" => %d\n", hrc);
+
+    if (pObjInfo)
+        RTMemFree(pObjInfo);
+
+    return hrc;
 }
 
 
