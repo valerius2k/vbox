@@ -19,6 +19,7 @@ VBoxSF_DLLSUFF       = .ifs
 VBoxSF_DEFS          = VBOX_WITH_HGCM
 VBoxSF_INCS         := \
 	. \
+        $(PATH_ROOT)/include \
 	$(PATH_ROOT)/src/VBox/Additions/common/VBoxGuestLib \
 	$(PATH_ROOT)/src/VBox/Additions/common/VBoxGuest \
 	$(PATH_ROOT)/src/VBox/Runtime/include \

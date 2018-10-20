@@ -5,6 +5,7 @@
 
 /*
  * Copyright (c) 2007 knut st. osmundsen <bird-src-spam@anduin.net>
+ * Copyright (c) 2015-2018 Valery V. Sedletski <_valerius-no-spam@mail.ru>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -39,7 +40,7 @@
 #include <iprt/mem.h>
 #include <iprt/assert.h>
 
-extern VBSFCLIENT g_clientHandle;
+extern VBGLSFCLIENT g_clientHandle;
 
 
 uint32_t VBoxToOS2Attr(uint32_t fMode)
@@ -93,8 +94,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
 
     usEntriesWanted = *pcMatch;
     *pcMatch = 0;
-
-    dprintf("usEntriesWanted=%u\n", usEntriesWanted);
 
     switch (level)
     {
@@ -158,12 +157,12 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
             pFindBuf->index = 0;
         }
 
-        rc = vboxCallDirInfo(&g_clientHandle, &pFindBuf->map, pFindBuf->handle, pFindBuf->path, 0, pFindBuf->index,
+        rc = VbglR0SfDirInfo(&g_clientHandle, &pFindBuf->map, pFindBuf->handle, pFindBuf->path, 0, pFindBuf->index,
                              &pFindBuf->len, pFindBuf->buf, &pFindBuf->num_files);
 
         if (rc != 0 && rc != VERR_NO_MORE_FILES)
         {
-            dprintf("vboxCallDirInfo failed: %d\n", rc);
+            dprintf("VbglR0SfDirInfo failed: %d\n", rc);
             RTMemFree(pFindBuf->buf);
             hrc = vbox_err_to_os2_err(rc);
             goto FILLFINDBUFEXIT;
@@ -176,8 +175,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
             pFindBuf->has_more_files = false;
             goto FILLFINDBUFEXIT;
         }
-
-        dprintf("num_files=%lu\n", pFindBuf->num_files);
     }
 
     while (pFindBuf->bufpos < pFindBuf->buf + pFindBuf->len && *pcMatch < usEntriesWanted)
@@ -225,14 +222,11 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
                     FILEFNDBUF3 findbuf;
                     char *pszFileName = (char *)file->name.String.utf8;
                     RTTIME time;
-                    dprintf("FIL_STANDARD\n");
                     memset(&findbuf, 0, sizeof(findbuf));
                     /* File name */
                     vboxsfStrFromUtf8(findbuf.achName, (char *)pszFileName, 
                         CCHMAXPATHCOMP, file->name.u16Length);
                     findbuf.cchName = strlen(findbuf.achName);
-                    dprintf("findbuf.achName=%s\n", findbuf.achName);
-                    dprintf("findbuf.cchName=%u\n", findbuf.cchName);
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
@@ -282,14 +276,11 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
                     FILEFNDBUF3L findbuf;
                     char *pszFileName = (char *)file->name.String.utf8;
                     RTTIME time;
-                    dprintf("FIL_STANDARDL\n");
                     memset(&findbuf, 0, sizeof(findbuf));
                     /* File name */
                     vboxsfStrFromUtf8(findbuf.achName, (char *)pszFileName,
                         CCHMAXPATHCOMP, file->name.u16Length);
                     findbuf.cchName = strlen(findbuf.achName);
-                    dprintf("findbuf.achName=%s\n", findbuf.achName);
-                    dprintf("findbuf.cchName=%u\n", findbuf.cchName);
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
@@ -339,14 +330,11 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
                     FILEFNDBUF2 findbuf;
                     char *pszFileName = (char *)file->name.String.utf8;
                     RTTIME time;
-                    dprintf("FIL_QUERYEASIZE\n");
                     memset(&findbuf, 0, sizeof(findbuf));
                     /* File name */
                     vboxsfStrFromUtf8(findbuf.achName, (char *)pszFileName, 
                         CCHMAXPATHCOMP, file->name.u16Length);
                     findbuf.cchName = strlen(findbuf.achName);
-                    dprintf("findbuf.achName=%s\n", findbuf.achName);
-                    dprintf("findbuf.cchName=%u\n", findbuf.cchName);
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
@@ -389,7 +377,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
                     }
                     findbuf.cbList = file->Info.Attr.u.EASize.cb;
                     KernCopyOut(pbData, &findbuf, cbSize);
-                    dprintf("cbList=%lu\n", findbuf.cbList);
                     break;
                 }
 
@@ -397,15 +384,12 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
                 {
                     FILEFNDBUF4L findbuf;
                     RTTIME time;
-                    dprintf("FIL_QUERYEASIZEL\n");
                     char *pszFileName = (char *)file->name.String.utf8;
                     memset(&findbuf, 0, sizeof(findbuf));
                     /* File name */
                     vboxsfStrFromUtf8(findbuf.achName, (char *)pszFileName, 
                         CCHMAXPATHCOMP, file->name.u16Length);
                     findbuf.cchName = strlen(findbuf.achName);
-                    dprintf("findbuf.achName=%s\n", findbuf.achName);
-                    dprintf("findbuf.cchName=%u\n", findbuf.cchName);
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
@@ -448,14 +432,12 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
                     }
                     findbuf.cbList = file->Info.Attr.u.EASize.cb;
                     KernCopyOut(pbData, &findbuf, cbSize);
-                    dprintf("cbList=%lu\n", findbuf.cbList);
                     break;
                 }
 
             case FIL_QUERYEASFROMLIST:
                 {
                     FILEFNDBUF3 findbuf;
-                    dprintf("FIL_QUERYEASFROMLIST\n");
                     char *pszFileName = (char *)file->name.String.utf8;
                     RTTIME time;
                     memset(&findbuf, 0, sizeof(findbuf));
@@ -463,8 +445,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
                     vboxsfStrFromUtf8(findbuf.achName, (char *)pszFileName, 
                         CCHMAXPATHCOMP, file->name.u16Length);
                     findbuf.cchName = strlen(findbuf.achName);
-                    dprintf("findbuf.achName=%s\n", findbuf.achName);
-                    dprintf("findbuf.cchName=%u\n", findbuf.cchName);
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
@@ -512,7 +492,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
             case FIL_QUERYEASFROMLISTL:
                 {
                     FILEFNDBUF3L findbuf;
-                    dprintf("FIL_QUERYEASFROMLISTL\n");
                     char *pszFileName = (char *)file->name.String.utf8;
                     RTTIME time;
                     memset(&findbuf, 0, sizeof(findbuf));
@@ -520,8 +499,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
                     vboxsfStrFromUtf8(findbuf.achName, (char *)pszFileName, 
                         CCHMAXPATHCOMP, file->name.u16Length);
                     findbuf.cchName = strlen(findbuf.achName);
-                    dprintf("findbuf.achName=%s\n", findbuf.achName);
-                    dprintf("findbuf.cchName=%u\n", findbuf.cchName);
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
@@ -573,7 +550,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
         }
 
         (*pcMatch)++;
-        dprintf("*pcMatch=%u\n", *pcMatch);
 
         pbData += cbSize;
         cbData -= cbSize;
@@ -593,7 +569,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
                PFSFSI pfsfsi, PVBOXFSFSD pfsfsd, PBYTE pbData, USHORT cbData, PUSHORT pcMatch,
                USHORT level, USHORT flags)
 {
-    SHFLCREATEPARMS params;
+    SHFLCREATEPARMS params = {0};
     PFINDBUF pFindBuf;
     PSHFLSTRING path;
     PVPFSI pvpfsi;
@@ -662,11 +638,11 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
 
     dprintf("str=%s\n", str);
 
-    pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
+    pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
     vboxsfStrToUtf8(pwsz, str);
 
     path = make_shflstring(pwsz);
-    rc = vboxCallCreate(&g_clientHandle, &pvboxsfvp->map, path, &params);
+    rc = VbglR0SfCreate(&g_clientHandle, &pvboxsfvp->map, path, &params);
     free_shflstring(path);
     RTMemFree(pwsz);
 
@@ -692,7 +668,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
 
             dprintf("wildcard: %s\n", str);
 
-            pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
+            pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
             vboxsfStrToUtf8(pwsz, str);
 
             pFindBuf->path = make_shflstring(pwsz);
@@ -707,7 +683,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
     }
     else
     {
-        dprintf("VBOXSF: vboxCallCreate: %d\n", rc);
+        dprintf("VBOXSF: VbglR0SfCreate: %d\n", rc);
         hrc = vbox_err_to_os2_err(rc);
         goto FS32_FINDFIRSTEXIT;
     }
@@ -749,7 +725,7 @@ FS32_FINDCLOSE(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd)
     PFINDBUF pFindBuf = pfsfsd->pFindBuf;
     dprintf("FS32_FINDCLOSE\n");
 
-    vboxCallClose(&g_clientHandle, &pFindBuf->map, pFindBuf->handle);
+    VbglR0SfClose(&g_clientHandle, &pFindBuf->map, pFindBuf->handle);
     free_shflstring(pFindBuf->path);
     RTMemFree(pFindBuf);
     return NO_ERROR;

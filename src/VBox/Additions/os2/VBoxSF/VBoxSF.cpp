@@ -5,6 +5,7 @@
 
 /*
  * Copyright (c) 2007 knut st. osmundsen <bird-src-spam@anduin.net>
+ * Copyright (c) 2015-2018 Valery V. Sedletski <_valerius-no-spam@mail.ru>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -39,7 +40,10 @@
 #include <iprt/assert.h>
 #include <iprt/mem.h>
 
-VBSFCLIENT g_clientHandle = {0};
+APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
+                              char *pszParsedPath, int *pcbParsedPath, VBGLSFMAP *map);
+
+VBGLSFCLIENT g_clientHandle = {0};
 
 
 DECLASM(void)
@@ -67,8 +71,6 @@ FS32_ATTACH(ULONG flag, PCSZ pszDev, PVBOXSFVP pvpfsd, PVBOXSFCD pcdfsd, PBYTE p
     PSHFLSTRING sharename;
     PVBOXSFVP pvboxsfvp = (PVBOXSFVP)pvpfsd;
 
-    //__asm__ __volatile__ (".byte 0xcc\n\t");
-
     if (! pszDev)
     {
         rc = ERROR_INVALID_PARAMETER;
@@ -78,7 +80,6 @@ FS32_ATTACH(ULONG flag, PCSZ pszDev, PVBOXSFVP pvpfsd, PVBOXSFCD pcdfsd, PBYTE p
     switch (flag)
     {
         case 0: // Attach
-            dprintf("*pcbParm=%u, pszParm=%s\n", *pcbParm, pszParm);
             if (pszDev[1] != ':')
             {
                 /* drives only */
@@ -90,16 +91,14 @@ FS32_ATTACH(ULONG flag, PCSZ pszDev, PVBOXSFVP pvpfsd, PVBOXSFCD pcdfsd, PBYTE p
                 rc = ERROR_BUFFER_OVERFLOW;
                 goto FS32_ATTACHEXIT;
             }
-            dprintf("g_clientHandle=%lx\n", g_clientHandle);
             sharename = make_shflstring((char *)pszParm);
-            rc = vboxCallMapFolder(&g_clientHandle, sharename, &pvboxsfvp->map);
+            rc = VbglR0SfMapFolder(&g_clientHandle, sharename, &pvboxsfvp->map);
             strncpy(pvboxsfvp->szLabel, (char *)pszParm, 12);
             pvboxsfvp->szLabel[11] = '\0';
-            dprintf("pvboxsfvp->map=%lx\n", pvboxsfvp->map);
             free_shflstring(sharename);
             if (RT_FAILURE(rc))
             {
-                dprintf("vboxCallMapFolder rc=%d", rc);
+                dprintf("VbglR0SfMapFolder rc=%d", rc);
                 rc = ERROR_VOLUME_NOT_MOUNTED;
                 goto FS32_ATTACHEXIT;
             }
@@ -116,8 +115,6 @@ FS32_ATTACH(ULONG flag, PCSZ pszDev, PVBOXSFVP pvpfsd, PVBOXSFCD pcdfsd, PBYTE p
             break;
 
         case 2: // Query
-            dprintf("pvboxsfvp->szLabel=%s\n", pvboxsfvp->szLabel);
-            dprintf("pvboxsfvp->map=%lx\n", pvboxsfvp->map);
             len = MIN(strlen(pvboxsfvp->szLabel) + 1, 12);
 	    if (*pcbParm >= sizeof(pvboxsfvp->szLabel) && pszParm)
 	    {
@@ -155,7 +152,7 @@ FS32_FSINFO(ULONG flag, ULONG hVPB, PBYTE pbData, ULONG cbData, ULONG level)
 {
     APIRET  rc = NO_ERROR;
     int32_t rv = 0;
-    VBSFMAP map;
+    VBGLSFMAP map;
     PVPFSI pvpfsi = NULL;
     PVPFSD pvpfsd = NULL;
     PVBOXSFVP pvboxsfvp;
@@ -173,12 +170,12 @@ FS32_FSINFO(ULONG flag, ULONG hVPB, PBYTE pbData, ULONG cbData, ULONG level)
     map = pvboxsfvp->map;
     dprintf("map=%lx\n", map);
 
-    rv = vboxCallFSInfo(&g_clientHandle, &map, 0, 
+    rv = VbglR0SfFsInfo(&g_clientHandle, &map, 0, 
         (SHFL_INFO_GET | SHFL_INFO_VOLUME), &bytes, (PSHFLDIRINFO)&volume_info);
 
     if (RT_FAILURE(rv))
     {
-        dprintf("VBOXSF: vboxCallFSInfo failed (%d)\n", rv);
+        dprintf("VBOXSF: VbglR0SfFsInfo failed (%d)\n", rv);
         return vbox_err_to_os2_err(rv);
     }
 
@@ -314,13 +311,12 @@ DECLASM(int)
 FS32_CHDIR(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszDir, USHORT iCurDirEnd)
 {
     APIRET hrc = NO_ERROR;
-    SHFLCREATEPARMS params;
-    PVPFSI pvpfsi = NULL;
-    PVPFSD pvpfsd = NULL;
-    PVBOXSFVP pvboxsfvp;
-    PSHFLSTRING path;
-    char *pwsz;
-    char *pszFullDir;
+    SHFLCREATEPARMS params = {0};
+    PSHFLSTRING path = NULL;
+    char *pszFullName = NULL;
+    int cbFullName;
+    VBGLSFMAP map;
+    char *pwsz = NULL;
     int rc;
 
     dprintf("VBOXSF: FS32_CHDIR(%lx, %u)\n", flag, iCurDirEnd);
@@ -330,45 +326,34 @@ FS32_CHDIR(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszDir, USHORT iCur
         case 0: /* allocate new working directory */
             dprintf("chdir to: %s\n", pszDir);
 
-            FSH32_GETVOLPARM(pcdfsi->cdi_hVPB, &pvpfsi, &pvpfsd);
+            pszFullName = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
 
-            pvboxsfvp = (PVBOXSFVP)pvpfsd;
-
-            pszFullDir = (char *)RTMemAlloc(CCHMAXPATHCOMP);
-
-            if ( (pszDir[0] == '\\' || pszDir[1] == ':') )
+            if (! pszFullName)
             {
-                // absolute path
-                strcpy(pszFullDir, (char *)pszDir);
-                dprintf("1\n");
-            }
-            else
-            {
-                // relative path
-                strcpy(pszFullDir, pcdfsi->cdi_curdir);
-
-                if (pszFullDir[strlen(pszFullDir) - 1] != '\\')
-                    strcat(pszFullDir, "\\");
-
-                strcat(pszFullDir, (char *)pszDir);
-                dprintf("2\n");
+                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                goto FS32_CHDIREXIT;
             }
 
-            pszFullDir += 3;
-            //if (iCurDirEnd != 0xffff)
-            //{
-            //    pszFullDir += iCurDirEnd - 3;
-            //}
+            cbFullName = CCHMAXPATHCOMP + 1;
 
-            dprintf("pszFullDir=%s\n", pszFullDir);
-            pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
-            vboxsfStrToUtf8(pwsz, (char *)pszFullDir);
+            hrc = parseFileName((char *)pszDir, pcdfsi, pszFullName, &cbFullName, &map);
+
+            if (hrc)
+            {
+                dprintf("Filename parse error!\n");
+                goto FS32_CHDIREXIT;
+            }
+
+            dprintf("pszFullName=%s\n", pszFullName);
+            pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+            vboxsfStrToUtf8(pwsz, (char *)pszFullName);
 
             path = make_shflstring((char *)pwsz);
-            rc = vboxCallCreate(&g_clientHandle, &pvboxsfvp->map, path, &params);
-            free_shflstring(path);
-            RTMemFree(pwsz);
-            RTMemFree(pszFullDir);
+
+            params.Handle = SHFL_HANDLE_NIL;
+            params.CreateFlags = SHFL_CF_DIRECTORY | SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW | SHFL_CF_ACCESS_READ;
+            
+            rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
 
             if (RT_SUCCESS(rc))
             {
@@ -378,7 +363,7 @@ FS32_CHDIR(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszDir, USHORT iCur
                     return ERROR_NOT_ENOUGH_MEMORY;
 
                 pcdfsd->cwd->handle = params.Handle;
-                pcdfsd->cwd->map = pvboxsfvp->map;
+                pcdfsd->cwd->map = map;
                 dprintf("success\n");
             }
             else
@@ -390,7 +375,7 @@ FS32_CHDIR(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszDir, USHORT iCur
             break;
 
         case CD_FREE: /* deallocate working directory */
-            vboxCallClose(&g_clientHandle, &pcdfsd->cwd->map, pcdfsd->cwd->handle);
+            VbglR0SfClose(&g_clientHandle, &pcdfsd->cwd->map, pcdfsd->cwd->handle);
             RTMemFree(pcdfsd->cwd);
             hrc = NO_ERROR;
             break;
@@ -400,6 +385,13 @@ FS32_CHDIR(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszDir, USHORT iCur
     }
 
 FS32_CHDIREXIT:
+    if (path)
+        RTMemFree(path);
+    if (pwsz)
+        RTMemFree(pwsz);
+    if (pszFullName)
+        RTMemFree(pszFullName);
+
     dprintf(" => %d\n", hrc);
     return hrc;
 }
@@ -409,13 +401,14 @@ DECLASM(int)
 FS32_MKDIR(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
            PBYTE pEABuf, ULONG flag)
 {
-    SHFLCREATEPARMS params;
+    SHFLCREATEPARMS params = {0};
     APIRET hrc = NO_ERROR;
-    PVPFSI pvpfsi;
-    PVPFSD pvpfsd;
+    char *pszFullName = NULL;
+    int cbFullName;
     PVBOXSFVP pvboxsfvp;
-    PSHFLSTRING path;
-    char *pwsz;
+    PSHFLSTRING path = NULL;
+    char *pwsz = NULL;
+    VBGLSFMAP map;
     int rc;
 
     dprintf("VBOXSF: FS32_MKDIR(%s, %lu)\n", pszName, flag);
@@ -423,32 +416,53 @@ FS32_MKDIR(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
     params.Handle = 0;
     params.Info.cbObject = 0;
     params.CreateFlags = SHFL_CF_DIRECTORY | SHFL_CF_ACT_CREATE_IF_NEW |
-        SHFL_CF_ACT_FAIL_IF_EXISTS | SHFL_CF_ACCESS_READ;
+        SHFL_CF_ACT_FAIL_IF_EXISTS | SHFL_CF_ACCESS_READWRITE; //SHFL_CF_ACCESS_READ;
 
-    FSH32_GETVOLPARM(pcdfsi->cdi_hVPB, &pvpfsi, &pvpfsd);
+    pszFullName = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
 
-    pvboxsfvp = (PVBOXSFVP)pvpfsd;
+    if (! pszFullName)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_MKDIREXIT;
+    }
 
-    pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
-    vboxsfStrToUtf8(pwsz, (char *)pszName);
+    cbFullName = CCHMAXPATHCOMP + 1;
+
+    hrc = parseFileName((char *)pszName, pcdfsi, pszFullName, &cbFullName, &map);
+
+    if (hrc)
+    {
+        dprintf("Filename parse error!\n");
+        goto FS32_MKDIREXIT;
+    }
+
+    pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+    vboxsfStrToUtf8(pwsz, (char *)pszFullName);
+    dprintf("path=%s\n", pwsz);
 
     path = make_shflstring((char *)pwsz);
-    rc = vboxCallCreate(&g_clientHandle, &pvboxsfvp->map, path, &params);
-    RTMemFree(path);
-    RTMemFree(pwsz);
+    rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
 
     /** @todo r=ramshankar: we should perhaps also check rc here and change
      *        Handle initialization from 0 to SHFL_HANDLE_NIL. */
     if (params.Handle == SHFL_HANDLE_NIL)
     {
+        dprintf("fail\n");
         hrc = vbox_err_to_os2_err(rc);
         goto FS32_MKDIREXIT;
     }
 
-    vboxCallClose(&g_clientHandle, &pvboxsfvp->map, params.Handle);
+    VbglR0SfClose(&g_clientHandle, &map, params.Handle);
     hrc = NO_ERROR;
 
 FS32_MKDIREXIT:
+    if (pszFullName)
+        RTMemFree(pszFullName);
+    if (path)
+        RTMemFree(path);
+    if (pwsz)
+        RTMemFree(pwsz);
+
     dprintf(" => %d\n", hrc);
     return hrc;
 }
@@ -458,30 +472,49 @@ DECLASM(int)
 FS32_RMDIR(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd)
 {
     APIRET hrc = NO_ERROR;
-    PVPFSI pvpfsi;
-    PVPFSD pvpfsd;
-    PVBOXSFVP pvboxsfvp;
-    PSHFLSTRING path;
-    char *pwsz;
+    PSHFLSTRING path = NULL;
+    char *pszFullName = NULL;
+    int cbFullName;
+    VBGLSFMAP map;
+    char *pwsz = NULL;
     int rc;
 
     dprintf("VBOXSF: FS32_RMDIR(%s)\n", pszName);
 
-    FSH32_GETVOLPARM(pcdfsi->cdi_hVPB, &pvpfsi, &pvpfsd);
+    pszFullName = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
 
-    pvboxsfvp = (PVBOXSFVP)pvpfsd;
+    if (! pszFullName)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_RMDIREXIT;
+    }
 
-    pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
-    vboxsfStrToUtf8(pwsz, (char *)pszName);
+    cbFullName = CCHMAXPATHCOMP + 1;
+
+    hrc = parseFileName((char *)pszName, pcdfsi, pszFullName, &cbFullName, &map);
+
+    if (hrc)
+    {
+        dprintf("Filename parse error!\n");
+        goto FS32_RMDIREXIT;
+    }
+
+    pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+    vboxsfStrToUtf8(pwsz, (char *)pszFullName);
 
     path = make_shflstring((char *)pwsz);
-    rc = vboxCallRemove(&g_clientHandle, &pvboxsfvp->map, path, SHFL_REMOVE_DIR);
-    RTMemFree(path);
-    RTMemFree(pwsz);
+    rc = VbglR0SfRemove(&g_clientHandle, &map, path, SHFL_REMOVE_DIR);
 
     hrc = vbox_err_to_os2_err(rc);
 
 FS32_RMDIREXIT:
+    if (pszFullName)
+        RTMemFree(pszFullName);
+    if (path)
+        RTMemFree(path);
+    if (pwsz)
+        RTMemFree(pwsz);
+
     dprintf(" => %d\n", hrc);
     return hrc;
 }
@@ -501,36 +534,80 @@ FS32_MOVE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszSrc, USHORT iSrcCurDirEnd,
           PCSZ pszDst, USHORT iDstCurDirEnd, USHORT flag)
 {
     APIRET hrc = NO_ERROR;
-    PVPFSI pvpfsi;
-    PVPFSD pvpfsd;
-    PVBOXSFVP pvboxsfvp;
-    PSHFLSTRING oldpath, newpath;
-    char *pwszFrom, *pwszTo;
+    PSHFLSTRING oldpath = NULL, newpath = NULL;
+    char *pszFullSrc = NULL;
+    int cbFullSrc;
+    char *pszFullDst = NULL;
+    int cbFullDst;
+    VBGLSFMAP map;
+    char *pwszSrc = NULL, *pwszDst = NULL;
     int rc;
 
     dprintf("VBOXSF: FS32_MOVE(%s, %s, %lx)\n", pszSrc, pszDst, flag);
 
-    FSH32_GETVOLPARM(pcdfsi->cdi_hVPB, &pvpfsi, &pvpfsd);
+    pszFullSrc = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
 
-    pvboxsfvp = (PVBOXSFVP)pvpfsd;
+    if (! pszFullSrc)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_MOVEEXIT;
+    }
 
-    pwszFrom = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
-    pwszTo = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
-    vboxsfStrToUtf8(pwszFrom, (char *)pszSrc);
-    vboxsfStrToUtf8(pwszTo, (char *)pszDst);
+    cbFullSrc = CCHMAXPATHCOMP + 1;
 
-    oldpath = make_shflstring((char *)pwszFrom);
-    newpath = make_shflstring((char *)pwszTo);
+    hrc = parseFileName((char *)pszSrc, pcdfsi, pszFullSrc, &cbFullSrc, &map);
 
-    rc = vboxCallRename(&g_clientHandle, &pvboxsfvp->map, oldpath, newpath, SHFL_RENAME_FILE | SHFL_RENAME_REPLACE_IF_EXISTS);
-    RTMemFree(oldpath);
-    RTMemFree(newpath);
-    RTMemFree(pwszFrom);
-    RTMemFree(pwszTo);
+    if (hrc)
+    {
+        dprintf("Filename parse error!\n");
+        goto FS32_MOVEEXIT;
+    }
+
+    pszFullDst = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
+
+    if (! pszFullDst)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_MOVEEXIT;
+    }
+
+    cbFullDst = CCHMAXPATHCOMP + 1;
+
+    hrc = parseFileName((char *)pszDst, pcdfsi, pszFullDst, &cbFullDst, &map);
+
+    if (hrc)
+    {
+        dprintf("Filename parse error!\n");
+        goto FS32_MOVEEXIT;
+    }
+
+    pwszSrc = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+    pwszDst = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+
+    vboxsfStrToUtf8(pwszSrc, (char *)pszFullSrc);
+    vboxsfStrToUtf8(pwszDst, (char *)pszFullDst);
+
+    oldpath = make_shflstring((char *)pwszSrc);
+    newpath = make_shflstring((char *)pwszDst);
+
+    rc = VbglR0SfRename(&g_clientHandle, &map, oldpath, newpath, SHFL_RENAME_FILE | SHFL_RENAME_REPLACE_IF_EXISTS);
 
     hrc = vbox_err_to_os2_err(rc);
 
 FS32_MOVEEXIT:
+    if (oldpath)
+        RTMemFree(oldpath);
+    if (newpath)
+        RTMemFree(newpath);
+    if (pwszSrc)
+        RTMemFree(pwszSrc);
+    if (pwszDst)
+        RTMemFree(pwszDst);
+    if (pszFullSrc)
+        RTMemFree(pszFullSrc);
+    if (pszFullDst)
+        RTMemFree(pszFullDst);
+
     dprintf(" => %d\n", hrc);
     return hrc;
 }
@@ -540,30 +617,49 @@ DECLASM(int)
 FS32_DELETE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszFile, USHORT iCurDirEnd)
 {
     APIRET hrc = NO_ERROR;
-    PVPFSI pvpfsi;
-    PVPFSD pvpfsd;
-    PVBOXSFVP pvboxsfvp;
-    PSHFLSTRING path;
-    char *pwsz;
+    PSHFLSTRING path = NULL;
+    char *pwsz = NULL;
+    char *pszFullName = NULL;
+    int cbFullName;
+    VBGLSFMAP map;
     int rc;
 
     dprintf("VBOXSF: FS32_DELETE(%s)\n", pszFile);
 
-    FSH32_GETVOLPARM(pcdfsi->cdi_hVPB, &pvpfsi, &pvpfsd);
+    pszFullName = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
 
-    pvboxsfvp = (PVBOXSFVP)pvpfsd;
+    if (! pszFullName)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_DELETEEXIT;
+    }
 
-    pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
-    vboxsfStrToUtf8(pwsz, (char *)pszFile);
+    cbFullName = CCHMAXPATHCOMP + 1;
+
+    hrc = parseFileName((char *)pszFile, pcdfsi, pszFullName, &cbFullName, &map);
+
+    if (hrc)
+    {
+        dprintf("Filename parse error!\n");
+        goto FS32_DELETEEXIT;
+    }
+
+    pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+    vboxsfStrToUtf8(pwsz, (char *)pszFullName);
 
     path = make_shflstring((char *)pwsz);
-    rc = vboxCallRemove(&g_clientHandle, &pvboxsfvp->map, path, SHFL_REMOVE_FILE);
-    RTMemFree(path);
-    RTMemFree(pwsz);
+    rc = VbglR0SfRemove(&g_clientHandle, &map, path, SHFL_REMOVE_FILE);
 
     hrc = vbox_err_to_os2_err(rc);
 
 FS32_DELETEEXIT:
+    if (pszFullName)
+        RTMemFree(pszFullName);
+    if (path)
+        RTMemFree(path);
+    if (pwsz)
+        RTMemFree(pwsz);
+
     dprintf(" => %d\n", hrc);
     return hrc;
 }
@@ -572,97 +668,83 @@ FS32_DELETEEXIT:
 DECLASM(int)
 FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd, PUSHORT pAttr)
 {
-    SHFLCREATEPARMS params;
+    SHFLCREATEPARMS params = {0};
     APIRET hrc = NO_ERROR;
-    PVPFSI pvpfsi;
-    PVPFSD pvpfsd;
-    PVBOXSFVP pvboxsfvp;
     PSHFLDIRINFO file = NULL;
     uint32_t len = sizeof(SHFLDIRINFO);
-    uint32_t num_files = 0;
-    uint32_t index = 0;
-    char *str, *p, *lastslash;
-    char *pszDirName;
-    PSHFLSTRING path, path2;
-    char *pwsz;
+    PSHFLSTRING path = NULL;
+    char *pwsz = NULL;
+    char *pszFullName = NULL;
+    int cbFullName;
+    VBGLSFMAP map;
     int rc;
 
     dprintf("VBOXSF: FS32_FILEATTRIBUTE(%lx, %s)\n", flag, pszName);
 
-    FSH32_GETVOLPARM(pcdfsi->cdi_hVPB, &pvpfsi, &pvpfsd);
-
-    pvboxsfvp = (PVBOXSFVP)pvpfsd;
-
     switch (flag)
     {
         case 0: // retrieve
-            pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
-            vboxsfStrToUtf8(pwsz, (char *)pszName);
+            file = (PSHFLDIRINFO)RTMemAlloc(len);
 
-            path = make_shflstring((char *)pwsz);
-
-            str = (char *)RTMemAlloc(strlen((char *)pszName) + 1);
-
-            if (! str)
+            if (! file)
             {
-                dprintf("Not enough memory 2\n");
+                dprintf("Not enough memory 1\n");
                 hrc = ERROR_NOT_ENOUGH_MEMORY;
                 goto FS32_FILEATTRIBUTEEXIT;
             }
 
-            strcpy(str, (char *)pszName);
+            pszFullName = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
 
-            lastslash = p = str;
+            if (! pszFullName)
+            {
+                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                goto FS32_FILEATTRIBUTEEXIT;
+            }
 
-            // get last backslash
-            do {
-                lastslash = p;
-                p = strchr(p + 1, '\\');
-            } while (p && p < str + strlen(str));
+            cbFullName = CCHMAXPATHCOMP + 1;
 
-            // cut off file part from directory part
-            str[lastslash - str + 1] = '\0';
-            pszDirName = str + 1;
+            hrc = parseFileName((char *)pszName, pcdfsi, pszFullName, &cbFullName, &map);
 
-            dprintf("pszDirName=%s\n", pszDirName);
+            if (hrc)
+            {
+                dprintf("Filename parse error!\n");
+                goto FS32_FILEATTRIBUTEEXIT;
+            }
 
-            pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
-            vboxsfStrToUtf8(pwsz, (char *)pszDirName);
+            pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+            vboxsfStrToUtf8(pwsz, (char *)pszFullName);
 
             path = make_shflstring((char *)pwsz);
-            rc = vboxCallCreate(&g_clientHandle, &pvboxsfvp->map, path, &params);
-            free_shflstring(path);
-            RTMemFree(pwsz);
-            RTMemFree(str);
+
+            params.Handle = SHFL_HANDLE_NIL;
+            params.CreateFlags = SHFL_CF_LOOKUP | SHFL_CF_ACT_FAIL_IF_NEW;
+
+            rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
 
             if (!RT_SUCCESS(rc))
             {
-                dprintf("vboxCallCreate returned %d\n", rc);
-                free_shflstring(path);
+                dprintf("VbglR0SfCreate returned %d\n", rc);
                 hrc = vbox_err_to_os2_err(rc);
                 goto FS32_FILEATTRIBUTEEXIT;
             }
 
             dprintf("path=%s\n", pszName);
-            dprintf("pvboxsfvp->map=%x\n", pvboxsfvp->map);
+            dprintf("map=%x\n", map);
             dprintf("params.Handle=%x\n", params.Handle);
             dprintf("len=%x\n", len);
-            dprintf("num_files=%x\n", num_files);
 
-            //path = make_shflstring(str);
-
-            rc = vboxCallFSInfo(&g_clientHandle, &pvboxsfvp->map, params.Handle,
+            rc = VbglR0SfFsInfo(&g_clientHandle, &map, params.Handle,
                                 SHFL_INFO_GET | SHFL_INFO_FILE, &len, file);
 
             hrc = vbox_err_to_os2_err(rc);
 
             if (RT_FAILURE(rc))
             {
-                dprintf("vboxCallFSInfo failed: %d\n", rc);
+                dprintf("VbglR0SfFsInfo failed: %d\n", rc);
                 goto FS32_FILEATTRIBUTEEXIT;
             }
 
-            vboxCallClose(&g_clientHandle, &pvboxsfvp->map, params.Handle);
+            VbglR0SfClose(&g_clientHandle, &map, params.Handle);
 
             *pAttr = VBoxToOS2Attr(file->Info.Attr.fMode);
             break;
@@ -672,6 +754,15 @@ FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, US
     }
 
 FS32_FILEATTRIBUTEEXIT:
+    if (file)
+        RTMemFree(file);
+    if (path)
+        RTMemFree(path);
+    if (pwsz)
+        RTMemFree(pwsz);
+    if (pszFullName)
+        RTMemFree(pszFullName);
+
     dprintf(" => %d\n", hrc);
     return hrc;
 }
@@ -684,73 +775,56 @@ FS32_PATHINFO(USHORT flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT
     APIRET hrc = NO_ERROR;
     SHFLCREATEPARMS params = {0};
     USHORT usNeededSize;
-    PVPFSI pvpfsi;
-    PVPFSD pvpfsd;
-    PVBOXSFVP pvboxsfvp;
     PSHFLDIRINFO file = NULL;
     uint32_t len = sizeof(SHFLDIRINFO);
-    uint32_t num_files = 0;
-    uint32_t index = 0;
-    char *str, *p, *lastslash;
-    char *pszDirName;
-    PSHFLSTRING path, path2;
-    char *pwsz, pwsz2;
+    PSHFLSTRING path = NULL;
+    char *pwsz = NULL;
+    char *pszFullName = NULL;
+    int cbFullName;
+    VBGLSFMAP map;
     int rc;
 
     dprintf("VBOXSF: FS32_PATHINFO(%x, %s, %x)\n", flag, pszName, level);
 
-    FSH32_GETVOLPARM(pcdfsi->cdi_hVPB, &pvpfsi, &pvpfsd);
+    pszFullName = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
 
-    pvboxsfvp = (PVBOXSFVP)pvpfsd;
-
-    str = (char *)RTMemAlloc(strlen((char *)pszName) + 1);
-
-    if (! str)
+    if (! pszFullName)
     {
-        dprintf("Not enough memory 2\n");
         hrc = ERROR_NOT_ENOUGH_MEMORY;
         goto FS32_PATHINFOEXIT;
     }
 
-    strcpy(str, (char *)pszName);
+    cbFullName = CCHMAXPATHCOMP + 1;
 
-    lastslash = p = str;
+    hrc = parseFileName((char *)pszName, pcdfsi, pszFullName, &cbFullName, &map);
 
-    // get last backslash
-    do {
-        lastslash = p;
-        p = strchr(p + 1, '\\');
-    } while (p && p < str + strlen(str));
+    if (hrc)
+    {
+        dprintf("Filename parse error!\n");
+        goto FS32_PATHINFOEXIT;
+    }
 
-    // cut off file part from directory part
-    str[lastslash - str + 1] = '\0';
-    pszDirName = str + 1;
-
-    dprintf("pszDirName=%s\n", pszDirName);
-
-    pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP);
-    vboxsfStrToUtf8(pwsz, (char *)pszDirName);
+    pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+    vboxsfStrToUtf8(pwsz, (char *)pszFullName);
 
     path = make_shflstring((char *)pwsz);
-    rc = vboxCallCreate(&g_clientHandle, &pvboxsfvp->map, path, &params);
-    RTMemFree(pwsz);
-    RTMemFree(str);
 
-    if (!RT_SUCCESS(rc))
+    params.Handle = SHFL_HANDLE_NIL;
+    params.CreateFlags = SHFL_CF_ACT_FAIL_IF_NEW; // SHFL_CF_LOOKUP
+
+    rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
+
+    if (! RT_SUCCESS(rc))
     {
-        dprintf("vboxCallCreate returned %d\n", rc);
-        free_shflstring(path);
+        dprintf("VbglR0SfCreate returned %d\n", rc);
         hrc = vbox_err_to_os2_err(rc);
         goto FS32_PATHINFOEXIT;
     }
 
     dprintf("path=%s\n", pszName);
-    dprintf("pvboxsfvp->map=%x\n", pvboxsfvp->map);
+    dprintf("map=%x\n", map);
     dprintf("params.Handle=%x\n", params.Handle);
     dprintf("len=%x\n", len);
-    dprintf("num_files=%x\n", num_files);
-
-    //path = make_shflstring(str);
 
     switch (flag)
     {
@@ -802,14 +876,14 @@ FS32_PATHINFO(USHORT flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT
 
                 dprintf("file=%x\n", file);
 
-                rc = vboxCallFSInfo(&g_clientHandle, &pvboxsfvp->map, params.Handle,
+                rc = VbglR0SfFsInfo(&g_clientHandle, &map, params.Handle,
                                     SHFL_INFO_GET | SHFL_INFO_FILE, &len, file);
 
                 hrc = vbox_err_to_os2_err(rc);
 
                 if (RT_FAILURE(rc))
                 {
-                    dprintf("vboxCallFSInfo failed: %d\n", rc);
+                    dprintf("VbglR0SfFsInfo failed: %d\n", rc);
                     goto FS32_PATHINFOEXIT;
                 }
 
@@ -994,22 +1068,22 @@ FS32_PATHINFO(USHORT flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT
                         {
                             EAOP filestatus;
                             KernCopyIn(&filestatus, pData, sizeof(EAOP));
-                            PFEALIST pFEA = filestatus.fpFEAList;
+                            PFEALIST pFEA = (PFEALIST)KernSelToFlat((ULONG)filestatus.fpFEAList);
                             // @todo: get empty EAs
                             memset(pFEA, 0, (USHORT)pFEA->cbList);
                             pFEA->cbList = sizeof(pFEA->cbList);
-                            KernCopyOut(pData, &filestatus, sizeof(FILESTATUS4L));
+                            KernCopyOut(pData, &filestatus, sizeof(EAOP));
                             break;
                         }
 
-                    case 4:
+                    case 4: // FIL_QUERYALLEAS
                         {
                             EAOP filestatus;
                             KernCopyIn(&filestatus, pData, sizeof(EAOP));
-                            PFEALIST pFEA = filestatus.fpFEAList;
+                            PFEALIST pFEA = (PFEALIST)KernSelToFlat((ULONG)filestatus.fpFEAList);
                             memset(pFEA, 0, (USHORT)pFEA->cbList);
                             pFEA->cbList = sizeof(pFEA->cbList);
-                            KernCopyOut(pData, &filestatus, sizeof(FILESTATUS4L));
+                            KernCopyOut(pData, &filestatus, sizeof(EAOP));
                             break;
                         }
 
@@ -1166,12 +1240,12 @@ FS32_PATHINFO(USHORT flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT
                         hrc = ERROR_INVALID_LEVEL;
                 }
 
-                rc = vboxCallFSInfo(&g_clientHandle, &pvboxsfvp->map, params.Handle,
+                rc = VbglR0SfFsInfo(&g_clientHandle, &map, params.Handle,
                                     SHFL_INFO_SET | SHFL_INFO_FILE, &len, file);
 
                 if (RT_FAILURE(rc))
                 {
-                    dprintf("vboxCallFSInfo failed: %d\n", rc);
+                    dprintf("VbglR0SfFsInfo failed: %d\n", rc);
                     hrc = vbox_err_to_os2_err(rc);
                     goto FS32_PATHINFOEXIT;
                 }
@@ -1183,11 +1257,17 @@ FS32_PATHINFO(USHORT flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT
     }
 
 FS32_PATHINFOEXIT:
+    if (pwsz)
+        RTMemFree(pwsz);
+    if (path)
+        RTMemFree(path);
     if (file)
         RTMemFree(file);
+    if (pszFullName)
+        RTMemFree(pszFullName);
 
     if (params.Handle)
-        vboxCallClose(&g_clientHandle, &pvboxsfvp->map, params.Handle);
+        VbglR0SfClose(&g_clientHandle, &map, params.Handle);
 
     dprintf(" => %d\n", hrc);
     return hrc;

@@ -5,6 +5,7 @@
 
 /*
  * Copyright (c) 2007 knut st. osmundsen <bird-src-spam@anduin.net>
+ * Copyright (c) 2015-2018 Valery V. Sedletski <_valerius-no-spam@mail.ru>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -51,7 +52,7 @@ extern VBOXGUESTOS2IDCCONNECT g_VBoxGuestIDC;
 extern uint32_t g_u32Info;
 /* from sys0.asm and the linker/end.lib. */
 extern char _text, _etext, _data, _end;
-extern VBSFCLIENT g_clientHandle;
+extern VBGLSFCLIENT g_clientHandle;
 RT_C_DECLS_END
 
 
@@ -64,12 +65,11 @@ RT_C_DECLS_END
  *
  * The caller will do the necessary AttachDD and calling of the 16 bit
  * IDC to initialize the g_VBoxGuestIDC global. Perhaps we should move
- * this bit to VbglInit? It's just that it's so much simpler to do it
+ * this bit to VbglInitClient? It's just that it's so much simpler to do it
  * while we're on the way here...
  *
  */
-DECLASM(void)
-VBoxSFR0Init(void)
+DECLASM(void) VBoxSFR0Init(void)
 {
     APIRET rc;
 
@@ -83,6 +83,14 @@ VBoxSFR0Init(void)
         &&  VALID_PTR(g_VBoxGuestIDC.u32Session)
         &&  VALID_PTR(g_VBoxGuestIDC.pfnServiceEP))
     {
+#if 0 // ???
+        int rc = RTR0Init(0);
+        if (RT_SUCCESS(rc))
+        {
+            rc = VbglInitClient();
+            if (RT_SUCCESS(rc))
+            {
+#endif // ???
 #ifndef DONT_LOCK_SEGMENTS
         /*
          * Lock the 32-bit segments in memory.
@@ -98,7 +106,7 @@ VBoxSFR0Init(void)
         AssertMsg(rc == NO_ERROR, ("locking text32 failed, rc=%d\n"));
 #endif
         /* Initialize VBox subsystem. */
-        rc = vboxInit();
+        rc = VbglR0SfInit();
         if (RT_FAILURE(rc))
         {
             dprintf("VBOXSF: %s: ERROR while initializing VBox subsystem (%Rrc)!\n", __FUNCTION__, rc);
@@ -106,17 +114,17 @@ VBoxSFR0Init(void)
 
         /* Connect the HGCM client */
         RT_ZERO(g_clientHandle);
-        rc = vboxConnect(&g_clientHandle);
+        rc = VbglR0SfConnect(&g_clientHandle);
         if (RT_FAILURE(rc))
         {
             dprintf("VBOXSF: %s: ERROR while connecting to host (%Rrc)!\n", __FUNCTION__, rc);
-            vboxUninit();
+            VbglR0SfTerm();
         }
 
-        rc = vboxCallSetUtf8(&g_clientHandle);
+        rc = VbglR0SfSetUtf8(&g_clientHandle);
         if (RT_FAILURE(rc))
         {
-            dprintf("VBOXSF: vboxCallSetUtf8 failed. rc=%d\n", rc);
+            dprintf("VBOXSF: VbglR0SfSetUtf8 failed. rc=%d\n", rc);
         }
 
         dprintf("VBoxSFR0Init: completed successfully\n");

@@ -5,6 +5,7 @@
 
 /*
  * Copyright (c) 2007 knut st. osmundsen <bird-src-spam@anduin.net>
+ * Copyright (c) 2015-2018 Valery V. Sedletski <_valerius-no-spam@mail.ru>
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -41,7 +42,7 @@
 #include <os2ddk/fsd.h>
 #undef RT_MAX
 
-#include <VBoxGuestR0LibSharedFolders.h>
+#include <VBox/VBoxGuestLibSharedFolders.h>
 
 #include <iprt/types.h>
 #include <iprt/assert.h>
@@ -127,7 +128,7 @@ typedef FILEFNDBUF4L  *PFILEFNDBUF4L;
 typedef struct _CWD
 {
     SHFLHANDLE handle;
-    VBSFMAP map;
+    VBGLSFMAP map;
 } CWD, *PCWD;
 
 typedef struct _FILEBUF
@@ -144,7 +145,7 @@ typedef struct _FILEBUF
 typedef struct VBOXSFVP
 {
     uint32_t u32Dummy;
-    VBSFMAP  map;
+    VBGLSFMAP  map;
     char szLabel[12];
 } VBOXSFVP;
 AssertCompile(sizeof(VBOXSFVP) <= sizeof(VPFSD));
@@ -194,7 +195,7 @@ typedef struct _FINDBUF
     char *pDir;
     uint32_t bAttr;
     uint32_t bMustAttr;
-    VBSFMAP  map;
+    VBGLSFMAP  map;
 } FINDBUF, *PFINDBUF;
 
 /**
@@ -221,7 +222,7 @@ PSHFLSTRING build_path(PSHFLSTRING dir, const char* const name);
 APIRET APIENTRY vboxsfStrFromUtf8(char *dst, char *src, ULONG len, ULONG srclen);
 APIRET APIENTRY vboxsfStrToUtf8(char *dst, char *src);
 APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
-                              char *pszParsedPath, int *cbParsedPath, VBSFMAP *map);
+                              char *pszParsedPath, int *cbParsedPath, VBGLSFMAP *map);
 
 RT_C_DECLS_BEGIN
 
@@ -241,4 +242,3 @@ int tolower (int c);
 char *strncpy(char *dst, char *src, int len);
 
 #endif
-

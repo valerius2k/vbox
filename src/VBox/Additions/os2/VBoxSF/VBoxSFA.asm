@@ -5,6 +5,7 @@
 
 ;
 ; Copyright (c) 2007 knut st. osmundsen <bird-src-spam@anduin.net>
+; Copyright (c) 2015-2018 Valery V. Sedletski <_valerius-no-spam@mail.ru>
 ;
 ; Permission is hereby granted, free of charge, to any person
 ; obtaining a copy of this software and associated documentation
