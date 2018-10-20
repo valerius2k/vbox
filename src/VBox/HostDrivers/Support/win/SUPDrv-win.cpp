@@ -156,7 +156,7 @@ typedef struct SUPDRVNTERRORINFO
     /** Number of bytes of valid info. */
     uint32_t        cchErrorInfo;
     /** The error info. */
-    char            szErrorInfo[2048];
+    char            szErrorInfo[16384 - sizeof(RTLISTNODE) - sizeof(HANDLE)*2 - sizeof(uint64_t) - sizeof(uint32_t) - 0x20];
 } SUPDRVNTERRORINFO;
 /** Pointer to error info. */
 typedef SUPDRVNTERRORINFO *PSUPDRVNTERRORINFO;
@@ -1004,7 +1004,7 @@ NTSTATUS _stdcall VBoxDrvNtClose(PDEVICE_OBJECT pDevObj, PIRP pIrp)
  * @param   cbInput             The size of the input buffer.
  * @param   pvOutput            The output buffer as specfied by the user.
  * @param   cbOutput            The size of the output buffer.
- * @param   uFunction           The function.
+ * @param   uCmd                The I/O command/function being invoked.
  * @param   pIoStatus           Where to return the status of the operation.
  * @param   pDevObj             The device object..
  */
@@ -1258,7 +1258,7 @@ NTSTATUS _stdcall VBoxDrvNtDeviceControl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
  *
  * @returns NT status code.
  *
- * @param   pDevObj     Device object.
+ * @param   pDevExt     Device extension.
  * @param   pSession    The session.
  * @param   pIrp        Request packet.
  * @param   pStack      The stack location containing the DeviceControl parameters.
@@ -1828,11 +1828,15 @@ int  VBOXCALL   supdrvOSLdrOpen(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage, c
 }
 
 
-void VBOXCALL   supdrvOSLdrNotifyOpened(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage)
+void VBOXCALL   supdrvOSLdrNotifyOpened(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage, const char *pszFilename)
+{
+    NOREF(pDevExt); NOREF(pImage); NOREF(pszFilename);
+}
+
+void VBOXCALL   supdrvOSLdrNotifyUnloaded(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage)
 {
     NOREF(pDevExt); NOREF(pImage);
 }
-
 
 int  VBOXCALL   supdrvOSLdrValidatePointer(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage, void *pv, const uint8_t *pbImageBits)
 {

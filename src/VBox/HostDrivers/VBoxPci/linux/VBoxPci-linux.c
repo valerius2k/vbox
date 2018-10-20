@@ -149,7 +149,9 @@ static int __init VBoxPciLinuxInit(void)
     {
 # if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 30)
         /* find_module() is static before Linux 2.6.30 */
+        mutex_lock(&module_mutex);
         g_VBoxPciGlobals.pciStubModule = find_module(PCI_STUB_MODULE_NAME);
+        mutex_unlock(&module_mutex);
         if (g_VBoxPciGlobals.pciStubModule)
         {
             if (try_module_get(g_VBoxPciGlobals.pciStubModule))
@@ -880,9 +882,9 @@ int  vboxPciOsDevPciCfgRead (PVBOXRAWPCIINS pIns, uint32_t Register, PCIRAWMEMLO
  *
  * @param   iIrq            The IRQ number.
  * @param   pvDevId         The device ID, a pointer to PVBOXRAWPCIINS.
- * @param   pvRegs          Register set. Removed in 2.6.19.
+ * @param   pRegs           Register set. Removed in 2.6.19.
  */
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 19)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 19) && !defined(DOXYGEN_RUNNING)
 static irqreturn_t vboxPciOsIrqHandler(int iIrq, void *pvDevId)
 #else
 static irqreturn_t vboxPciOsIrqHandler(int iIrq, void *pvDevId, struct pt_regs *pRegs)

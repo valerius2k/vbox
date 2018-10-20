@@ -127,6 +127,12 @@ public:
     virtual void stop(IOService *pProvider);
     virtual IOService *probe(IOService *pProvider, SInt32 *pi32Score);
     virtual bool terminate(IOOptionBits fOptions);
+
+    RTR0MEMEF_NEW_AND_DELETE_OPERATORS_IOKIT();
+
+private:
+    /** Guard against the parent class growing and us using outdated headers. */
+    uint8_t m_abSafetyPadding[256];
 };
 
 OSDefineMetaClassAndStructors(org_virtualbox_SupDrv, IOService);
@@ -142,6 +148,9 @@ class org_virtualbox_SupDrvClient : public IOUserClient
     OSDeclareDefaultStructors(org_virtualbox_SupDrvClient);
 
 private:
+    /** Guard against the parent class growing and us using outdated headers. */
+    uint8_t m_abSafetyPadding[256];
+
     PSUPDRVSESSION          m_pSession;     /**< The session. */
     task_t                  m_Task;         /**< The client task. */
     org_virtualbox_SupDrv  *m_pProvider;    /**< The service provider. */
@@ -155,6 +164,8 @@ public:
     virtual bool terminate(IOOptionBits fOptions = 0);
     virtual bool finalize(IOOptionBits fOptions);
     virtual void stop(IOService *pProvider);
+
+    RTR0MEMEF_NEW_AND_DELETE_OPERATORS_IOKIT();
 };
 
 OSDefineMetaClassAndStructors(org_virtualbox_SupDrvClient, IOUserClient);
@@ -837,7 +848,7 @@ static int VBoxDrvDarwinIOCtlSlow(PSUPDRVSESSION pSession, u_long iCmd, caddr_t 
  * The SUPDRV IDC entry point.
  *
  * @returns VBox status code, see supdrvIDC.
- * @param   iReq        The request code.
+ * @param   uReq        The request code.
  * @param   pReq        The request.
  */
 DECLEXPORT(int) VBOXCALL SUPDrvDarwinIDC(uint32_t uReq, PSUPDRVIDCREQHDR pReq)
@@ -1124,32 +1135,6 @@ bool VBOXCALL supdrvOSAreTscDeltasInSync(void)
     return false;
 }
 
-void VBOXCALL   supdrvOSLdrNotifyOpened(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage)
-{
-#if 1
-    NOREF(pDevExt); NOREF(pImage);
-#else
-    /*
-     * Try store the image load address in NVRAM so we can retrived it on panic.
-     * Note! This only works if you're root! - Acutally, it doesn't work at all at the moment. FIXME!
-     */
-    IORegistryEntry *pEntry = IORegistryEntry::fromPath("/options", gIODTPlane);
-    if (pEntry)
-    {
-        char szVar[80];
-        RTStrPrintf(szVar, sizeof(szVar), "vboximage"/*-%s*/, pImage->szName);
-        char szValue[48];
-        RTStrPrintf(szValue, sizeof(szValue), "%#llx,%#llx", (uint64_t)(uintptr_t)pImage->pvImage,
-                    (uint64_t)(uintptr_t)pImage->pvImage + pImage->cbImageBits - 1);
-        bool fRc = pEntry->setProperty(szVar, szValue); NOREF(fRc);
-        pEntry->release();
-        SUPR0Printf("fRc=%d '%s'='%s'\n", fRc, szVar, szValue);
-    }
-    /*else
-        SUPR0Printf("failed to find /options in gIODTPlane\n");*/
-#endif
-}
-
 
 int  VBOXCALL   supdrvOSLdrOpen(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage, const char *pszFilename)
 {
@@ -1173,6 +1158,45 @@ int  VBOXCALL   supdrvOSLdrLoad(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage, c
 
 
 void VBOXCALL   supdrvOSLdrUnload(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage)
+{
+    NOREF(pDevExt); NOREF(pImage);
+}
+
+
+void VBOXCALL   supdrvOSLdrNotifyLoaded(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage)
+{
+    NOREF(pDevExt); NOREF(pImage);
+}
+
+
+void VBOXCALL   supdrvOSLdrNotifyOpened(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage, const char *pszFilename)
+{
+#if 1
+    NOREF(pDevExt); NOREF(pImage); NOREF(pszFilename);
+#else
+    /*
+     * Try store the image load address in NVRAM so we can retrived it on panic.
+     * Note! This only works if you're root! - Acutally, it doesn't work at all at the moment. FIXME!
+     */
+    IORegistryEntry *pEntry = IORegistryEntry::fromPath("/options", gIODTPlane);
+    if (pEntry)
+    {
+        char szVar[80];
+        RTStrPrintf(szVar, sizeof(szVar), "vboximage"/*-%s*/, pImage->szName);
+        char szValue[48];
+        RTStrPrintf(szValue, sizeof(szValue), "%#llx,%#llx", (uint64_t)(uintptr_t)pImage->pvImage,
+                    (uint64_t)(uintptr_t)pImage->pvImage + pImage->cbImageBits - 1);
+        bool fRc = pEntry->setProperty(szVar, szValue); NOREF(fRc);
+        pEntry->release();
+        SUPR0Printf("fRc=%d '%s'='%s'\n", fRc, szVar, szValue);
+    }
+    /*else
+        SUPR0Printf("failed to find /options in gIODTPlane\n");*/
+#endif
+}
+
+
+void VBOXCALL   supdrvOSLdrNotifyUnloaded(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage)
 {
     NOREF(pDevExt); NOREF(pImage);
 }
@@ -1621,11 +1645,9 @@ bool org_virtualbox_SupDrvClient::initWithTask(task_t OwningTask, void *pvSecuri
 
     if (u32Type != SUP_DARWIN_IOSERVICE_COOKIE)
     {
-        LogRel(("org_virtualbox_SupDrvClient::initWithTask: Bad cookie %#x (%s)\n", u32Type, pszProcName));
+        LogRelMax(10,("org_virtualbox_SupDrvClient::initWithTask: Bad cookie %#x (%s)\n", u32Type, pszProcName));
         return false;
     }
-    else
-        LogRel(("org_virtualbox_SupDrvClient::initWithTask: Expected cookie %#x (%s)\n", u32Type, pszProcName));
 
     if (IOUserClient::initWithTask(OwningTask, pvSecurityId , u32Type))
     {

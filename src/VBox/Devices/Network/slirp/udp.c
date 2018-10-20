@@ -463,6 +463,22 @@ int udp_output(PNATState pData, struct socket *so, struct mbuf *m,
     LogFlowFunc(("ENTER: so = %R[natsock], m = %p, saddr = %RTnaipv4\n",
                  so, (long)m, addr->sin_addr.s_addr));
 
+    if (so->so_laddr.s_addr == INADDR_ANY)
+    {
+        if (pData->guest_addr_guess.s_addr != INADDR_ANY)
+        {
+            LogRel2(("NAT: port-forward: using %RTnaipv4 for %R[natsock]\n",
+                     pData->guest_addr_guess.s_addr, so));
+            so->so_laddr = pData->guest_addr_guess;
+        }
+        else
+        {
+            LogRel2(("NAT: port-forward: guest address unknown for %R[natsock]\n", so));
+            m_freem(pData, m);
+            return 0;
+        }
+    }
+
     saddr = *addr;
     if ((so->so_faddr.s_addr & RT_H2N_U32(pData->netmask)) == pData->special_addr.s_addr)
     {
@@ -641,7 +657,8 @@ udp_listen(PNATState pData, u_int32_t bind_addr, u_int port, u_int32_t laddr, u_
 
     if (bind(so->s,(struct sockaddr *)&addr, addrlen) < 0)
     {
-        LogRel(("NAT: bind to %RTnaipv4 has been failed\n", addr.sin_addr));
+        LogRel(("NAT: udp bind to %RTnaipv4:%d failed, error %d\n",
+                addr.sin_addr, RT_N2H_U16(port), errno));
         udp_detach(pData, so);
         LogFlowFunc(("LEAVE: NULL\n"));
         return NULL;

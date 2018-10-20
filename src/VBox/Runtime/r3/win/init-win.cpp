@@ -56,6 +56,8 @@ DECLHIDDEN(OSVERSIONINFOEXW)    g_WinOsInfoEx;
 DECLHIDDEN(HMODULE)             g_hModKernel32 = NULL;
 /** The native ntdll.dll handle. */
 DECLHIDDEN(HMODULE)             g_hModNtDll = NULL;
+/** GetSystemWindowsDirectoryW or GetWindowsDirectoryW (NT4). */
+DECLHIDDEN(PFNGETWINSYSDIR)     g_pfnGetSystemWindowsDirectoryW = NULL;
 
 
 
@@ -255,7 +257,7 @@ static int rtR3InitNativeObtrusiveWorker(void)
             rc = VERR_INTERNAL_ERROR_3;
     }
 
-    /** @bugref 6861: Observed GUI issues on Vista (32-bit and 64-bit). */
+    /** @bugref{6861} Observed GUI issues on Vista (32-bit and 64-bit). */
     if (g_enmWinVer > kRTWinOSType_VISTA)
     {
         typedef BOOL(WINAPI *PFNSETDEFAULTDLLDIRECTORIES)(DWORD);
@@ -291,6 +293,14 @@ DECLHIDDEN(int) rtR3InitNativeFirst(uint32_t fFlags)
     int rc = VINF_SUCCESS;
     if (!(fFlags & RTR3INIT_FLAGS_UNOBTRUSIVE))
         rc = rtR3InitNativeObtrusiveWorker();
+
+    /*
+     * Resolve some kernel32.dll APIs we may need but aren't necessarily
+     * present in older windows versions.
+     */
+    g_pfnGetSystemWindowsDirectoryW = (PFNGETWINSYSDIR)GetProcAddress(g_hModKernel32, "GetSystemWindowsDirectoryW");
+    if (g_pfnGetSystemWindowsDirectoryW)
+        g_pfnGetSystemWindowsDirectoryW = (PFNGETWINSYSDIR)GetProcAddress(g_hModKernel32, "GetWindowsDirectoryW");
 
     return rc;
 }

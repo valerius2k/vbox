@@ -145,7 +145,7 @@ typedef RTCRDIGESTDESC const *PCRTCRDIGESTDESC;
  *                          RTCrDigestCreate.  This is optional, fewer
  *                          algortihms are available if not specified.
  */
-RTDECL(PCRTCRDIGESTDESC) RTCrDigestFindByObjIdString(const char *pszObjId, void *ppvOpaque);
+RTDECL(PCRTCRDIGESTDESC) RTCrDigestFindByObjIdString(const char *pszObjId, void **ppvOpaque);
 
 /**
  * Finds a cryptographic hash / message digest descriptor by object identifier
@@ -153,13 +153,13 @@ RTDECL(PCRTCRDIGESTDESC) RTCrDigestFindByObjIdString(const char *pszObjId, void 
  *
  * @returns Pointer to the message digest details & vtable if found.  NULL if
  *          not found.
- * @param   pszObjId        The ASN.1 object ID of the message digest algorithm.
+ * @param   pObjId          The ASN.1 object ID of the message digest algorithm.
  * @param   ppvOpaque       Where to return an opaque implementation specfici
  *                          sub-type indicator that can be passed to
  *                          RTCrDigestCreate.  This is optional, fewer
  *                          algortihms are available if not specified.
  */
-RTDECL(PCRTCRDIGESTDESC) RTCrDigestFindByObjId(PCRTASN1OBJID pObjId, void *ppvOpaque);
+RTDECL(PCRTCRDIGESTDESC) RTCrDigestFindByObjId(PCRTASN1OBJID pObjId, void **ppvOpaque);
 
 RTDECL(PCRTCRDIGESTDESC) RTCrDigestFindByType(RTDIGESTTYPE enmDigestType);
 RTDECL(int) RTCrDigestCreateByObjIdString(PRTCRDIGEST phDigest, const char *pszObjId);

@@ -79,6 +79,18 @@ typedef enum RTTESTLVL
  */
 RTR3DECL(int) RTTestCreate(const char *pszTest, PRTTEST phTest);
 
+/**
+ * Creates a test instance for a child process.
+ *
+ * This differs from RTTestCreate in that it disabled result reporting to file
+ * and pipe in order to avoid producing invalid XML.
+ *
+ * @returns IPRT status code.
+ * @param   pszTest     The test name.
+ * @param   phTest      Where to store the test instance handle.
+ */
+RTR3DECL(int) RTTestCreateChild(const char *pszTest, PRTTEST phTest);
+
 /** @name RTTEST_C_XXX - Flags for RTTestCreateEx.
  * @{ */
 /** Whether to check the IPRT_TEST_XXX variables when constructing the
@@ -110,8 +122,16 @@ RTR3DECL(int) RTTestCreate(const char *pszTest, PRTTEST phTest);
 /** Whether to try install the test instance in the test TLS slot.  Setting
  * this flag is incompatible with using the RTTestIXxxx variant of the API. */
 #define RTTEST_C_NO_TLS                 RT_BIT(3)
+/** Don't report to the pipe (IPRT_TEST_PIPE or other).   */
+#define RTTEST_C_NO_XML_REPORTING_PIPE  RT_BIT(4)
+/** Don't report to the results file (IPRT_TEST_FILE or other).   */
+#define RTTEST_C_NO_XML_REPORTING_FILE  RT_BIT(4)
+/** No XML reporting to pipes, file or anything.
+ * Child processes may want to use this so they don't garble the output of
+ * the main test process. */
+#define RTTEST_C_NO_XML_REPORTING       (RTTEST_C_NO_XML_REPORTING_PIPE | RTTEST_C_NO_XML_REPORTING_FILE)
 /** Mask containing the valid bits. */
-#define RTTEST_C_VALID_MASK             UINT32_C(0x0000000f)
+#define RTTEST_C_VALID_MASK             UINT32_C(0x0000003f)
 /** @} */
 
 
@@ -174,7 +194,7 @@ RTR3DECL(RTEXITCODE) RTTestInitAndCreate(const char *pszTest, PRTTEST phTest);
  * @param   pszTest     The test name.
  * @param   phTest      Where to store the test instance handle.
  */
-RTR3DECL(RTEXITCODE) RTTestInitExAndCreate(int cArgs, char ***papszArgs, uint32_t fRtInit, const char *pszTest, PRTTEST phTest);
+RTR3DECL(RTEXITCODE) RTTestInitExAndCreate(int cArgs, char ***ppapszArgs, uint32_t fRtInit, const char *pszTest, PRTTEST phTest);
 
 /**
  * Destroys a test instance previously created by RTTestCreate.
@@ -539,7 +559,7 @@ RTR3DECL(int) RTTestValueF(RTTEST hTest, uint64_t u64Value, RTTESTUNIT enmUnit,
  * @param   u64Value    The value.
  * @param   enmUnit     The value unit.
  * @param   pszNameFmt  The value name format string.
- * @param   va_list     String arguments.
+ * @param   va          String arguments.
  */
 RTR3DECL(int) RTTestValueV(RTTEST hTest, uint64_t u64Value, RTTESTUNIT enmUnit,
                            const char *pszNameFmt, va_list va) RT_IPRT_FORMAT_ATTR(4, 0);
@@ -990,7 +1010,7 @@ RTR3DECL(int) RTTestIValueF(uint64_t u64Value, RTTESTUNIT enmUnit, const char *p
  * @param   u64Value    The value.
  * @param   enmUnit     The value unit.
  * @param   pszNameFmt  The value name format string.
- * @param   va_list     String arguments.
+ * @param   va          String arguments.
  */
 RTR3DECL(int) RTTestIValueV(uint64_t u64Value, RTTESTUNIT enmUnit, const char *pszNameFmt, va_list va) RT_IPRT_FORMAT_ATTR(3, 0);
 
@@ -1155,7 +1175,6 @@ RTR3DECL(int) RTTestIFailureDetails(const char *pszFormat, ...) RT_IPRT_FORMAT_A
  * @param   expr            The expression to evaluate.
  * @param   DetailsArgs     Argument list for RTTestIFailureDetails, including
  *                          parenthesis.
- * @param   rcRet           What to return on failure.
  */
 #define RTTESTI_CHECK_MSG_BREAK(expr, DetailsArgs) \
     if (!(expr)) { \

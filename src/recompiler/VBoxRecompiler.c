@@ -15,6 +15,16 @@
  * hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
  */
 
+/** @page pg_rem REM - Recompiled Execution Manager.
+ *
+ * The recompiled exeuction manager (REM) serves the final fallback for guest
+ * execution, after HM / raw-mode and IEM have given up.
+ *
+ * The REM is qemu with a whole bunch of VBox specific customization for
+ * interfacing with PATM, CSAM, PGM and other components.
+ *
+ * @sa @ref grp_rem
+ */
 
 /*********************************************************************************************************************************
 *   Header Files                                                                                                                 *
@@ -785,7 +795,7 @@ REMR3DECL(int) REMR3Step(PVM pVM, PVMCPU pVCpu)
      * pending interrupts and suchlike.
      */
     interrupt_request = pVM->rem.s.Env.interrupt_request;
-    Assert(!(interrupt_request & ~(CPU_INTERRUPT_HARD | CPU_INTERRUPT_EXITTB | CPU_INTERRUPT_TIMER  | CPU_INTERRUPT_EXTERNAL_HARD | CPU_INTERRUPT_EXTERNAL_EXIT | CPU_INTERRUPT_EXTERNAL_FLUSH_TLB | CPU_INTERRUPT_EXTERNAL_TIMER)));
+    Assert(!(interrupt_request & ~(CPU_INTERRUPT_HARD | CPU_INTERRUPT_EXITTB | CPU_INTERRUPT_TIMER | CPU_INTERRUPT_EXTERNAL_HARD | CPU_INTERRUPT_EXTERNAL_EXIT | CPU_INTERRUPT_EXTERNAL_FLUSH_TLB | CPU_INTERRUPT_EXTERNAL_TIMER)));
     pVM->rem.s.Env.interrupt_request = 0;
     cpu_single_step(&pVM->rem.s.Env, 1);
 
@@ -925,7 +935,10 @@ REMR3DECL(int) REMR3EmulateInstruction(PVM pVM, PVMCPU pVCpu)
     if (RT_SUCCESS(rc))
     {
         int interrupt_request = pVM->rem.s.Env.interrupt_request;
-        Assert(!(interrupt_request & ~(CPU_INTERRUPT_HARD | CPU_INTERRUPT_EXITTB | CPU_INTERRUPT_TIMER | CPU_INTERRUPT_EXTERNAL_HARD | CPU_INTERRUPT_EXTERNAL_EXIT | CPU_INTERRUPT_EXTERNAL_FLUSH_TLB | CPU_INTERRUPT_EXTERNAL_TIMER)));
+        Assert(!(  interrupt_request
+                 & ~(CPU_INTERRUPT_HARD | CPU_INTERRUPT_EXITTB | CPU_INTERRUPT_TIMER | CPU_INTERRUPT_EXTERNAL_HARD
+                     | CPU_INTERRUPT_EXTERNAL_EXIT | CPU_INTERRUPT_EXTERNAL_FLUSH_TLB | CPU_INTERRUPT_EXTERNAL_TIMER
+                     | CPU_INTERRUPT_EXTERNAL_DMA)));
 #ifdef REM_USE_QEMU_SINGLE_STEP_FOR_LOGGING
         cpu_single_step(&pVM->rem.s.Env, 0);
 #endif
@@ -3578,25 +3591,26 @@ REMR3DECL(bool) REMR3IsPageAccessHandled(PVM pVM, RTGCPHYS GCPhys)
  * @param   env         The cpu environment.
  * @param   addr        The virtual address.
  * @param   pTLBEntry   The TLB entry.
+ * @param   IoTlbEntry  The I/O TLB entry address.
  */
 target_ulong remR3PhysGetPhysicalAddressCode(CPUX86State       *env,
                                              target_ulong       addr,
                                              CPUTLBEntry       *pTLBEntry,
-                                             target_phys_addr_t ioTLBEntry)
+                                             target_phys_addr_t IoTlbEntry)
 {
     PVM pVM = env->pVM;
 
-    if ((ioTLBEntry & ~TARGET_PAGE_MASK) == pVM->rem.s.iHandlerMemType)
+    if ((IoTlbEntry & ~TARGET_PAGE_MASK) == pVM->rem.s.iHandlerMemType)
     {
         /* If code memory is being monitored, appropriate IOTLB entry will have
            handler IO type, and addend will provide real physical address, no
            matter if we store VA in TLB or not, as handlers are always passed PA */
-        target_ulong ret = (ioTLBEntry & TARGET_PAGE_MASK) + addr;
+        target_ulong ret = (IoTlbEntry & TARGET_PAGE_MASK) + addr;
         return ret;
     }
     LogRel(("\nTrying to execute code with memory type addr_code=%RGv addend=%RGp at %RGv! (iHandlerMemType=%#x iMMIOMemType=%#x IOTLB=%RGp)\n"
             "*** handlers\n",
-            (RTGCPTR)pTLBEntry->addr_code, (RTGCPHYS)pTLBEntry->addend, (RTGCPTR)addr, pVM->rem.s.iHandlerMemType, pVM->rem.s.iMMIOMemType, (RTGCPHYS)ioTLBEntry));
+            (RTGCPTR)pTLBEntry->addr_code, (RTGCPHYS)pTLBEntry->addend, (RTGCPTR)addr, pVM->rem.s.iHandlerMemType, pVM->rem.s.iMMIOMemType, (RTGCPHYS)IoTlbEntry));
     DBGFR3Info(pVM->pUVM, "handlers", NULL, DBGFR3InfoLogRelHlp());
     LogRel(("*** mmio\n"));
     DBGFR3Info(pVM->pUVM, "mmio", NULL, DBGFR3InfoLogRelHlp());
@@ -4147,7 +4161,7 @@ bool remR3DisasInstr(CPUX86State *env, int f32BitCode, char *pszPrefix)
  * @param   pvCode          Pointer to the code block.
  * @param   cb              Size of the code block.
  */
-void disas(FILE *phFile, void *pvCode, unsigned long cb)
+void disas(FILE *phFileIgnored, void *pvCode, unsigned long cb)
 {
     if (LogIs2Enabled())
     {
@@ -4187,7 +4201,7 @@ void disas(FILE *phFile, void *pvCode, unsigned long cb)
  * @param   cb              Number of bytes to disassemble.
  * @param   fFlags          Flags, probably something which tells if this is 16, 32 or 64 bit code.
  */
-void target_disas(FILE *phFile, target_ulong uCode, target_ulong cb, int fFlags)
+void target_disas(FILE *phFileIgnored, target_ulong uCode, target_ulong cb, int fFlags)
 {
     if (LogIs2Enabled())
     {
@@ -4636,8 +4650,8 @@ int cpu_rdmsr(CPUX86State *env, uint32_t idMsr, uint64_t *puValue)
  * @retval 0 success.
  * @retval -1 failure, raise \#GP(0).
  * @param   env     The cpu state.
- * @param   idMsr   The MSR to read.
- * @param   puValue Where to return the value.
+ * @param   idMsr   The MSR to write to.
+ * @param   uValue  The value to write.
  */
 int cpu_wrmsr(CPUX86State *env, uint32_t idMsr, uint64_t uValue)
 {
@@ -4770,10 +4784,10 @@ uint32_t cpu_inl(CPUX86State *env, pio_addr_t addr)
  * @param   env         Pointer to the recompiler CPU structure.
  * @param   idx         The CPUID leaf (eax).
  * @param   idxSub      The CPUID sub-leaf (ecx) where applicable.
- * @param   pvEAX       Where to store eax.
- * @param   pvEBX       Where to store ebx.
- * @param   pvECX       Where to store ecx.
- * @param   pvEDX       Where to store edx.
+ * @param   pEAX        Where to store eax.
+ * @param   pEBX        Where to store ebx.
+ * @param   pECX        Where to store ecx.
+ * @param   pEDX        Where to store edx.
  */
 void cpu_x86_cpuid(CPUX86State *env, uint32_t idx, uint32_t idxSub,
                    uint32_t *pEAX, uint32_t *pEBX, uint32_t *pECX, uint32_t *pEDX)

@@ -42,6 +42,7 @@
 
 
 /** @defgroup grp_vm    The Virtual Machine
+ * @ingroup grp_vmm
  * @{
  */
 
@@ -224,7 +225,7 @@ typedef struct VMCPU
 #ifdef ___GIMInternal_h
         struct GIMCPU s;
 #endif
-        uint8_t             padding[64];      /* multiple of 64 */
+        uint8_t             padding[64];        /* multiple of 64 */
     } gim;
 
     /** Align the following members on page boundary. */
@@ -391,6 +392,10 @@ typedef struct VMCPU
 /** Same as VM_FF_PGM_SYNC_CR3 except that global pages can be skipped.
  * (NON-GLOBAL FLUSH) */
 #define VMCPU_FF_PGM_SYNC_CR3_NON_GLOBAL    RT_BIT_32(17)
+/** Check for pending TLB shootdown actions (deprecated)
+ * Reserved for furture HM re-use if necessary / safe.
+ * Consumer: HM */
+#define VMCPU_FF_TLB_SHOOTDOWN_UNUSED       RT_BIT_32(18)
 /** Check for pending TLB flush action.
  * Consumer: HM
  * @todo rename to VMCPU_FF_HM_TLB_FLUSH  */
@@ -509,7 +514,7 @@ typedef struct VMCPU
 /** @def VM_FF_SET
  * Sets a force action flag.
  *
- * @param   pVM     Pointer to the VM.
+ * @param   pVM     The cross context VM structure.
  * @param   fFlag   The flag to set.
  */
 #if 1
@@ -524,7 +529,7 @@ typedef struct VMCPU
 /** @def VMCPU_FF_SET
  * Sets a force action flag for the given VCPU.
  *
- * @param   pVCpu   Pointer to the VMCPU.
+ * @param   pVCpu   The cross context virtual CPU structure.
  * @param   fFlag   The flag to set.
  */
 #define VMCPU_FF_SET(pVCpu, fFlag)          ASMAtomicOrU32(&(pVCpu)->fLocalForcedActions, (fFlag))
@@ -532,7 +537,7 @@ typedef struct VMCPU
 /** @def VM_FF_CLEAR
  * Clears a force action flag.
  *
- * @param   pVM     Pointer to the VM.
+ * @param   pVM     The cross context VM structure.
  * @param   fFlag   The flag to clear.
  */
 #if 1
@@ -547,7 +552,7 @@ typedef struct VMCPU
 /** @def VMCPU_FF_CLEAR
  * Clears a force action flag for the given VCPU.
  *
- * @param   pVCpu   Pointer to the VMCPU.
+ * @param   pVCpu   The cross context virtual CPU structure.
  * @param   fFlag   The flag to clear.
  */
 #define VMCPU_FF_CLEAR(pVCpu, fFlag)        ASMAtomicAndU32(&(pVCpu)->fLocalForcedActions, ~(fFlag))
@@ -555,7 +560,7 @@ typedef struct VMCPU
 /** @def VM_FF_IS_SET
  * Checks if a force action flag is set.
  *
- * @param   pVM     Pointer to the VM.
+ * @param   pVM     The cross context VM structure.
  * @param   fFlag   The flag to check.
  */
 #define VM_FF_IS_SET(pVM, fFlag)            (((pVM)->fGlobalForcedActions & (fFlag)) == (fFlag))
@@ -563,7 +568,7 @@ typedef struct VMCPU
 /** @def VMCPU_FF_IS_SET
  * Checks if a force action flag is set for the given VCPU.
  *
- * @param   pVCpu   Pointer to the VMCPU.
+ * @param   pVCpu   The cross context virtual CPU structure.
  * @param   fFlag   The flag to check.
  */
 #define VMCPU_FF_IS_SET(pVCpu, fFlag)       (((pVCpu)->fLocalForcedActions & (fFlag)) == (fFlag))
@@ -571,27 +576,27 @@ typedef struct VMCPU
 /** @def VM_FF_IS_PENDING
  * Checks if one or more force action in the specified set is pending.
  *
- * @param   pVM     Pointer to the VM.
+ * @param   pVM     The cross context VM structure.
  * @param   fFlags  The flags to check for.
  */
 #define VM_FF_IS_PENDING(pVM, fFlags)       RT_BOOL((pVM)->fGlobalForcedActions & (fFlags))
 
-/** @def VM_FF_TESTANDCLEAR
+/** @def VM_FF_TEST_AND_CLEAR
  * Checks if one (!) force action in the specified set is pending and clears it atomically
  *
  * @returns true if the bit was set.
  * @returns false if the bit was clear.
- * @param   pVM     Pointer to the VM.
+ * @param   pVM     The cross context VM structure.
  * @param   iBit    Bit position to check and clear
  */
 #define VM_FF_TEST_AND_CLEAR(pVM, iBit)     (ASMAtomicBitTestAndClear(&(pVM)->fGlobalForcedActions, iBit##_BIT))
 
-/** @def VMCPU_FF_TESTANDCLEAR
+/** @def VMCPU_FF_TEST_AND_CLEAR
  * Checks if one (!) force action in the specified set is pending and clears it atomically
  *
  * @returns true if the bit was set.
  * @returns false if the bit was clear.
- * @param   pVCpu   Pointer to the VMCPU.
+ * @param   pVCpu   The cross context virtual CPU structure.
  * @param   iBit    Bit position to check and clear
  */
 #define VMCPU_FF_TEST_AND_CLEAR(pVCpu, iBit) (ASMAtomicBitTestAndClear(&(pVCpu)->fLocalForcedActions, iBit##_BIT))
@@ -599,7 +604,7 @@ typedef struct VMCPU
 /** @def VMCPU_FF_IS_PENDING
  * Checks if one or more force action in the specified set is pending for the given VCPU.
  *
- * @param   pVCpu   Pointer to the VMCPU.
+ * @param   pVCpu   The cross context virtual CPU structure.
  * @param   fFlags  The flags to check for.
  */
 #define VMCPU_FF_IS_PENDING(pVCpu, fFlags)  RT_BOOL((pVCpu)->fLocalForcedActions & (fFlags))
@@ -608,7 +613,7 @@ typedef struct VMCPU
  * Checks if one or more force action in the specified set is pending while one
  * or more other ones are not.
  *
- * @param   pVM     Pointer to the VM.
+ * @param   pVM     The cross context VM structure.
  * @param   fFlags  The flags to check for.
  * @param   fExcpt  The flags that should not be set.
  */
@@ -618,7 +623,7 @@ typedef struct VMCPU
  * Checks if one or more force action in the specified set is pending for the given
  * VCPU while one or more other ones are not.
  *
- * @param   pVCpu   Pointer to the VMCPU.
+ * @param   pVCpu   The cross context virtual CPU structure.
  * @param   fFlags  The flags to check for.
  * @param   fExcpt  The flags that should not be set.
  */
@@ -921,7 +926,7 @@ typedef struct VM
     bool                        fUseLargePages;
     /** @} */
 
-    /** Alignment padding.. */
+    /** Alignment padding. */
     uint8_t                     uPadding1[2];
 
     /** @name Debugging
@@ -935,7 +940,7 @@ typedef struct VM
     /** @} */
 
 #if HC_ARCH_BITS == 32
-    /** Alignment padding.. */
+    /** Alignment padding. */
     uint32_t                    uPadding2;
 #endif
 
@@ -1114,7 +1119,7 @@ typedef struct VM
 #ifdef ___SSMInternal_h
         struct SSM  s;
 #endif
-        uint8_t     padding[128];        /* multiple of 64 */
+        uint8_t     padding[128];       /* multiple of 64 */
     } ssm;
 
     /** FTM part. */
@@ -1123,7 +1128,7 @@ typedef struct VM
 #ifdef ___FTMInternal_h
         struct FTM  s;
 #endif
-        uint8_t     padding[512];        /* multiple of 64 */
+        uint8_t     padding[512];       /* multiple of 64 */
     } ftm;
 
     /** REM part. */
@@ -1140,7 +1145,7 @@ typedef struct VM
 #ifdef ___GIMInternal_h
         struct GIM s;
 #endif
-        uint8_t     padding[320];        /* multiple of 64 */
+        uint8_t     padding[448];       /* multiple of 64 */
     } gim;
 
     /* ---- begin small stuff ---- */
@@ -1165,7 +1170,7 @@ typedef struct VM
 
 
     /** Padding for aligning the cpu array on a page boundary. */
-    uint8_t         abAlignment2[30];
+    uint8_t         abAlignment2[3998];
 
     /* ---- end small stuff ---- */
 

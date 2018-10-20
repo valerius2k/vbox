@@ -1838,8 +1838,29 @@ protected:
         setName(QApplication::translate("UIActionPool", "Show Application Icon"));
     }
 };
-#endif /* Q_WS_MAC */
 
+class UIActionToggleDockIconDisableOverlay : public UIActionToggle
+{
+    Q_OBJECT;
+
+public:
+
+    UIActionToggleDockIconDisableOverlay(UIActionPool *pParent)
+        : UIActionToggle(pParent) {}
+
+protected:
+
+    QString shortcutExtraDataID() const
+    {
+        return QString("DockOverlayDisable");
+    }
+
+    void retranslateUi()
+    {
+        setName(QApplication::translate("UIActionPool", "Disable Dock Icon Overlay"));
+    }
+};
+#endif /* Q_WS_MAC */
 
 UIActionPoolRuntime::UIActionPoolRuntime(bool fTemporary /* = false */)
     : UIActionPool(UIActionPoolType_Runtime, fTemporary)
@@ -2127,6 +2148,7 @@ void UIActionPoolRuntime::preparePool()
     m_pool[UIActionIndexRT_M_Dock_M_DockSettings] = new UIActionMenuDockSettings(this);
     m_pool[UIActionIndexRT_M_Dock_M_DockSettings_T_PreviewMonitor] = new UIActionToggleDockPreviewMonitor(this);
     m_pool[UIActionIndexRT_M_Dock_M_DockSettings_T_DisableMonitor] = new UIActionToggleDockDisableMonitor(this);
+    m_pool[UIActionIndexRT_M_Dock_M_DockSettings_T_DisableOverlay] = new UIActionToggleDockIconDisableOverlay(this);
 #endif /* Q_WS_MAC */
 
     /* Prepare update-handlers for known menus: */
@@ -2156,6 +2178,7 @@ void UIActionPoolRuntime::preparePool()
 void UIActionPoolRuntime::prepareConnections()
 {
     /* Prepare connections: */
+    connect(gShortcutPool, SIGNAL(sigSelectorShortcutsReloaded()), this, SLOT(sltApplyShortcuts()));
     connect(gShortcutPool, SIGNAL(sigMachineShortcutsReloaded()), this, SLOT(sltApplyShortcuts()));
     connect(gEDataManager, SIGNAL(sigMenuBarConfigurationChange(const QString&)),
             this, SLOT(sltHandleConfigurationChange(const QString&)));
@@ -2984,10 +3007,10 @@ void UIActionPoolRuntime::updateMenuDebug()
 }
 #endif /* VBOX_WITH_DEBUGGER_GUI */
 
-void UIActionPoolRuntime::retranslateUi()
+void UIActionPoolRuntime::updateShortcuts()
 {
     /* Call to base-class: */
-    UIActionPool::retranslateUi();
+    UIActionPool::updateShortcuts();
     /* Create temporary Selector UI pool to do the same: */
     if (!m_fTemporary)
         UIActionPool::createTemporary(UIActionPoolType_Selector);

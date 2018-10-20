@@ -169,11 +169,11 @@ RTDECL(RTCPUID) RTMpGetMaxCpuId(void)
     }
 
     /* Disable SMP if no MP API's detected */
-    if (RTMpOs2GetApiExt() == ISCS_DEFAULT)
-    {
-        // return one CPU available
-        return 0;
-    }
+    //if (RTMpOs2GetApiExt() == ISCS_DEFAULT)
+    //{
+    //    // return one CPU available
+    //    return 0;
+    //}
 
     return num_cpus - 1;
 }

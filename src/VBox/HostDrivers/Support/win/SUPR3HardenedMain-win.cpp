@@ -216,7 +216,7 @@ typedef struct SUPR3WINPROCPARAMS
     /** Where if message. */
     char                        szWhere[80];
     /** Error message / path name string space. */
-    char                        szErrorMsg[4096];
+    char                        szErrorMsg[16384+1024];
 } SUPR3WINPROCPARAMS;
 
 
@@ -312,7 +312,7 @@ static PVERIFIERCACHEENTRY  volatile g_pVerifierCacheTodoWvt = NULL;
 static PVERIFIERCACHEIMPORT volatile g_pVerifierCacheTodoImports = NULL;
 
 /** The windows path to dir \\SystemRoot\\System32 directory (technically
- *  this whatever \KnownDlls\KnownDllPath points to). */
+ *  this whatever \\KnownDlls\\KnownDllPath points to). */
 SUPSYSROOTDIRBUF            g_System32WinPath;
 /** @ */
 
@@ -1154,6 +1154,28 @@ static void supR3HardenedWinVerifyCacheProcessWvtTodos(void)
 
 
 /**
+ * Translates VBox status code (from supHardenedWinVerifyImageTrust) to an NT
+ * status.
+ *
+ * @returns NT status.
+ * @param   rc                      VBox status code.
+ */
+static NTSTATUS supR3HardenedScreenImageCalcStatus(int rc)
+{
+    /* This seems to be what LdrLoadDll returns when loading a 32-bit DLL into
+       a 64-bit process.  At least here on windows 10 (2015-11-xx).
+
+       NtCreateSection probably returns something different, possibly a warning,
+       we currently don't distinguish between the too, so we stick with the
+       LdrLoadDll one as it's definitely an error.*/
+    if (rc == VERR_LDR_ARCH_MISMATCH)
+        return STATUS_INVALID_IMAGE_FORMAT;
+
+    return STATUS_TRUST_FAILURE;
+}
+
+
+/**
  * Screens an image file or file mapped with execute access.
  *
  * @returns NT status code.
@@ -1263,7 +1285,7 @@ static NTSTATUS supR3HardenedScreenImage(HANDLE hFile, bool fImage, bool fIgnore
             supR3HardenedError(VINF_SUCCESS, false,
                                "supR3HardenedScreenImage/%s: cached rc=%Rrc fImage=%d fProtect=%#x fAccess=%#x cHits=%u %ls\n",
                                pszCaller, pCacheHit->rc, fImage, *pfProtect, *pfAccess, cHits, uBuf.UniStr.Buffer);
-        return STATUS_TRUST_FAILURE;
+        return supR3HardenedScreenImageCalcStatus(pCacheHit->rc);
     }
 
     /*
@@ -1449,7 +1471,7 @@ static NTSTATUS supR3HardenedScreenImage(HANDLE hFile, bool fImage, bool fIgnore
                            pszCaller, rc, fImage, *pfAccess, *pfProtect, uBuf.UniStr.Buffer, ErrInfo.pszMsg);
         if (hMyFile != hFile)
             supR3HardenedWinVerifyCacheInsert(&uBuf.UniStr, hMyFile, rc, fWinVerifyTrust, fFlags);
-        return STATUS_TRUST_FAILURE;
+        return supR3HardenedScreenImageCalcStatus(rc);
     }
 
     /*
@@ -2957,7 +2979,7 @@ DECLINLINE(bool) suplibCommandLineIsArgSeparator(int ch)
  * argument.
  *
  * @returns Pointer to a command line string (heap).
- * @param   pUniStr         Unicode string structure to initialize to the
+ * @param   pString         Unicode string structure to initialize to the
  *                          command line. Optional.
  * @param   iWhich          Which respawn we're to check for, 1 being the first
  *                          one, and 2 the second and final.
@@ -3748,7 +3770,7 @@ static void supR3HardNtChildFindNtdll(PSUPR3HARDNTCHILD pThis)
 /**
  * Gather child data.
  *
- * @param   This                The child process data structure.
+ * @param   pThis               The child process data structure.
  */
 static void supR3HardNtChildGatherData(PSUPR3HARDNTCHILD pThis)
 {
@@ -4364,7 +4386,7 @@ static void supR3HardenedWinOpenStubDevice(void)
          * extra information that goes into VBoxStartup.log so that we stand a
          * better chance resolving the issue.
          */
-        char szErrorInfo[_4K];
+        char szErrorInfo[16384];
         int rc = VERR_OPEN_FAILED;
         if (SUP_NT_STATUS_IS_VBOX(rcNt)) /* See VBoxDrvNtErr2NtStatus. */
         {
@@ -4410,7 +4432,7 @@ static void supR3HardenedWinOpenStubDevice(void)
             supR3HardenedFatalMsg("supR3HardenedWinReSpawn", kSupInitOp_Driver, rc,
                                   "NtCreateFile(%ls) failed: %Rrc (rcNt=%#x)%s", s_wszName, rc, rcNt,
                                   supR3HardenedWinReadErrorInfoDevice(szErrorInfo, sizeof(szErrorInfo),
-                                                                    "\nVBoxDrvStub error: "));
+                                                                      "\nVBoxDrvStub error: "));
         }
         else
         {
@@ -4484,7 +4506,7 @@ DECLHIDDEN(int) supR3HardenedWinReSpawn(int iWhich)
 
     /*
      * Make sure we're alone in the stub process before creating the VM process
-     * and that there isn't any debuggers attached.
+     * and that there aren't any debuggers attached.
      */
     if (iWhich == 2)
     {
@@ -5098,11 +5120,11 @@ static void supR3HardenedLogFileInfo(PCRTUTF16 pwszFile, bool fAdversarial)
  *
  * @returns Mask of SUPHARDNT_ADVERSARY_XXX flags.
  *
- * @remarks The enumeration of \Driver normally requires administrator
+ * @remarks The enumeration of \\Driver normally requires administrator
  *          privileges.  So, the detection we're doing here isn't always gonna
  *          work just based on that.
  *
- * @todo    Find drivers in \FileSystems as well, then we could detect VrNsdDrv
+ * @todo    Find drivers in \\FileSystems as well, then we could detect VrNsdDrv
  *          from ViRobot APT Shield 2.0.
  */
 static uint32_t supR3HardenedWinFindAdversaries(void)
@@ -5587,7 +5609,7 @@ DECLHIDDEN(void) supR3HardenedWinReportErrorToParent(const char *pszWhere, SUPIN
 
 /**
  * Routine called by the supR3HardenedEarlyProcessInitThunk assembly routine
- * when LdrInitializeThunk is executed in during process initialization.
+ * when LdrInitializeThunk is executed during process initialization.
  *
  * This initializes the Stub and VM processes, hooking NTDLL APIs and opening
  * the device driver before any other DLLs gets loaded into the process.  This

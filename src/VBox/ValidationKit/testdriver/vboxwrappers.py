@@ -34,7 +34,6 @@ __version__ = "$Revision$"
 import array
 import os
 import socket
-import sys
 
 # Validation Kit imports.
 from common     import utils;
@@ -1429,22 +1428,31 @@ class SessionWrapper(TdTaskBase):
         """
 
         # Resolve missing MAC address prefix
-        cchMacAddr = len(sMacAddr) > 0;
+        cchMacAddr = len(sMacAddr)
         if cchMacAddr > 0 and cchMacAddr < 12:
-            sHostName = '';
+            sHostName = ''
             try:
-                sHostName = socket.getfqdn();
-                if sys.platform == 'win32' \
-                 and sHostName.endswith('.sun.com') \
-                 and not sHostName.endswith('.germany.sun.com'):
-                    sHostName = socket.gethostname(); # klugde.
-                abHostIP = socket.inet_aton(socket.gethostbyname(sHostName));
+                sHostName = socket.getfqdn()
+                if not '.' in sHostName:
+                    # somewhat misconfigured system, needs expensive approach to guessing FQDN
+                    for aAI in socket.getaddrinfo(sHostName, None):
+                        sName, _ = socket.getnameinfo(aAI[4], 0)
+                        if '.' in sName and not set(sName).issubset(set('0123456789.')):
+                            sHostName = sName
+                            break
+
+                sHostIP = socket.gethostbyname(sHostName)
+                abHostIP = socket.inet_aton(sHostIP)
+                if ord(abHostIP[0]) == 127 \
+                    or ord(abHostIP[0]) == 169 and ord(abHostIP[1]) == 254 \
+                    or ord(abHostIP[0]) == 192 and ord(abHostIP[1]) == 168 and ord(abHostIP[2]) == 56:
+                    reporter.log('warning: host IP for "%s" is %s, most likely not unique.' % (sHostName, sHostIP))
             except:
-                reporter.errorXcpt('failed to determin the host IP for "%s".' % (sHostName,));
-                abHostIP = array.array('B', (0x80, 0x86, 0x00, 0x00)).tostring();
+                reporter.errorXcpt('failed to determine the host IP for "%s".' % (sHostName,))
+                abHostIP = array.array('B', (0x80, 0x86, 0x00, 0x00)).tostring()
             sDefaultMac = '%02X%02X%02X%02X%02X%02X' \
-                % (0x02, ord(abHostIP[0]), ord(abHostIP[1]), ord(abHostIP[2]), ord(abHostIP[3]), iNic);
-            sMacAddr = sDefaultMac[0:(11 - cchMacAddr)] + sMacAddr;
+                % (0x02, ord(abHostIP[0]), ord(abHostIP[1]), ord(abHostIP[2]), ord(abHostIP[3]), iNic)
+            sMacAddr = sDefaultMac[0:(12 - cchMacAddr)] + sMacAddr
 
         # Get the NIC object and try set it address.
         try:

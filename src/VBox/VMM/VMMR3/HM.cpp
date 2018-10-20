@@ -15,6 +15,22 @@
  * hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
  */
 
+/** @page pg_hm     HM - Hardware Assisted Virtualization Manager
+ *
+ * The HM manages guest execution using the VT-x and AMD-V CPU hardware
+ * extensions.
+ *
+ * {summary of what HM does}
+ *
+ * Hardware assited virtualization manager was origianlly abriviated HWACCM,
+ * however that was cumbersome to write and parse for such a central component,
+ * so it was shorted to HM when refactoring the code in the 4.3 development
+ * cycle.
+ *
+ * {add sections with more details}
+ *
+ * @sa @ref grp_hm
+ */
 
 /*********************************************************************************************************************************
 *   Header Files                                                                                                                 *
@@ -310,11 +326,11 @@ static const char * const g_apszAmdVExitReasons[MAX_EXITREASON_STAT] =
 *********************************************************************************************************************************/
 static DECLCALLBACK(int) hmR3Save(PVM pVM, PSSMHANDLE pSSM);
 static DECLCALLBACK(int) hmR3Load(PVM pVM, PSSMHANDLE pSSM, uint32_t uVersion, uint32_t uPass);
-static int hmR3InitCPU(PVM pVM);
-static int hmR3InitFinalizeR0(PVM pVM);
-static int hmR3InitFinalizeR0Intel(PVM pVM);
-static int hmR3InitFinalizeR0Amd(PVM pVM);
-static int hmR3TermCPU(PVM pVM);
+static int               hmR3InitCPU(PVM pVM);
+static int               hmR3InitFinalizeR0(PVM pVM);
+static int               hmR3InitFinalizeR0Intel(PVM pVM);
+static int               hmR3InitFinalizeR0Amd(PVM pVM);
+static int               hmR3TermCPU(PVM pVM);
 
 
 
@@ -330,7 +346,7 @@ static int hmR3TermCPU(PVM pVM);
  * the ring-3 and ring-0 callback to HMR3InitCompleted.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  *
  * @remarks Be careful with what we call here, since most of the VMM components
  *          are uninitialized.
@@ -358,14 +374,36 @@ VMMR3_INT_DECL(int) HMR3Init(PVM pVM)
     /*
      * Read configuration.
      */
-    PCFGMNODE pCfgHM = CFGMR3GetChild(CFGMR3GetRoot(pVM), "HM/");
+    PCFGMNODE pCfgHm = CFGMR3GetChild(CFGMR3GetRoot(pVM), "HM/");
+
+    /*
+     * Validate the HM settings.
+     */
+    rc = CFGMR3ValidateConfig(pCfgHm, "/HM/",
+                              "HMForced"
+                              "|EnableNestedPaging"
+                              "|EnableUX"
+                              "|EnableLargePages"
+                              "|EnableVPID"
+                              "|TPRPatchingEnabled"
+                              "|64bitEnabled"
+                              "|VmxPleGap"
+                              "|VmxPleWindow"
+                              "|SvmPauseFilter"
+                              "|SvmPauseFilterThreshold"
+                              "|Exclusive"
+                              "|MaxResumeLoops"
+                              "|UseVmxPreemptTimer",
+                              "" /* pszValidNodes */, "HM" /* pszWho */, 0 /* uInstance */);
+    if (RT_FAILURE(rc))
+        return rc;
 
     /** @cfgm{/HM/HMForced, bool, false}
      * Forces hardware virtualization, no falling back on raw-mode. HM must be
      * enabled, i.e. /HMEnabled must be true. */
     bool fHMForced;
 #ifdef VBOX_WITH_RAW_MODE
-    rc = CFGMR3QueryBoolDef(pCfgHM, "HMForced", &fHMForced, false);
+    rc = CFGMR3QueryBoolDef(pCfgHm, "HMForced", &fHMForced, false);
     AssertRCReturn(rc, rc);
     AssertLogRelMsgReturn(!fHMForced || pVM->fHMEnabled, ("Configuration error: HM forced but not enabled!\n"),
                           VERR_INVALID_PARAMETER);
@@ -384,28 +422,28 @@ VMMR3_INT_DECL(int) HMR3Init(PVM pVM)
 
     /** @cfgm{/HM/EnableNestedPaging, bool, false}
      * Enables nested paging (aka extended page tables). */
-    rc = CFGMR3QueryBoolDef(pCfgHM, "EnableNestedPaging", &pVM->hm.s.fAllowNestedPaging, false);
+    rc = CFGMR3QueryBoolDef(pCfgHm, "EnableNestedPaging", &pVM->hm.s.fAllowNestedPaging, false);
     AssertRCReturn(rc, rc);
 
     /** @cfgm{/HM/EnableUX, bool, true}
      * Enables the VT-x unrestricted execution feature. */
-    rc = CFGMR3QueryBoolDef(pCfgHM, "EnableUX", &pVM->hm.s.vmx.fAllowUnrestricted, true);
+    rc = CFGMR3QueryBoolDef(pCfgHm, "EnableUX", &pVM->hm.s.vmx.fAllowUnrestricted, true);
     AssertRCReturn(rc, rc);
 
     /** @cfgm{/HM/EnableLargePages, bool, false}
      * Enables using large pages (2 MB) for guest memory, thus saving on (nested)
      * page table walking and maybe better TLB hit rate in some cases. */
-    rc = CFGMR3QueryBoolDef(pCfgHM, "EnableLargePages", &pVM->hm.s.fLargePages, false);
+    rc = CFGMR3QueryBoolDef(pCfgHm, "EnableLargePages", &pVM->hm.s.fLargePages, false);
     AssertRCReturn(rc, rc);
 
     /** @cfgm{/HM/EnableVPID, bool, false}
      * Enables the VT-x VPID feature. */
-    rc = CFGMR3QueryBoolDef(pCfgHM, "EnableVPID", &pVM->hm.s.vmx.fAllowVpid, false);
+    rc = CFGMR3QueryBoolDef(pCfgHm, "EnableVPID", &pVM->hm.s.vmx.fAllowVpid, false);
     AssertRCReturn(rc, rc);
 
     /** @cfgm{/HM/TPRPatchingEnabled, bool, false}
      * Enables TPR patching for 32-bit windows guests with IO-APIC. */
-    rc = CFGMR3QueryBoolDef(pCfgHM, "TPRPatchingEnabled", &pVM->hm.s.fTprPatchingAllowed, false);
+    rc = CFGMR3QueryBoolDef(pCfgHm, "TPRPatchingEnabled", &pVM->hm.s.fTprPatchingAllowed, false);
     AssertRCReturn(rc, rc);
 
     /** @cfgm{/HM/64bitEnabled, bool, 32-bit:false, 64-bit:true}
@@ -413,11 +451,48 @@ VMMR3_INT_DECL(int) HMR3Init(PVM pVM)
      * On 32-bit hosts this isn't default and require host CPU support. 64-bit hosts
      * already have the support. */
 #ifdef VBOX_ENABLE_64_BITS_GUESTS
-    rc = CFGMR3QueryBoolDef(pCfgHM, "64bitEnabled", &pVM->hm.s.fAllow64BitGuests, HC_ARCH_BITS == 64);
+    rc = CFGMR3QueryBoolDef(pCfgHm, "64bitEnabled", &pVM->hm.s.fAllow64BitGuests, HC_ARCH_BITS == 64);
     AssertLogRelRCReturn(rc, rc);
 #else
     pVM->hm.s.fAllow64BitGuests = false;
 #endif
+
+    /** @cfgm{/HM/VmxPleGap, uint32_t, 0}
+     * The pause-filter exiting gap in TSC ticks. When the number of ticks between
+     * two successive PAUSE instructions exceeds VmxPleGap, the CPU considers the
+     * latest PAUSE instruction to be start of a new PAUSE loop.
+     */
+    rc = CFGMR3QueryU32Def(pCfgHm, "VmxPleGap", &pVM->hm.s.vmx.cPleGapTicks, 0);
+    AssertRCReturn(rc, rc);
+
+    /** @cfgm{/HM/VmxPleWindow, uint32_t, 0}
+     * The pause-filter exiting window in TSC ticks. When the number of ticks
+     * between the current PAUSE instruction and first PAUSE of a loop exceeds
+     * VmxPleWindow, a VM-exit is triggered.
+     *
+     * Setting VmxPleGap and VmxPleGap to 0 disables pause-filter exiting.
+     */
+    rc = CFGMR3QueryU32Def(pCfgHm, "VmxPleWindow", &pVM->hm.s.vmx.cPleWindowTicks, 0);
+    AssertRCReturn(rc, rc);
+
+    /** @cfgm{/HM/SvmPauseFilterCount, uint16_t, 0}
+     * A counter that is decrement each time a PAUSE instruction is executed by the
+     * guest. When the counter is 0, a \#VMEXIT is triggered.
+     */
+    rc = CFGMR3QueryU16Def(pCfgHm, "SvmPauseFilter", &pVM->hm.s.svm.cPauseFilter, 0);
+    AssertRCReturn(rc, rc);
+
+    /** @cfgm{/HM/SvmPauseFilterThreshold, uint16_t, 0}
+     * The pause filter threshold in ticks. When the elapsed time between two
+     * successive PAUSE instructions exceeds SvmPauseFilterThreshold, the PauseFilter
+     * count is reset to its initial value. However, if PAUSE is executed PauseFilter
+     * times within PauseFilterThreshold ticks, a VM-exit will be triggered.
+     *
+     * Setting both SvmPauseFilterCount and SvmPauseFilterCount to 0 disables
+     * pause-filter exiting.
+     */
+    rc = CFGMR3QueryU16Def(pCfgHm, "SvmPauseFilterThreshold", &pVM->hm.s.svm.cPauseFilterThresholdTicks, 0);
+    AssertRCReturn(rc, rc);
 
     /** @cfgm{/HM/Exclusive, bool}
      * Determines the init method for AMD-V and VT-x. If set to true, HM will do a
@@ -433,7 +508,7 @@ VMMR3_INT_DECL(int) HMR3Init(PVM pVM)
 #if defined(RT_OS_DARWIN)
     pVM->hm.s.fGlobalInit = true;
 #else
-    rc = CFGMR3QueryBoolDef(pCfgHM, "Exclusive", &pVM->hm.s.fGlobalInit,
+    rc = CFGMR3QueryBoolDef(pCfgHm, "Exclusive", &pVM->hm.s.fGlobalInit,
 # if defined(RT_OS_WINDOWS)
                             false
 # else
@@ -447,13 +522,13 @@ VMMR3_INT_DECL(int) HMR3Init(PVM pVM)
      * The number of times to resume guest execution before we forcibly return to
      * ring-3.  The return value of RTThreadPreemptIsPendingTrusty in ring-0
      * determines the default value. */
-    rc = CFGMR3QueryU32Def(pCfgHM, "MaxResumeLoops", &pVM->hm.s.cMaxResumeLoops, 0 /* set by R0 later */);
+    rc = CFGMR3QueryU32Def(pCfgHm, "MaxResumeLoops", &pVM->hm.s.cMaxResumeLoops, 0 /* set by R0 later */);
     AssertLogRelRCReturn(rc, rc);
 
     /** @cfgm{/HM/UseVmxPreemptTimer, bool}
      * Whether to make use of the VMX-preemption timer feature of the CPU if it's
      * available. */
-    rc = CFGMR3QueryBoolDef(pCfgHM, "UseVmxPreemptTimer", &pVM->hm.s.vmx.fUsePreemptTimer, true);
+    rc = CFGMR3QueryBoolDef(pCfgHm, "UseVmxPreemptTimer", &pVM->hm.s.vmx.fUsePreemptTimer, true);
     AssertLogRelRCReturn(rc, rc);
 
     /*
@@ -593,7 +668,7 @@ VMMR3_INT_DECL(int) HMR3Init(PVM pVM)
  * Initializes the per-VCPU HM.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  */
 static int hmR3InitCPU(PVM pVM)
 {
@@ -611,8 +686,9 @@ static int hmR3InitCPU(PVM pVM)
 #ifdef VBOX_WITH_STATISTICS
     STAM_REG(pVM, &pVM->hm.s.StatTprPatchSuccess,   STAMTYPE_COUNTER, "/HM/TPR/Patch/Success",  STAMUNIT_OCCURENCES, "Number of times an instruction was successfully patched.");
     STAM_REG(pVM, &pVM->hm.s.StatTprPatchFailure,   STAMTYPE_COUNTER, "/HM/TPR/Patch/Failed",   STAMUNIT_OCCURENCES, "Number of unsuccessful patch attempts.");
-    STAM_REG(pVM, &pVM->hm.s.StatTprReplaceSuccess, STAMTYPE_COUNTER, "/HM/TPR/Replace/Success",STAMUNIT_OCCURENCES, "Number of times an instruction was successfully patched.");
-    STAM_REG(pVM, &pVM->hm.s.StatTprReplaceFailure, STAMTYPE_COUNTER, "/HM/TPR/Replace/Failed", STAMUNIT_OCCURENCES, "Number of unsuccessful patch attempts.");
+    STAM_REG(pVM, &pVM->hm.s.StatTprReplaceSuccessCr8, STAMTYPE_COUNTER, "/HM/TPR/Replace/SuccessCR8",STAMUNIT_OCCURENCES, "Number of instruction replacements by MOV CR8.");
+    STAM_REG(pVM, &pVM->hm.s.StatTprReplaceSuccessVmc, STAMTYPE_COUNTER, "/HM/TPR/Replace/SuccessVMC",STAMUNIT_OCCURENCES, "Number of instruction replacements by VMMCALL.");
+    STAM_REG(pVM, &pVM->hm.s.StatTprReplaceFailure, STAMTYPE_COUNTER, "/HM/TPR/Replace/Failed", STAMUNIT_OCCURENCES, "Number of unsuccessful replace attempts.");
 #endif
 
     /*
@@ -884,7 +960,7 @@ static int hmR3InitCPU(PVM pVM)
  * Called when a init phase has completed.
  *
  * @returns VBox status code.
- * @param   pVM                 The VM.
+ * @param   pVM                 The cross context VM structure.
  * @param   enmWhat             The phase that completed.
  */
 VMMR3_INT_DECL(int) HMR3InitCompleted(PVM pVM, VMINITCOMPLETED enmWhat)
@@ -904,7 +980,7 @@ VMMR3_INT_DECL(int) HMR3InitCompleted(PVM pVM, VMINITCOMPLETED enmWhat)
 /**
  * Turns off normal raw mode features.
  *
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  */
 static void hmR3DisableRawMode(PVM pVM)
 {
@@ -922,7 +998,7 @@ static void hmR3DisableRawMode(PVM pVM)
  * Initialize VT-x or AMD-V.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  */
 static int hmR3InitFinalizeR0(PVM pVM)
 {
@@ -1004,7 +1080,7 @@ static int hmR3InitFinalizeR0(PVM pVM)
     }
 
     /*
-     * Do the vendor specific initalization                                                                                                               .
+     * Do the vendor specific initialization                                                                                                               .
      *                                                                                                                                                    .
      * Note! We disable release log buffering here since we're doing relatively                                                                           .
      *       lot of logging and doesn't want to hit the disk with each LogRel                                                                             .
@@ -1028,7 +1104,7 @@ static int hmR3InitFinalizeR0(PVM pVM)
  * Finish VT-x initialization (after ring-0 init).
  *
  * @returns VBox status code.
- * @param   pVM                 The cross context VM structure.
+ * @param   pVM                The cross context VM structure.
  */
 static int hmR3InitFinalizeR0Intel(PVM pVM)
 {
@@ -1041,7 +1117,7 @@ static int hmR3InitFinalizeR0Intel(PVM pVM)
     uint64_t    zap;
     RTGCPHYS    GCPhys = 0;
 
-    LogRel(("HM: Using VT-x implementation 2.0!\n"));
+    LogRel(("HM: Using VT-x implementation 2.0\n"));
     LogRel(("HM: Host CR4                        = %#RX64\n", pVM->hm.s.vmx.u64HostCr4));
     LogRel(("HM: Host EFER                       = %#RX64\n", pVM->hm.s.vmx.u64HostEfer));
     LogRel(("HM: MSR_IA32_FEATURE_CONTROL        = %#RX64\n", pVM->hm.s.vmx.Msrs.u64FeatureCtrl));
@@ -1140,23 +1216,13 @@ static int hmR3InitFinalizeR0Intel(PVM pVM)
         val = pVM->hm.s.vmx.Msrs.u64EptVpidCaps;
         LogRel(("HM: MSR_IA32_VMX_EPT_VPID_CAP       = %#RX64\n", val));
         HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_RWX_X_ONLY);
-        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_RWX_W_ONLY);
-        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_RWX_WX_ONLY);
-        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_GAW_21_BITS);
-        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_GAW_30_BITS);
-        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_GAW_39_BITS);
-        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_GAW_48_BITS);
-        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_GAW_57_BITS);
+        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_PAGE_WALK_LENGTH_4);
         HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_EMT_UC);
-        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_EMT_WC);
-        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_EMT_WT);
-        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_EMT_WP);
         HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_EMT_WB);
-        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_SP_21_BITS);
-        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_SP_30_BITS);
-        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_SP_39_BITS);
-        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_SP_48_BITS);
+        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_PDE_2M);
+        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_PDPTE_1G);
         HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_INVEPT);
+        HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_EPT_ACCESS_DIRTY);
         HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_INVEPT_SINGLE_CONTEXT);
         HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_INVEPT_ALL_CONTEXTS);
         HMVMX_REPORT_CAPABILITY(val, MSR_IA32_VMX_EPT_VPID_CAP_INVVPID);
@@ -1238,7 +1304,7 @@ static int hmR3InitFinalizeR0Intel(PVM pVM)
         && CPUMGetGuestCpuIdFeature(pVM, CPUMCPUIDFEATURE_RDTSCP))
     {
         CPUMClearGuestCpuIdFeature(pVM, CPUMCPUIDFEATURE_RDTSCP);
-        LogRel(("HM: RDTSCP disabled\n"));
+        LogRel(("HM: Disabled RDTSCP\n"));
     }
 
     if (!pVM->hm.s.vmx.fUnrestrictedGuest)
@@ -1320,7 +1386,7 @@ static int hmR3InitFinalizeR0Intel(PVM pVM)
     }
 
     LogRel(("HM: Supports VMCS EFER fields       = %RTbool\n", pVM->hm.s.vmx.fSupportsVmcsEfer));
-    LogRel(("HM: VMX enabled!\n"));
+    LogRel(("HM: Enabled VMX\n"));
     pVM->hm.s.vmx.fEnabled = true;
 
     hmR3DisableRawMode(pVM); /** @todo make this go away! */
@@ -1353,7 +1419,7 @@ static int hmR3InitFinalizeR0Intel(PVM pVM)
      */
     if (pVM->hm.s.fNestedPaging)
     {
-        LogRel(("HM: Nested paging enabled!\n"));
+        LogRel(("HM: Enabled nested paging\n"));
         if (pVM->hm.s.vmx.enmFlushEpt == VMXFLUSHEPT_SINGLE_CONTEXT)
             LogRel(("HM:   EPT flush type                = VMXFLUSHEPT_SINGLE_CONTEXT\n"));
         else if (pVM->hm.s.vmx.enmFlushEpt == VMXFLUSHEPT_ALL_CONTEXTS)
@@ -1364,14 +1430,14 @@ static int hmR3InitFinalizeR0Intel(PVM pVM)
             LogRel(("HM:   EPT flush type                = %d\n", pVM->hm.s.vmx.enmFlushEpt));
 
         if (pVM->hm.s.vmx.fUnrestrictedGuest)
-            LogRel(("HM: Unrestricted guest execution enabled!\n"));
+            LogRel(("HM: Enabled unrestricted guest execution\n"));
 
 #if HC_ARCH_BITS == 64
         if (pVM->hm.s.fLargePages)
         {
             /* Use large (2 MB) pages for our EPT PDEs where possible. */
             PGMSetLargePageUsage(pVM, true);
-            LogRel(("HM: Large page support enabled\n"));
+            LogRel(("HM: Enabled large page support\n"));
         }
 #endif
     }
@@ -1380,7 +1446,7 @@ static int hmR3InitFinalizeR0Intel(PVM pVM)
 
     if (pVM->hm.s.vmx.fVpid)
     {
-        LogRel(("HM: VPID enabled!\n"));
+        LogRel(("HM: Enabled VPID\n"));
         if (pVM->hm.s.vmx.enmFlushVpid == VMXFLUSHVPID_INDIV_ADDR)
             LogRel(("HM:   VPID flush type               = VMXFLUSHVPID_INDIV_ADDR\n"));
         else if (pVM->hm.s.vmx.enmFlushVpid == VMXFLUSHVPID_SINGLE_CONTEXT)
@@ -1396,9 +1462,9 @@ static int hmR3InitFinalizeR0Intel(PVM pVM)
         LogRel(("HM: Ignoring VPID capabilities of CPU\n"));
 
     if (pVM->hm.s.vmx.fUsePreemptTimer)
-        LogRel(("HM: VMX-preemption timer enabled (cPreemptTimerShift=%u)\n", pVM->hm.s.vmx.cPreemptTimerShift));
+        LogRel(("HM: Enabled VMX-preemption timer (cPreemptTimerShift=%u)\n", pVM->hm.s.vmx.cPreemptTimerShift));
     else
-        LogRel(("HM: VMX-preemption timer disabled\n"));
+        LogRel(("HM: Disabled VMX-preemption timer\n"));
 
     return VINF_SUCCESS;
 }
@@ -1408,13 +1474,13 @@ static int hmR3InitFinalizeR0Intel(PVM pVM)
  * Finish AMD-V initialization (after ring-0 init).
  *
  * @returns VBox status code.
- * @param   pVM                 The cross context VM structure.
+ * @param   pVM                The cross context VM structure.
  */
 static int hmR3InitFinalizeR0Amd(PVM pVM)
 {
     Log(("pVM->hm.s.svm.fSupported = %d\n", pVM->hm.s.svm.fSupported));
 
-    LogRel(("HM: Using AMD-V implementation 2.0!\n"));
+    LogRel(("HM: Using AMD-V implementation 2.0\n"));
 
     uint32_t u32Family;
     uint32_t u32Model;
@@ -1479,12 +1545,12 @@ static int hmR3InitFinalizeR0Amd(PVM pVM)
         return VMSetError(pVM, rc, RT_SRC_POS, "AMD-V setup failed: %Rrc", rc);
     }
 
-    LogRel(("HM: AMD-V enabled!\n"));
+    LogRel(("HM: Enabled SVM\n"));
     pVM->hm.s.svm.fEnabled = true;
 
     if (pVM->hm.s.fNestedPaging)
     {
-        LogRel(("HM:   Nested paging enabled!\n"));
+        LogRel(("HM:   Enabled nested paging\n"));
 
         /*
          * Enable large pages (2 MB) if applicable.
@@ -1493,7 +1559,7 @@ static int hmR3InitFinalizeR0Amd(PVM pVM)
         if (pVM->hm.s.fLargePages)
         {
             PGMSetLargePageUsage(pVM, true);
-            LogRel(("HM:   Large page support enabled!\n"));
+            LogRel(("HM:   Enabled large page support\n"));
         }
 #endif
     }
@@ -1516,7 +1582,7 @@ static int hmR3InitFinalizeR0Amd(PVM pVM)
     else if (CPUMGetGuestCpuIdFeature(pVM, CPUMCPUIDFEATURE_PAE))
         CPUMSetGuestCpuIdFeature(pVM, CPUMCPUIDFEATURE_NX);
 
-    LogRel(("HM: TPR patching %s\n", (pVM->hm.s.fTprPatchingAllowed) ? "enabled" : "disabled"));
+    LogRel(("HM: %s TPR patching\n", (pVM->hm.s.fTprPatchingAllowed) ? "Enabled" : "Disabled"));
 
     LogRel((pVM->hm.s.fAllow64BitGuests
             ? "HM: Guest support: 32-bit and 64-bit\n"
@@ -1531,7 +1597,7 @@ static int hmR3InitFinalizeR0Amd(PVM pVM)
  * component. This function will be called at init and
  * whenever the VMM need to relocate it self inside the GC.
  *
- * @param   pVM     The VM.
+ * @param   pVM     The cross context VM structure.
  */
 VMMR3_INT_DECL(void) HMR3Relocate(PVM pVM)
 {
@@ -1576,8 +1642,8 @@ VMMR3_INT_DECL(void) HMR3Relocate(PVM pVM)
  *
  * This is called by PGM.
  *
- * @param   pVM            Pointer to the VM.
- * @param   pVCpu          Pointer to the VMCPU.
+ * @param   pVM            The cross context VM structure.
+ * @param   pVCpu          The cross context virtual CPU structure.
  * @param   enmShadowMode  New shadow paging mode.
  * @param   enmGuestMode   New guest paging mode.
  */
@@ -1598,17 +1664,6 @@ VMMR3_INT_DECL(void) HMR3PagingModeChanged(PVM pVM, PVMCPU pVCpu, PGMMODE enmSha
         Log(("HMR3PagingModeChanged indicates real mode execution\n"));
         pVCpu->hm.s.vmx.fWasInRealMode = true;
     }
-
-    /** @todo r=ramshankar: Disabling for now. If nothing breaks remove it
-     *        eventually. (Test platforms that use the cache ofc). */
-#if 0
-#ifdef VMX_USE_CACHED_VMCS_ACCESSES
-    /* Reset the contents of the read cache. */
-    PVMCSCACHE pCache = &pVCpu->hm.s.vmx.VMCSCache;
-    for (unsigned j = 0; j < pCache->Read.cValidEntries; j++)
-        pCache->Read.aFieldVal[j] = 0;
-#endif
-#endif
 }
 
 
@@ -1619,7 +1674,7 @@ VMMR3_INT_DECL(void) HMR3PagingModeChanged(PVM pVM, PVMCPU pVCpu, PGMMODE enmSha
  * the VM itself is, at this point, powered off or suspended.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  */
 VMMR3_INT_DECL(int) HMR3Term(PVM pVM)
 {
@@ -1637,7 +1692,7 @@ VMMR3_INT_DECL(int) HMR3Term(PVM pVM)
  * Terminates the per-VCPU HM.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  */
 static int hmR3TermCPU(PVM pVM)
 {
@@ -1675,7 +1730,7 @@ static int hmR3TermCPU(PVM pVM)
  *
  * Used by HMR3Reset and CPU hot plugging.
  *
- * @param   pVCpu   The CPU to reset.
+ * @param   pVCpu   The cross context virtual CPU structure to reset.
  */
 VMMR3_INT_DECL(void) HMR3ResetCpu(PVMCPU pVCpu)
 {
@@ -1709,7 +1764,7 @@ VMMR3_INT_DECL(void) HMR3ResetCpu(PVMCPU pVCpu)
  * For the HM component this means that any GDT/LDT/TSS monitors
  * needs to be removed.
  *
- * @param   pVM     Pointer to the VM.
+ * @param   pVM     The cross context VM structure.
  */
 VMMR3_INT_DECL(void) HMR3Reset(PVM pVM)
 {
@@ -1740,8 +1795,8 @@ VMMR3_INT_DECL(void) HMR3Reset(PVM pVM)
  * Callback to patch a TPR instruction (vmmcall or mov cr8).
  *
  * @returns VBox strict status code.
- * @param   pVM     Pointer to the VM.
- * @param   pVCpu   The VMCPU for the EMT we're being called on.
+ * @param   pVM     The cross context VM structure.
+ * @param   pVCpu   The cross context virtual CPU structure of the calling EMT.
  * @param   pvUser  Unused.
  */
 static DECLCALLBACK(VBOXSTRICTRC) hmR3RemovePatches(PVM pVM, PVMCPU pVCpu, void *pvUser)
@@ -1805,7 +1860,7 @@ static DECLCALLBACK(VBOXSTRICTRC) hmR3RemovePatches(PVM pVM, PVMCPU pVCpu, void 
  * Worker for enabling patching in a VT-x/AMD-V guest.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  * @param   idCpu       VCPU to execute hmR3RemovePatches on.
  * @param   pPatchMem   Patch memory range.
  * @param   cbPatchMem  Size of the memory range.
@@ -1826,7 +1881,7 @@ static int hmR3EnablePatching(PVM pVM, VMCPUID idCpu, RTRCPTR pPatchMem, unsigne
  * Enable patching in a VT-x/AMD-V guest
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  * @param   pPatchMem   Patch memory range.
  * @param   cbPatchMem  Size of the memory range.
  */
@@ -1850,7 +1905,7 @@ VMMR3_INT_DECL(int)  HMR3EnablePatching(PVM pVM, RTGCPTR pPatchMem, unsigned cbP
  * Disable patching in a VT-x/AMD-V guest.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  * @param   pPatchMem   Patch memory range.
  * @param   cbPatchMem  Size of the memory range.
  */
@@ -1878,8 +1933,8 @@ VMMR3_INT_DECL(int)  HMR3DisablePatching(PVM pVM, RTGCPTR pPatchMem, unsigned cb
  * Callback to patch a TPR instruction (vmmcall or mov cr8).
  *
  * @returns VBox strict status code.
- * @param   pVM     Pointer to the VM.
- * @param   pVCpu   The VMCPU for the EMT we're being called on.
+ * @param   pVM     The cross context VM structure.
+ * @param   pVCpu   The cross context virtual CPU structure of the calling EMT.
  * @param   pvUser  User specified CPU context.
  *
  */
@@ -1955,6 +2010,7 @@ static DECLCALLBACK(VBOXSTRICTRC) hmR3ReplaceTprInstr(PVM pVM, PVMCPU pVCpu, voi
 
             memcpy(pPatch->aNewOpcode, s_abVMMCall, sizeof(s_abVMMCall));
             pPatch->cbNewOp = sizeof(s_abVMMCall);
+            STAM_COUNTER_INC(&pVM->hm.s.StatTprReplaceSuccessVmc);
         }
         else
         {
@@ -2007,6 +2063,7 @@ static DECLCALLBACK(VBOXSTRICTRC) hmR3ReplaceTprInstr(PVM pVM, PVMCPU pVCpu, voi
 
                 memcpy(pPatch->aNewOpcode, abInstr, pPatch->cbOp);
                 pPatch->cbNewOp = pPatch->cbOp;
+                STAM_COUNTER_INC(&pVM->hm.s.StatTprReplaceSuccessCr8);
 
                 Log(("Acceptable read/shr candidate!\n"));
                 pPatch->enmType = HMTPRINSTR_READ_SHR4;
@@ -2021,6 +2078,7 @@ static DECLCALLBACK(VBOXSTRICTRC) hmR3ReplaceTprInstr(PVM pVM, PVMCPU pVCpu, voi
 
                 memcpy(pPatch->aNewOpcode, s_abVMMCall, sizeof(s_abVMMCall));
                 pPatch->cbNewOp = sizeof(s_abVMMCall);
+                STAM_COUNTER_INC(&pVM->hm.s.StatTprReplaceSuccessVmc);
                 Log(("hmR3ReplaceTprInstr: HMTPRINSTR_READ %u\n", pPatch->uDstOperand));
             }
         }
@@ -2030,7 +2088,6 @@ static DECLCALLBACK(VBOXSTRICTRC) hmR3ReplaceTprInstr(PVM pVM, PVMCPU pVCpu, voi
         AssertRC(rc);
 
         pVM->hm.s.cPatches++;
-        STAM_COUNTER_INC(&pVM->hm.s.StatTprReplaceSuccess);
         return VINF_SUCCESS;
     }
 
@@ -2052,8 +2109,8 @@ static DECLCALLBACK(VBOXSTRICTRC) hmR3ReplaceTprInstr(PVM pVM, PVMCPU pVCpu, voi
  * Callback to patch a TPR instruction (jump to generated code).
  *
  * @returns VBox strict status code.
- * @param   pVM     Pointer to the VM.
- * @param   pVCpu   The VMCPU for the EMT we're being called on.
+ * @param   pVM     The cross context VM structure.
+ * @param   pVCpu   The cross context virtual CPU structure of the calling EMT.
  * @param   pvUser  User specified CPU context.
  *
  */
@@ -2285,8 +2342,8 @@ static DECLCALLBACK(VBOXSTRICTRC) hmR3PatchTprInstr(PVM pVM, PVMCPU pVCpu, void 
  * Attempt to patch TPR mmio instructions.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCtx        Pointer to the guest CPU context.
  */
 VMMR3_INT_DECL(int) HMR3PatchTprInstr(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
@@ -2307,7 +2364,7 @@ VMMR3_INT_DECL(int) HMR3PatchTprInstr(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
  * @returns true if selector is suitable for VMX, otherwise
  *        false.
  * @param   pSel        Pointer to the selector to check (CS).
- *          uStackDpl   The CPL, aka the DPL of the stack segment.
+ * @param   uStackDpl   The CPL, aka the DPL of the stack segment.
  */
 static bool hmR3IsCodeSelectorOkForVmx(PCPUMSELREG pSel, unsigned uStackDpl)
 {
@@ -2416,7 +2473,7 @@ static bool hmR3IsStackSelectorOkForVmx(PCPUMSELREG pSel)
      * but as an alternative we for old saved states and AMD<->VT-x migration
      * we also treat segments with all the attributes cleared as unusable.
      */
-    /** @todo r=bird: actually all zeros isn't gonna cut it... SS.DPL == CPL. */
+    /** @todo r=bird: actually all zeroes isn't gonna cut it... SS.DPL == CPL. */
     if (pSel->Attr.n.u1Unusable || !pSel->Attr.u)
         return true;
 
@@ -2453,7 +2510,7 @@ static bool hmR3IsStackSelectorOkForVmx(PCPUMSELREG pSel)
  * Force execution of the current IO code in the recompiler.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  * @param   pCtx        Partial VM execution context.
  */
 VMMR3_INT_DECL(int) HMR3EmulateIoBlock(PVM pVM, PCPUMCTX pCtx)
@@ -2480,7 +2537,7 @@ VMMR3_INT_DECL(int) HMR3EmulateIoBlock(PVM pVM, PCPUMCTX pCtx)
  * Checks if we can currently use hardware accelerated raw mode.
  *
  * @returns true if we can currently use hardware acceleration, otherwise false.
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  * @param   pCtx        Partial VM execution context.
  */
 VMMR3DECL(bool) HMR3CanExecuteGuest(PVM pVM, PCPUMCTX pCtx)
@@ -2671,7 +2728,7 @@ VMMR3DECL(bool) HMR3CanExecuteGuest(PVM pVM, PCPUMCTX pCtx)
  * Checks if we need to reschedule due to VMM device heap changes.
  *
  * @returns true if a reschedule is required, otherwise false.
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  * @param   pCtx        VM execution context.
  */
 VMMR3_INT_DECL(bool) HMR3IsRescheduleRequired(PVM pVM, PCPUMCTX pCtx)
@@ -2696,7 +2753,7 @@ VMMR3_INT_DECL(bool) HMR3IsRescheduleRequired(PVM pVM, PCPUMCTX pCtx)
  * Notification from EM about a rescheduling into hardware assisted execution
  * mode.
  *
- * @param   pVCpu       Pointer to the current VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure of the calling EMT.
  */
 VMMR3_INT_DECL(void) HMR3NotifyScheduled(PVMCPU pVCpu)
 {
@@ -2707,7 +2764,7 @@ VMMR3_INT_DECL(void) HMR3NotifyScheduled(PVMCPU pVCpu)
 /**
  * Notification from EM about returning from instruction emulation (REM / EM).
  *
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  */
 VMMR3_INT_DECL(void) HMR3NotifyEmulated(PVMCPU pVCpu)
 {
@@ -2719,7 +2776,7 @@ VMMR3_INT_DECL(void) HMR3NotifyEmulated(PVMCPU pVCpu)
  * Checks if we are currently using hardware acceleration.
  *
  * @returns true if hardware acceleration is being used, otherwise false.
- * @param   pVCpu        Pointer to the VMCPU.
+ * @param   pVCpu        The cross context virtual CPU structure.
  */
 VMMR3_INT_DECL(bool) HMR3IsActive(PVMCPU pVCpu)
 {
@@ -2829,7 +2886,7 @@ VMMR3DECL(bool) HMR3IsUXActive(PUVM pUVM)
  * Checks if internal events are pending. In that case we are not allowed to dispatch interrupts.
  *
  * @returns true if an internal event is pending, otherwise false.
- * @param   pVM         Pointer to the VM.
+ * @param   pVCpu       The cross context virtual CPU structure.
  */
 VMMR3_INT_DECL(bool) HMR3IsEventPending(PVMCPU pVCpu)
 {
@@ -2841,7 +2898,7 @@ VMMR3_INT_DECL(bool) HMR3IsEventPending(PVMCPU pVCpu)
  * Checks if the VMX-preemption timer is being used.
  *
  * @returns true if the VMX-preemption timer is being used, otherwise false.
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  */
 VMMR3_INT_DECL(bool) HMR3IsVmxPreemptionTimerUsed(PVM pVM)
 {
@@ -2861,8 +2918,8 @@ VMMR3_INT_DECL(bool) HMR3IsVmxPreemptionTimerUsed(PVM pVM)
  *                                      status code must be passed on to EM.
  * @retval  VERR_NOT_FOUND if no pending I/O instruction.
  *
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCtx        Pointer to the guest CPU context.
  */
 VMMR3_INT_DECL(VBOXSTRICTRC) HMR3RestartPendingIOInstr(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
@@ -2883,8 +2940,7 @@ VMMR3_INT_DECL(VBOXSTRICTRC) HMR3RestartPendingIOInstr(PVM pVM, PVMCPU pVCpu, PC
             uint32_t uAndVal = pVCpu->hm.s.PendingIO.s.Port.uAndVal;
             uint32_t u32Val  = 0;
 
-            rcStrict = IOMIOPortRead(pVM, pVCpu, pVCpu->hm.s.PendingIO.s.Port.uPort,
-                                     &u32Val,
+            rcStrict = IOMIOPortRead(pVM, pVCpu, pVCpu->hm.s.PendingIO.s.Port.uPort, &u32Val,
                                      pVCpu->hm.s.PendingIO.s.Port.cbSize);
             if (IOM_SUCCESS(rcStrict))
             {
@@ -2935,7 +2991,7 @@ VMMR3_INT_DECL(VBOXSTRICTRC) HMR3RestartPendingIOInstr(PVM pVM, PVMCPU pVCpu, PC
  * Check fatal VT-x/AMD-V error and produce some meaningful
  * log release message.
  *
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  * @param   iStatusCode VBox status code.
  */
 VMMR3_INT_DECL(void) HMR3CheckError(PVM pVM, int iStatusCode)
@@ -3028,7 +3084,7 @@ VMMR3_INT_DECL(void) HMR3CheckError(PVM pVM, int iStatusCode)
  * Execute state save operation.
  *
  * @returns VBox status code.
- * @param   pVM             Pointer to the VM.
+ * @param   pVM             The cross context VM structure.
  * @param   pSSM            SSM operation handle.
  */
 static DECLCALLBACK(int) hmR3Save(PVM pVM, PSSMHANDLE pSSM)
@@ -3117,7 +3173,7 @@ static DECLCALLBACK(int) hmR3Save(PVM pVM, PSSMHANDLE pSSM)
  * Execute state load operation.
  *
  * @returns VBox status code.
- * @param   pVM             Pointer to the VM.
+ * @param   pVM             The cross context VM structure.
  * @param   pSSM            SSM operation handle.
  * @param   uVersion        Data layout version.
  * @param   uPass           The data pass.

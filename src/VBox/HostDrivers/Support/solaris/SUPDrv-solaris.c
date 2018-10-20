@@ -664,7 +664,7 @@ static int VBoxDrvSolarisWrite(dev_t Dev, struct uio *pUio, cred_t *pCred)
  *
  * @param   Dev             Device number
  * @param   Cmd             Operation identifier
- * @param   pArg            Arguments from user to driver
+ * @param   pArgs           Arguments from user to driver
  * @param   Mode            Information bitfield (read/write, address space etc.)
  * @param   pCred           User credentials
  * @param   pVal            Return value for calling process.
@@ -744,7 +744,7 @@ static int VBoxDrvSolarisIOCtl(dev_t Dev, int Cmd, intptr_t pArgs, int Mode, cre
  * @returns Solaris errno.
  *
  * @param   pSession    The session.
- * @param   Cmd         The IOCtl command.
+ * @param   iCmd        The IOCtl command.
  * @param   Mode        Information bitfield (for specifying ownership of data)
  * @param   iArg        User space address of the request buffer.
  */
@@ -848,7 +848,7 @@ static int VBoxDrvSolarisIOCtlSlow(PSUPDRVSESSION pSession, int iCmd, int Mode, 
  * The SUPDRV IDC entry point.
  *
  * @returns VBox status code, see supdrvIDC.
- * @param   iReq        The request code.
+ * @param   uReq        The request code.
  * @param   pReq        The request.
  */
 int VBOXCALL SUPDrvSolarisIDC(uint32_t uReq, PSUPDRVIDCREQHDR pReq)
@@ -1061,12 +1061,6 @@ int  VBOXCALL   supdrvOSLdrOpen(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage, c
 }
 
 
-void VBOXCALL   supdrvOSLdrNotifyOpened(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage)
-{
-    NOREF(pDevExt); NOREF(pImage);
-}
-
-
 int  VBOXCALL   supdrvOSLdrValidatePointer(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage, void *pv, const uint8_t *pbImageBits)
 {
     NOREF(pDevExt); NOREF(pImage); NOREF(pv); NOREF(pbImageBits);
@@ -1211,12 +1205,6 @@ int  VBOXCALL   supdrvOSLdrOpen(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage, c
 }
 
 
-void VBOXCALL   supdrvOSLdrNotifyOpened(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage)
-{
-    NOREF(pDevExt); NOREF(pImage);
-}
-
-
 int  VBOXCALL   supdrvOSLdrValidatePointer(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage, void *pv, const uint8_t *pbImageBits)
 {
     NOREF(pDevExt); NOREF(pImage); NOREF(pv); NOREF(pbImageBits);
@@ -1237,6 +1225,18 @@ void VBOXCALL   supdrvOSLdrUnload(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage)
 }
 
 #endif /* !VBOX_WITH_NATIVE_SOLARIS_LOADING */
+
+
+void VBOXCALL   supdrvOSLdrNotifyOpened(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage, const char *pszFilename)
+{
+    NOREF(pDevExt); NOREF(pImage); NOREF(pszFilename);
+}
+
+
+void VBOXCALL   supdrvOSLdrNotifyUnloaded(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage)
+{
+    NOREF(pDevExt); NOREF(pImage);
+}
 
 
 #ifdef SUPDRV_WITH_MSR_PROBER

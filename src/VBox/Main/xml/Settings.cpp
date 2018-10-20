@@ -334,6 +334,8 @@ ConfigFileBase::ConfigFileBase(const com::Utf8Str *pstrFilename)
                     m->sv = SettingsVersion_v1_14;
                 else if (ulMinor == 15)
                     m->sv = SettingsVersion_v1_15;
+                else if (ulMinor == 16)
+                    m->sv = SettingsVersion_v1_16;
                 else if (ulMinor > 15)
                     m->sv = SettingsVersion_Future;
             }
@@ -528,7 +530,7 @@ void ConfigFileBase::readExtraData(const xml::ElementNode &elmExtraData,
 }
 
 /**
- * Reads <USBDeviceFilter> entries from under the given elmDeviceFilters node and
+ * Reads \<USBDeviceFilter\> entries from under the given elmDeviceFilters node and
  * stores them in the given linklist. This is in ConfigFileBase because it's used
  * from both MainConfigFile (for host filters) and MachineConfigFile (for machine
  * filters).
@@ -806,13 +808,13 @@ void ConfigFileBase::readMedium(MediaType t,
 }
 
 /**
- * Reads in the entire <MediaRegistry> chunk and stores its media in the lists
+ * Reads in the entire \<MediaRegistry\> chunk and stores its media in the lists
  * of the given MediaRegistry structure.
  *
  * This is used in both MainConfigFile and MachineConfigFile since starting with
  * VirtualBox 4.0, we can have media registries in both.
  *
- * For pre-1.4 files, this gets called with the <DiskRegistry> chunk instead.
+ * For pre-1.4 files, this gets called with the \<DiskRegistry\> chunk instead.
  *
  * @param elmMediaRegistry
  */
@@ -944,6 +946,10 @@ void ConfigFileBase::setVersionAttribute(xml::ElementNode &elm)
             pcszVersion = "1.15";
             break;
 
+        case SettingsVersion_v1_16:
+            pcszVersion = "1.16";
+            break;
+
         default:
             // catch human error: the assertion below will trigger in debug
             // or dbgopt builds, so hopefully this will get noticed sooner in
@@ -1043,8 +1049,8 @@ void ConfigFileBase::createStubDocument()
 }
 
 /**
- * Creates an <ExtraData> node under the given parent element with
- * <ExtraDataItem> childern according to the contents of the given
+ * Creates an \<ExtraData\> node under the given parent element with
+ * \<ExtraDataItem\> childern according to the contents of the given
  * map.
  *
  * This is in ConfigFileBase because it's used in both MainConfigFile
@@ -1073,7 +1079,7 @@ void ConfigFileBase::buildExtraData(xml::ElementNode &elmParent,
 }
 
 /**
- * Creates <DeviceFilter> nodes under the given parent element according to
+ * Creates \<DeviceFilter\> nodes under the given parent element according to
  * the contents of the given USBDeviceFiltersList. This is in ConfigFileBase
  * because it's used in both MainConfigFile (for host filters) and
  * MachineConfigFile (for machine filters).
@@ -1131,7 +1137,7 @@ void ConfigFileBase::buildUSBDeviceFilters(xml::ElementNode &elmParent,
 }
 
 /**
- * Creates a single <HardDisk> element for the given Medium structure
+ * Creates a single \<HardDisk\> element for the given Medium structure
  * and recurses to write the child hard disks underneath. Called from
  * MainConfigFile::write().
  *
@@ -1211,7 +1217,7 @@ void ConfigFileBase::buildMedium(MediaType t,
 }
 
 /**
- * Creates a <MediaRegistry> node under the given parent and writes out all
+ * Creates a \<MediaRegistry\> node under the given parent and writes out all
  * hard disks and DVD and floppy images from the lists in the given MediaRegistry
  * structure under it.
  *
@@ -1358,7 +1364,7 @@ bool USBDeviceFilter::operator==(const USBDeviceFilter &u) const
 ////////////////////////////////////////////////////////////////////////////////
 
 /**
- * Reads one <MachineEntry> from the main VirtualBox.xml file.
+ * Reads one \<MachineEntry\> from the main VirtualBox.xml file.
  * @param elmMachineRegistry
  */
 void MainConfigFile::readMachineRegistry(const xml::ElementNode &elmMachineRegistry)
@@ -1385,7 +1391,7 @@ void MainConfigFile::readMachineRegistry(const xml::ElementNode &elmMachineRegis
 }
 
 /**
- * Reads in the <DHCPServers> chunk.
+ * Reads in the \<DHCPServers\> chunk.
  * @param elmDHCPServers
  */
 void MainConfigFile::readDHCPServers(const xml::ElementNode &elmDHCPServers)
@@ -1455,7 +1461,7 @@ void MainConfigFile::readDhcpOptions(DhcpOptionMap& map,
 }
 
 /**
- * Reads in the <NATNetworks> chunk.
+ * Reads in the \<NATNetworks\> chunk.
  * @param elmNATNetworks
  */
 void MainConfigFile::readNATNetworks(const xml::ElementNode &elmNATNetworks)
@@ -1990,6 +1996,7 @@ Hardware::Hardware()
           keyboardHIDType(KeyboardHIDType_PS2Keyboard),
           chipsetType(ChipsetType_PIIX3),
           paravirtProvider(ParavirtProvider_Legacy),
+          strParavirtDebug(""),
           fEmulatedUSBCardReader(false),
           clipboardMode(ClipboardMode_Disabled),
           dndMode(DnDMode_Disabled),
@@ -2067,6 +2074,7 @@ bool Hardware::operator==(const Hardware& h) const
                   && (keyboardHIDType           == h.keyboardHIDType)
                   && (chipsetType               == h.chipsetType)
                   && (paravirtProvider          == h.paravirtProvider)
+                  && (strParavirtDebug          == h.strParavirtDebug)
                   && (fEmulatedUSBCardReader    == h.fEmulatedUSBCardReader)
                   && (vrdeSettings              == h.vrdeSettings)
                   && (biosSettings              == h.biosSettings)
@@ -2738,8 +2746,8 @@ void MachineConfigFile::readGuestProperties(const xml::ElementNode &elmGuestProp
 }
 
 /**
- * Helper function to read attributes that are common to <SATAController> (pre-1.7)
- * and <StorageController>.
+ * Helper function to read attributes that are common to \<SATAController\> (pre-1.7)
+ * and \<StorageController\>.
  * @param elmStorageController
  * @param strg
  */
@@ -2751,12 +2759,12 @@ void MachineConfigFile::readStorageControllerAttributes(const xml::ElementNode &
 }
 
 /**
- * Reads in a <Hardware> block and stores it in the given structure. Used
+ * Reads in a \<Hardware\> block and stores it in the given structure. Used
  * both directly from readMachine and from readSnapshot, since snapshots
  * have their own hardware sections.
  *
  * For legacy pre-1.7 settings we also need a storage structure because
- * the IDE and SATA controllers used to be defined under <Hardware>.
+ * the IDE and SATA controllers used to be defined under \<Hardware\>.
  *
  * @param elmHardware
  * @param hw
@@ -2962,6 +2970,10 @@ void MachineConfigFile::readHardware(const xml::ElementNode &elmHardware,
                                           N_("Invalid value '%s' in Paravirt/@provider attribute"),
                                           strProvider.c_str());
             }
+
+            Utf8Str strDebug;
+            if (pelmHwChild->getAttributeValue("debug", strDebug))
+                hw.strParavirtDebug = strDebug;
         }
         else if (pelmHwChild->nameEquals("HPET"))
         {
@@ -3433,11 +3445,11 @@ void MachineConfigFile::readHardware(const xml::ElementNode &elmHardware,
 
 /**
  * This gets called instead of readStorageControllers() for legacy pre-1.7 settings
- * files which have a <HardDiskAttachments> node and storage controller settings
- * hidden in the <Hardware> settings. We set the StorageControllers fields just the
+ * files which have a \<HardDiskAttachments\> node and storage controller settings
+ * hidden in the \<Hardware\> settings. We set the StorageControllers fields just the
  * same, just from different sources.
- * @param elmHardware <Hardware> XML node.
- * @param elmHardDiskAttachments  <HardDiskAttachments> XML node.
+ * @param elmHardware \<Hardware\> XML node.
+ * @param elmHardDiskAttachments  \<HardDiskAttachments\> XML node.
  * @param strg
  */
 void MachineConfigFile::readHardDiskAttachments_pre1_7(const xml::ElementNode &elmHardDiskAttachments,
@@ -3497,7 +3509,7 @@ void MachineConfigFile::readHardDiskAttachments_pre1_7(const xml::ElementNode &e
 }
 
 /**
- * Reads in a <StorageControllers> block and stores it in the given Storage structure.
+ * Reads in a \<StorageControllers\> block and stores it in the given Storage structure.
  * Used both directly from readMachine and from readSnapshot, since snapshots
  * have their own storage controllers sections.
  *
@@ -3588,6 +3600,11 @@ void MachineConfigFile::readStorageControllers(const xml::ElementNode &elmStorag
             sctl.storageBus = StorageBus_USB;
             sctl.controllerType = StorageControllerType_USB;
         }
+        else if (strType == "NVMe")
+        {
+            sctl.storageBus = StorageBus_PCIe;
+            sctl.controllerType = StorageControllerType_NVMe;
+        }
         else
             throw ConfigFileError(this, pelmController, N_("Invalid value '%s' for StorageController/@type attribute"), strType.c_str());
 
@@ -3670,11 +3687,11 @@ void MachineConfigFile::readStorageControllers(const xml::ElementNode &elmStorag
 
 /**
  * This gets called for legacy pre-1.9 settings files after having parsed the
- * <Hardware> and <StorageControllers> sections to parse <Hardware> once more
- * for the <DVDDrive> and <FloppyDrive> sections.
+ * \<Hardware\> and \<StorageControllers\> sections to parse \<Hardware\> once more
+ * for the \<DVDDrive\> and \<FloppyDrive\> sections.
  *
  * Before settings version 1.9, DVD and floppy drives were specified separately
- * under <Hardware>; we then need this extra loop to make sure the storage
+ * under \<Hardware\>; we then need this extra loop to make sure the storage
  * controller structs are already set up so we can add stuff to them.
  *
  * @param elmHardware
@@ -3762,7 +3779,7 @@ void MachineConfigFile::readDVDAndFloppies_pre1_9(const xml::ElementNode &elmHar
 }
 
 /**
- * Called for reading the <Teleporter> element under <Machine>.
+ * Called for reading the \<Teleporter\> element under \<Machine\>.
  */
 void MachineConfigFile::readTeleporter(const xml::ElementNode *pElmTeleporter,
                                        MachineUserData *pUserData)
@@ -3778,7 +3795,7 @@ void MachineConfigFile::readTeleporter(const xml::ElementNode *pElmTeleporter,
 }
 
 /**
- * Called for reading the <Debugging> element under <Machine> or <Snapshot>.
+ * Called for reading the \<Debugging\> element under \<Machine\> or \<Snapshot\>.
  */
 void MachineConfigFile::readDebugging(const xml::ElementNode *pElmDebugging, Debugging *pDbg)
 {
@@ -3795,7 +3812,7 @@ void MachineConfigFile::readDebugging(const xml::ElementNode *pElmDebugging, Deb
 }
 
 /**
- * Called for reading the <Autostart> element under <Machine> or <Snapshot>.
+ * Called for reading the \<Autostart\> element under \<Machine\> or \<Snapshot\>.
  */
 void MachineConfigFile::readAutostart(const xml::ElementNode *pElmAutostart, Autostart *pAutostart)
 {
@@ -3820,7 +3837,7 @@ void MachineConfigFile::readAutostart(const xml::ElementNode *pElmAutostart, Aut
 }
 
 /**
- * Called for reading the <Groups> element under <Machine>.
+ * Called for reading the \<Groups\> element under \<Machine\>.
  */
 void MachineConfigFile::readGroups(const xml::ElementNode *pElmGroups, StringsList *pllGroups)
 {
@@ -3846,10 +3863,10 @@ void MachineConfigFile::readGroups(const xml::ElementNode *pElmGroups, StringsLi
 }
 
 /**
- * Called initially for the <Snapshot> element under <Machine>, if present,
+ * Called initially for the \<Snapshot\> element under \<Machine\>, if present,
  * to store the snapshot's data into the given Snapshot structure (which is
  * then the one in the Machine struct). This might then recurse if
- * a <Snapshots> (plural) element is found in the snapshot, which should
+ * a \<Snapshots\> (plural) element is found in the snapshot, which should
  * contain a list of child snapshots; such lists are maintained in the
  * Snapshot structure.
  *
@@ -3992,7 +4009,7 @@ void MachineConfigFile::convertOldOSType_pre1_5(Utf8Str &str)
 }
 
 /**
- * Called from the constructor to actually read in the <Machine> element
+ * Called from the constructor to actually read in the \<Machine\> element
  * of a machine config file.
  * @param elmMachine
  */
@@ -4107,8 +4124,8 @@ void MachineConfigFile::readMachine(const xml::ElementNode &elmMachine)
 }
 
 /**
- * Creates a <Hardware> node under elmParent and then writes out the XML
- * keys under that. Called for both the <Machine> node and for snapshots.
+ * Creates a \<Hardware\> node under elmParent and then writes out the XML
+ * keys under that. Called for both the \<Machine\> node and for snapshots.
  * @param elmParent
  * @param st
  */
@@ -4284,6 +4301,10 @@ void MachineConfigFile::buildHardwareXML(xml::ElementNode &elmParent,
 
         xml::ElementNode *pelmParavirt = pelmHardware->createChild("Paravirt");
         pelmParavirt->setAttribute("provider", pcszParavirtProvider);
+
+        if (   m->sv >= SettingsVersion_v1_16
+            && hw.strParavirtDebug.isNotEmpty())
+            pelmParavirt->setAttribute("debug", hw.strParavirtDebug);
     }
 
     xml::ElementNode *pelmBoot = pelmHardware->createChild("Boot");
@@ -4936,7 +4957,7 @@ void MachineConfigFile::buildHardwareXML(xml::ElementNode &elmParent,
 }
 
 /**
- * Fill a <Network> node. Only relevant for XML version >= v1_10.
+ * Fill a \<Network\> node. Only relevant for XML version >= v1_10.
  * @param mode
  * @param elmParent
  * @param fEnabled
@@ -5037,8 +5058,8 @@ void MachineConfigFile::buildNetworkXML(NetworkAttachmentType_T mode,
 }
 
 /**
- * Creates a <StorageControllers> node under elmParent and then writes out the XML
- * keys under that. Called for both the <Machine> node and for snapshots.
+ * Creates a \<StorageControllers\> node under elmParent and then writes out the XML
+ * keys under that. Called for both the \<Machine\> node and for snapshots.
  * @param elmParent
  * @param st
  * @param fSkipRemovableMedia If true, DVD and floppy attachments are skipped and
@@ -5096,6 +5117,7 @@ void MachineConfigFile::buildStorageControllersXML(xml::ElementNode &elmParent,
             case StorageControllerType_I82078: pcszType = "I82078"; break;
             case StorageControllerType_LsiLogicSas: pcszType = "LsiLogicSas"; break;
             case StorageControllerType_USB: pcszType = "USB"; break;
+            case StorageControllerType_NVMe: pcszType = "NVMe"; break;
             default: /*case StorageControllerType_PIIX3:*/ pcszType = "PIIX3"; break;
         }
         pelmController->setAttribute("type", pcszType);
@@ -5195,8 +5217,8 @@ void MachineConfigFile::buildStorageControllersXML(xml::ElementNode &elmParent,
 }
 
 /**
- * Creates a <Debugging> node under elmParent and then writes out the XML
- * keys under that. Called for both the <Machine> node and for snapshots.
+ * Creates a \<Debugging\> node under elmParent and then writes out the XML
+ * keys under that. Called for both the \<Machine\> node and for snapshots.
  *
  * @param pElmParent    Pointer to the parent element.
  * @param pDbg          Pointer to the debugging settings.
@@ -5214,8 +5236,8 @@ void MachineConfigFile::buildDebuggingXML(xml::ElementNode *pElmParent, const De
 }
 
 /**
- * Creates a <Autostart> node under elmParent and then writes out the XML
- * keys under that. Called for both the <Machine> node and for snapshots.
+ * Creates a \<Autostart\> node under elmParent and then writes out the XML
+ * keys under that. Called for both the \<Machine\> node and for snapshots.
  *
  * @param pElmParent    Pointer to the parent element.
  * @param pAutostart    Pointer to the autostart settings.
@@ -5243,8 +5265,8 @@ void MachineConfigFile::buildAutostartXML(xml::ElementNode *pElmParent, const Au
 }
 
 /**
- * Creates a <Groups> node under elmParent and then writes out the XML
- * keys under that. Called for the <Machine> node only.
+ * Creates a \<Groups\> node under elmParent and then writes out the XML
+ * keys under that. Called for the \<Machine\> node only.
  *
  * @param pElmParent    Pointer to the parent element.
  * @param pllGroups     Pointer to the groups list.
@@ -5268,8 +5290,8 @@ void MachineConfigFile::buildGroupsXML(xml::ElementNode *pElmParent, const Strin
 
 /**
  * Writes a single snapshot into the DOM tree. Initially this gets called from MachineConfigFile::write()
- * for the root snapshot of a machine, if present; elmParent then points to the <Snapshots> node under the
- * <Machine> node to which <Snapshot> must be added. This may then recurse for child snapshots.
+ * for the root snapshot of a machine, if present; elmParent then points to the \<Snapshots\> node under the
+ * \<Machine\> node to which \<Snapshot\> must be added. This may then recurse for child snapshots.
  *
  * @param depth
  * @param elmParent
@@ -5338,7 +5360,7 @@ void MachineConfigFile::buildSnapshotXML(uint32_t depth,
  *      settings version is at least v1.11 (VirtualBox 4.0).
  *
  *  --  BuildMachineXML_IncludeSnapshots: If set, descend into the snapshots tree
- *      of the machine and write out <Snapshot> and possibly more snapshots under
+ *      of the machine and write out \<Snapshot\> and possibly more snapshots under
  *      that, if snapshots are present. Otherwise all snapshots are suppressed
  *      (when called from OVF).
  *
@@ -5357,7 +5379,7 @@ void MachineConfigFile::buildSnapshotXML(uint32_t depth,
  *      attribute is never set. This is also for the OVF export case because we
  *      cannot save states with OVF.
  *
- * @param elmMachine XML <Machine> element to add attributes and elements to.
+ * @param elmMachine XML \<Machine\> element to add attributes and elements to.
  * @param fl Flags.
  * @param pllElementsWithUuidAttributes pointer to list that should receive UUID elements or NULL;
  *        see buildStorageControllersXML() for details.
@@ -5583,6 +5605,29 @@ AudioDriverType_T MachineConfigFile::getHostDefaultAudioDriver()
  */
 void MachineConfigFile::bumpSettingsVersionIfNeeded()
 {
+    if (m->sv < SettingsVersion_v1_16)
+    {
+        // VirtualBox 5.1 adds a NVMe storage controller, paravirt debug options.
+        for (StorageControllersList::const_iterator it = storageMachine.llStorageControllers.begin();
+             it != storageMachine.llStorageControllers.end();
+             ++it)
+        {
+            const StorageController &sctl = *it;
+
+            if (sctl.controllerType == StorageControllerType_NVMe)
+            {
+                m->sv = SettingsVersion_v1_16;
+                return;
+            }
+        }
+
+        if (hardwareMachine.strParavirtDebug.isNotEmpty())
+        {
+            m->sv = SettingsVersion_v1_16;
+            return;
+        }
+    }
+
     if (m->sv < SettingsVersion_v1_15)
     {
         // VirtualBox 5.0 adds paravirt providers, explicit AHCI port hotplug

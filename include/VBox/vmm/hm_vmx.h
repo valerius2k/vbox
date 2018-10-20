@@ -48,7 +48,7 @@
 #endif
 
 
-/** @defgroup grp_vmx   vmx Types and Definitions
+/** @defgroup grp_hm_vmx    VMX Types and Definitions
  * @ingroup grp_hm
  * @{
  */
@@ -56,7 +56,7 @@
 /** @def HMVMXCPU_GST_SET_UPDATED
  * Sets a guest-state-updated flag.
  *
- * @param   pVCpu   Pointer to the VMCPU.
+ * @param   pVCpu   The cross context virtual CPU structure.
  * @param   fFlag   The flag to set.
  */
 #define HMVMXCPU_GST_SET_UPDATED(pVCpu, fFlag)        (ASMAtomicUoOrU32(&(pVCpu)->hm.s.vmx.fUpdatedGuestState, (fFlag)))
@@ -64,7 +64,7 @@
 /** @def HMVMXCPU_GST_IS_SET
  * Checks if all the flags in the specified guest-state-updated set is pending.
  *
- * @param   pVCpu   Pointer to the VMCPU.
+ * @param   pVCpu   The cross context virtual CPU structure.
  * @param   fFlag   The flag to check.
  */
 #define HMVMXCPU_GST_IS_SET(pVCpu, fFlag)             ((ASMAtomicUoReadU32(&(pVCpu)->hm.s.vmx.fUpdatedGuestState) & (fFlag)) == (fFlag))
@@ -73,7 +73,7 @@
  * Checks if one or more of the flags in the specified guest-state-updated set
  * is updated.
  *
- * @param   pVCpu   Pointer to the VMCPU.
+ * @param   pVCpu   The cross context virtual CPU structure.
  * @param   fFlags  The flags to check for.
  */
 #define HMVMXCPU_GST_IS_UPDATED(pVCpu, fFlags)        RT_BOOL(ASMAtomicUoReadU32(&(pVCpu)->hm.s.vmx.fUpdatedGuestState) & (fFlags))
@@ -81,7 +81,7 @@
 /** @def HMVMXCPU_GST_RESET_TO
  * Resets the guest-state-updated flags to the specified value.
  *
- * @param   pVCpu   Pointer to the VMCPU.
+ * @param   pVCpu   The cross context virtual CPU structure.
  * @param   fFlags  The new value.
  */
 #define HMVMXCPU_GST_RESET_TO(pVCpu, fFlags)          (ASMAtomicUoWriteU32(&(pVCpu)->hm.s.vmx.fUpdatedGuestState, (fFlags)))
@@ -89,7 +89,7 @@
 /** @def HMVMXCPU_GST_VALUE
  * Returns the current guest-state-updated flags value.
  *
- * @param   pVCpu   Pointer to the VMCPU.
+ * @param   pVCpu   The cross context virtual CPU structure.
  */
 #define HMVMXCPU_GST_VALUE(pVCpu)                     (ASMAtomicUoReadU32(&(pVCpu)->hm.s.vmx.fUpdatedGuestState))
 
@@ -172,6 +172,14 @@ AssertCompileSizeAlignment(VMXRESTOREHOST, 8);
 #define VMX_UFC_CTRL_PROC_EXEC2                                 8
 /** Invalid unrestricted-guest execution controls combo. */
 #define VMX_UFC_INVALID_UX_COMBO                                9
+/** EPT flush type not supported. */
+#define VMX_UFC_EPT_FLUSH_TYPE_UNSUPPORTED                      10
+/** EPT paging structure memory type is not write-back. */
+#define VMX_UFC_EPT_MEM_TYPE_NOT_WB                             11
+/** EPT requires INVEPT instr. support but it's not available. */
+#define VMX_UFC_EPT_INVEPT_UNAVAILABLE                          12
+/** EPT requires page-walk length of 4. */
+#define VMX_UFC_EPT_PAGE_WALK_LENGTH_UNSUPPORTED                13
 /** @} */
 
 /** @name VMX HM-error codes for VERR_VMX_INVALID_GUEST_STATE.
@@ -1113,23 +1121,13 @@ typedef VMXMSRS *PVMXMSRS;
  * @{
  */
 #define MSR_IA32_VMX_EPT_VPID_CAP_RWX_X_ONLY                             RT_BIT_64(0)
-#define MSR_IA32_VMX_EPT_VPID_CAP_RWX_W_ONLY                             RT_BIT_64(1)
-#define MSR_IA32_VMX_EPT_VPID_CAP_RWX_WX_ONLY                            RT_BIT_64(2)
-#define MSR_IA32_VMX_EPT_VPID_CAP_GAW_21_BITS                            RT_BIT_64(3)
-#define MSR_IA32_VMX_EPT_VPID_CAP_GAW_30_BITS                            RT_BIT_64(4)
-#define MSR_IA32_VMX_EPT_VPID_CAP_GAW_39_BITS                            RT_BIT_64(5)
-#define MSR_IA32_VMX_EPT_VPID_CAP_GAW_48_BITS                            RT_BIT_64(6)
-#define MSR_IA32_VMX_EPT_VPID_CAP_GAW_57_BITS                            RT_BIT_64(7)
+#define MSR_IA32_VMX_EPT_VPID_CAP_PAGE_WALK_LENGTH_4                     RT_BIT_64(6)
 #define MSR_IA32_VMX_EPT_VPID_CAP_EMT_UC                                 RT_BIT_64(8)
-#define MSR_IA32_VMX_EPT_VPID_CAP_EMT_WC                                 RT_BIT_64(9)
-#define MSR_IA32_VMX_EPT_VPID_CAP_EMT_WT                                 RT_BIT_64(12)
-#define MSR_IA32_VMX_EPT_VPID_CAP_EMT_WP                                 RT_BIT_64(13)
 #define MSR_IA32_VMX_EPT_VPID_CAP_EMT_WB                                 RT_BIT_64(14)
-#define MSR_IA32_VMX_EPT_VPID_CAP_SP_21_BITS                             RT_BIT_64(16)
-#define MSR_IA32_VMX_EPT_VPID_CAP_SP_30_BITS                             RT_BIT_64(17)
-#define MSR_IA32_VMX_EPT_VPID_CAP_SP_39_BITS                             RT_BIT_64(18)
-#define MSR_IA32_VMX_EPT_VPID_CAP_SP_48_BITS                             RT_BIT_64(19)
+#define MSR_IA32_VMX_EPT_VPID_CAP_PDE_2M                                 RT_BIT_64(16)
+#define MSR_IA32_VMX_EPT_VPID_CAP_PDPTE_1G                               RT_BIT_64(17)
 #define MSR_IA32_VMX_EPT_VPID_CAP_INVEPT                                 RT_BIT_64(20)
+#define MSR_IA32_VMX_EPT_VPID_CAP_EPT_ACCESS_DIRTY                       RT_BIT_64(21)
 #define MSR_IA32_VMX_EPT_VPID_CAP_INVEPT_SINGLE_CONTEXT                  RT_BIT_64(25)
 #define MSR_IA32_VMX_EPT_VPID_CAP_INVEPT_ALL_CONTEXTS                    RT_BIT_64(26)
 #define MSR_IA32_VMX_EPT_VPID_CAP_INVVPID                                RT_BIT_64(32)
@@ -1289,6 +1287,8 @@ typedef VMXMSRS *PVMXMSRS;
 #define VMX_VMCS32_CTRL_ENTRY_INSTR_LENGTH                      0x401A
 #define VMX_VMCS32_CTRL_TPR_THRESHOLD                           0x401C
 #define VMX_VMCS32_CTRL_PROC_EXEC2                              0x401E
+#define VMX_VMCS32_CTRL_PLE_GAP                                 0x4020
+#define VMX_VMCS32_CTRL_PLE_WINDOW                              0x4022
 /** @} */
 
 
@@ -1386,7 +1386,7 @@ typedef VMXMSRS *PVMXMSRS;
 #define VMX_VMCS_CTRL_PROC_EXEC2_RDSEED_EXIT                    RT_BIT_64(16)
 /** Controls whether EPT-violations may cause \#VE instead of exits. */
 #define VMX_VMCS_CTRL_PROC_EXEC2_EPT_VE                         RT_BIT_64(18)
-/** Enables XSAVES/XRSTORS. */
+/** Enables XSAVES/XRSTORS instructions. */
 #define VMX_VMCS_CTRL_PROC_EXEC2_XSAVES                         RT_BIT_64(20)
 
 /** @} */
@@ -1825,7 +1825,7 @@ typedef VMXMSRS *PVMXMSRS;
 /** @} */
 
 
-/** @defgroup grp_vmx_asm   vmx assembly helpers
+/** @defgroup grp_hm_vmx_asm    VMX Assembly Helpers
  * @{
  */
 

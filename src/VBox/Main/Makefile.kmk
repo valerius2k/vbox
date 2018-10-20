@@ -303,7 +303,7 @@ ifdef VBOX_WITH_USB
 	$(if $(VBOX_WITH_NEW_USB_CODE_ON_DARWIN),VBOX_WITH_NEW_USB_CODE_ON_DARWIN,)
 endif
 VBoxSVC_DEFS.win += VBOX_COM_OUTOFPROC_MODULE
-VBoxSVC_DEFS.win += _WIN32_WINNT=0x0510
+VBoxSVC_DEFS.win += _WIN32_WINNT=0x0600
 # Try to load and use libhal at runtime for probing removable media
 # VBoxSVC_DEFS.linux += VBOX_USE_LIBHAL
 VBoxSVC_DEFS.solaris += VBOX_USE_LIBHAL
@@ -347,6 +347,7 @@ VBoxSVC_INTERMEDIATES = \
 
 VBoxSVC_SOURCES = \
 	$(VBoxAPIWrap_0_OUTDIR)/VBoxAPI.d \
+	src-all/AuthLibrary.cpp \
 	src-all/DisplayPNGUtil.cpp \
 	src-all/DisplayResampleImage.cpp \
 	src-all/DisplayUtils.cpp \
@@ -360,6 +361,7 @@ VBoxSVC_SOURCES = \
 	src-all/SecretKeyStore.cpp \
 	src-all/SharedFolderImpl.cpp \
 	src-all/AutoCaller.cpp \
+        src-all/ThreadTask.cpp \
 	src-all/VirtualBoxBase.cpp \
 	src-all/VirtualBoxErrorInfoImpl.cpp \
 	$(if $(VBOX_WITH_EXTPACK),src-all/ExtPackManagerImpl.cpp src-all/ExtPackUtil.cpp,) \
@@ -652,6 +654,7 @@ VBoxC_DEFS = \
 	$(if-expr defined(VBOX_WITH_EHCI) && defined(VBOX_WITH_USB),VBOX_WITH_EHCI,) \
 	$(if $(VBOX_WITH_EXTPACK),VBOX_WITH_EXTPACK,) \
 	$(if $(VBOX_WITH_PCI_PASSTHROUGH),VBOX_WITH_PCI_PASSTHROUGH,) \
+	$(if $(VBOX_WITH_VRDEAUTH_IN_VBOXSVC),VBOX_WITH_VRDEAUTH_IN_VBOXSVC,) \
 	$(if $(VBOX_WITH_VPX),VBOX_WITH_VPX,)
 ifdef VBOX_WITH_CRHGSMI
  VBoxC_DEFS += VBOX_WITH_CRHGSMI
@@ -738,6 +741,7 @@ VBoxC_SOURCES = \
 	src-all/SecretKeyStore.cpp \
 	src-all/SharedFolderImpl.cpp \
 	src-all/AutoCaller.cpp \
+        src-all/ThreadTask.cpp \
 	src-all/VirtualBoxBase.cpp \
 	src-all/VirtualBoxErrorInfoImpl.cpp \
 	$(if $(VBOX_WITH_EXTPACK),src-all/ExtPackManagerImpl.cpp src-all/ExtPackUtil.cpp,) \
@@ -812,6 +816,10 @@ ifdef VBOX_WITH_VPX
 	src-client/EbmlWriter.cpp \
 	src-client/VideoRec.cpp
 endif
+ifndef VBOX_WITH_VRDEAUTH_IN_VBOXSVC
+ VBoxC_SOURCES += \
+	src-all/AuthLibrary.cpp
+endif
 
 ifeq ($(KBUILD_TARGET),darwin)
 VBoxC_ORDERDEPS += $(VBoxC_0_OUTDIR)/VBoxC.def
@@ -858,6 +866,7 @@ ifdef VBOX_WITH_32_ON_64_MAIN_API
  	src-all/EventImpl.cpp \
  	src-all/Global.cpp \
 	src-all/AutoCaller.cpp \
+        src-all/ThreadTask.cpp \
  	src-all/VirtualBoxBase.cpp \
  	src-all/VirtualBoxErrorInfoImpl.cpp \
  	src-client/ClientTokenHolder.cpp \
@@ -928,6 +937,14 @@ ifdef VBOX_WITH_32_ON_64_MAIN_API
  LIBRARIES += VBoxCOM-x86
  VBoxCOM-x86_TEMPLATE = VBoxMainLib-x86
  VBoxCOM-x86_EXTENDS  = VBoxCOM
+endif
+
+# -MD version for the GUI in -MDd builds.
+ifeq ($(KBUILD_TARGET).$(VBOX_VCC_CRT_TYPE),win.d)
+ LIBRARIES += VBoxCOM-GUI
+ USES += qt4
+ VBoxCOM-GUI_TEMPLATE = VBOXQT4GUI$(if-expr defined(VBOX_WITH_HARDENING),,EXE)
+ VBoxCOM-GUI_EXTENDS  = VBoxCOM
 endif
 
 

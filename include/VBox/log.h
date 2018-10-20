@@ -36,7 +36,7 @@
 #include <iprt/log.h>
 
 
-/** @defgroup grp_rt_vbox_log    VirtualBox Logging
+/** @defgroup grp_rt_vbox_log    VBox Logging
  * @ingroup grp_rt_vbox
  * @{
  */
@@ -121,6 +121,8 @@ typedef enum LOGGROUP
     LOG_GROUP_DEV_LSILOGICSCSI,
     /** NE2000 Device group. */
     LOG_GROUP_DEV_NE2000,
+    /** NVMe Device group. */
+    LOG_GROUP_DEV_NVME,
     /** USB OHCI Device group. */
     LOG_GROUP_DEV_OHCI,
     /** Parallel Device group */
@@ -225,6 +227,8 @@ typedef enum LOGGROUP
     LOG_GROUP_DRV_TRANSPORT_ASYNC,
     /** TUN network transport driver group */
     LOG_GROUP_DRV_TUN,
+    /** UDP socket stream driver group. */
+    LOG_GROUP_DRV_UDP,
     /** UDP tunnet network transport driver group. */
     LOG_GROUP_DRV_UDPTUNNEL,
     /** USB Proxy driver group. */
@@ -740,7 +744,7 @@ typedef enum LOGGROUP
     /** USB webcam. */
     LOG_GROUP_USB_WEBCAM,
     /** VBox Guest Additions Driver (VBoxGuest). */
-    LOG_GROUP_VBGD,
+    LOG_GROUP_VGDRV,
     /** VBox Guest Additions Library. */
     LOG_GROUP_VBGL,
     /** Generic virtual disk layer. */
@@ -829,6 +833,7 @@ typedef enum LOGGROUP
     "DEV_LPC",      \
     "DEV_LSILOGICSCSI", \
     "DEV_NE2000",   \
+    "DEV_NVME",     \
     "DEV_OHCI",     \
     "DEV_PARALLEL", \
     "DEV_PC",       \
@@ -881,6 +886,7 @@ typedef enum LOGGROUP
     "DRV_TELNETSERVER", \
     "DRV_TRANSPORT_ASYNC", \
     "DRV_TUN",      \
+    "DRV_UDP", \
     "DRV_UDPTUNNEL", \
     "DRV_USBPROXY", \
     "DRV_VBOXHDD",  \
@@ -1138,7 +1144,7 @@ typedef enum LOGGROUP
     "USB_MSD",      \
     "USB_REMOTE",   \
     "USB_WEBCAM",   \
-    "VBGD",         \
+    "VGDRV",        \
     "VBGL",         \
     "VD",           \
     "VD_DMG",       \

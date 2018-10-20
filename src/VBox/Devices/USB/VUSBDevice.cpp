@@ -137,7 +137,8 @@ void vusbDevMapEndpoint(PVUSBDEV pDev, PCVUSBDESCENDPOINTEX pEndPtDesc)
         Log(("vusb: map input pipe on address %u\n", i8Addr));
         pPipe->in = pEndPtDesc;
 
-#if defined(RT_OS_LINUX) || defined(RT_OS_SOLARIS) || defined(RT_OS_DARWIN)
+        ///@todo: This is currently utterly broken and causes untold damage.
+#if 0 //defined(RT_OS_LINUX) || defined(RT_OS_SOLARIS) || defined(RT_OS_DARWIN)
         /*
          * For high-speed isochronous input endpoints, spin off a read-ahead buffering thread.
          */
@@ -1024,7 +1025,7 @@ void vusbDevSetAddress(PVUSBDEV pDev, uint8_t u8Address)
         if (pRh->pDefaultAddress != NULL)
         {
             vusbDevAddressUnHash(pRh->pDefaultAddress);
-            vusbDevSetState(pRh->pDefaultAddress, VUSB_DEVICE_STATE_POWERED);
+            vusbDevSetStateCmp(pRh->pDefaultAddress, VUSB_DEVICE_STATE_POWERED, VUSB_DEVICE_STATE_DEFAULT);
             Log(("2 DEFAULT ADDRS\n"));
         }
 
@@ -1355,11 +1356,13 @@ static DECLCALLBACK(void) vusbDevResetDoneTimer(PPDMUSBINS pUsbIns, PTMTIMER pTi
     PVUSBRESETARGS  pArgs = (PVUSBRESETARGS)pDev->pvArgs;
     Assert(pDev->pUsbIns == pUsbIns);
 
+    AssertPtr(pArgs);
+
     /*
      * Reset-done processing and cleanup.
      */
-    vusbDevResetDone(pDev, pArgs->rc, pArgs->pfnDone, pArgs->pvUser);
     pDev->pvArgs = NULL;
+    vusbDevResetDone(pDev, pArgs->rc, pArgs->pfnDone, pArgs->pvUser);
     RTMemFree(pArgs);
 }
 
@@ -1377,6 +1380,12 @@ static int vusbDevResetWorker(PVUSBDEV pDev, bool fResetOnLinux, bool fUseTimer,
     if (pDev->pUsbIns->pReg->pfnUsbReset)
         rc = pDev->pUsbIns->pReg->pfnUsbReset(pDev->pUsbIns, fResetOnLinux);
 
+    if (pArgs)
+    {
+        pArgs->rc = rc;
+        rc = VINF_SUCCESS;
+    }
+
     if (fUseTimer)
     {
         /*
@@ -1386,12 +1395,6 @@ static int vusbDevResetWorker(PVUSBDEV pDev, bool fResetOnLinux, bool fUseTimer,
          */
         int rc2 = TMTimerSet(pDev->pResetTimer, u64EndTS);
         AssertReleaseRC(rc2);
-    }
-
-    if (pArgs)
-    {
-        pArgs->rc = rc;
-        rc = VINF_SUCCESS;
     }
 
     LogFlow(("vusbDevResetWorker: %s: returns %Rrc\n", pDev->pUsbIns->pszName, rc));
@@ -1458,6 +1461,7 @@ static DECLCALLBACK(int) vusbIDeviceReset(PVUSBIDEVICE pDevice, bool fResetOnLin
             pArgs->pfnDone = pfnDone;
             pArgs->pvUser  = pvUser;
             pArgs->rc      = VINF_SUCCESS;
+            AssertPtrNull(pDev->pvArgs);
             pDev->pvArgs   = pArgs;
             int rc = vusbDevIoThreadExec(pDev, 0 /* fFlags */, (PFNRT)vusbDevResetWorker, 4, pDev, fResetOnLinux, true, pArgs);
             if (RT_SUCCESS(rc))

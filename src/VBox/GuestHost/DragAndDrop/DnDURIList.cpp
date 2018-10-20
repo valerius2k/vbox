@@ -24,6 +24,7 @@
 #include <iprt/file.h>
 #include <iprt/fs.h>
 #include <iprt/path.h>
+#include <iprt/string.h>
 #include <iprt/symlink.h>
 #include <iprt/uri.h>
 
@@ -283,7 +284,7 @@ int DnDURIList::AppendNativePath(const char *pszPath, uint32_t fFlags)
     {
         RTPathChangeToUnixSlashes(pszPathNative, true /* fForce */);
 
-        char *pszPathURI = RTUriCreate("file" /* pszScheme */, "/" /* pszAuthority */,
+        char *pszPathURI = RTUriCreate("file" /* pszScheme */, NULL /* pszAuthority */,
                                        pszPathNative, NULL /* pszQuery */, NULL /* pszFragment */);
         if (pszPathURI)
         {
@@ -341,7 +342,7 @@ int DnDURIList::AppendURIPath(const char *pszURI, uint32_t fFlags)
 
     /* Query the path component of a file URI. If this hasn't a
      * file scheme NULL is returned. */
-    char *pszSrcPath = RTUriFilePath(pszURI, URI_FILE_FORMAT_AUTO);
+    char *pszSrcPath = RTUriFilePath(pszURI);
     if (pszSrcPath)
     {
         /* Add the path to our internal file list (recursive in
@@ -447,8 +448,11 @@ int DnDURIList::RootFromURIData(const void *pvData, size_t cbData, uint32_t fFla
     AssertPtrReturn(pvData, VERR_INVALID_POINTER);
     AssertReturn(cbData, VERR_INVALID_PARAMETER);
 
+    if (!RTStrIsValidEncoding(static_cast<const char *>(pvData)))
+        return VERR_INVALID_PARAMETER;
+
     RTCList<RTCString> lstURI =
-        RTCString(static_cast<const char*>(pvData), cbData - 1).split("\r\n");
+        RTCString(static_cast<const char *>(pvData), cbData - 1).split("\r\n");
     if (lstURI.isEmpty())
         return VINF_SUCCESS;
 
@@ -459,8 +463,7 @@ int DnDURIList::RootFromURIData(const void *pvData, size_t cbData, uint32_t fFla
         /* Query the path component of a file URI. If this hasn't a
          * file scheme, NULL is returned. */
         const char *pszURI = lstURI.at(i).c_str();
-        char *pszFilePath = RTUriFilePath(pszURI,
-                                          URI_FILE_FORMAT_AUTO);
+        char *pszFilePath = RTUriFilePath(pszURI);
 #ifdef DEBUG_andy
         LogFlowFunc(("pszURI=%s, pszFilePath=%s\n", pszURI, pszFilePath));
 #endif
@@ -486,7 +489,7 @@ int DnDURIList::RootFromURIData(const void *pvData, size_t cbData, uint32_t fFla
 }
 
 RTCString DnDURIList::RootToString(const RTCString &strPathBase /* = "" */,
-                                   const RTCString &strSeparator /* = "\r\n" */)
+                                   const RTCString &strSeparator /* = "\r\n" */) const
 {
     RTCString strRet;
     for (size_t i = 0; i < m_lstRoot.size(); i++)
@@ -504,7 +507,7 @@ RTCString DnDURIList::RootToString(const RTCString &strPathBase /* = "" */,
                 if (pszPathURI)
                 {
                     strRet += RTCString(pszPathURI) + strSeparator;
-                    LogFlowFunc(("URI: %s\n", strRet.c_str()));
+                    LogFlowFunc(("URI (Base): %s\n", strRet.c_str()));
                     RTStrFree(pszPathURI);
                 }
 

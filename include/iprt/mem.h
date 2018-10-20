@@ -143,7 +143,6 @@ RTDECL(void)    RTMemTmpFree(void *pv) RT_NO_THROW_PROTO;
  * @returns Pointer to the allocated memory.
  * @returns NULL on failure, assertion raised in strict builds.
  * @param   cb      Size in bytes of the memory block to allocated.
- * @param   pszTag  Allocation tag used for statistics and such.
  */
 #define RTMemAlloc(cb)                  RTMemAllocTag((cb), RTMEM_TAG)
 
@@ -298,7 +297,7 @@ RTDECL(void)    RTMemFree(void *pv) RT_NO_THROW_PROTO;
 
 
 
-/** @def RTR0MemAllocEx and RTR0MemAllocExTag flags.
+/** @name RTR0MemAllocEx and RTR0MemAllocExTag flags.
  * @{ */
 /** The returned memory should be zeroed. */
 #define RTMEMALLOCEX_FLAGS_ZEROED           RT_BIT(0)
@@ -368,11 +367,6 @@ RTDECL(int) RTMemAllocExTag(size_t cb, size_t cbAlignment, uint32_t fFlags, cons
  *
  * @param   pv                  What to free, NULL is fine.
  * @param   cb                  The amount of allocated memory.
- * @param   fFlags              The flags specified when allocating the memory.
- *                              Whether the exact flags are requires depends on
- *                              the implementation, but in general, ring-0
- *                              doesn't require anything while ring-3 requires
- *                              RTMEMALLOCEX_FLAGS_EXEC if used.
  */
 RTDECL(void) RTMemFreeEx(void *pv, size_t cb) RT_NO_THROW_PROTO;
 
@@ -635,6 +629,8 @@ RTR0DECL(int) RTR0MemKernelCopyTo(void *pvDst, void const *pvSrc, size_t cb);
  * @returns NULL on failure.
  * @param   cb      Size in bytes of the memory block to allocate.
  * @param   pszTag  Allocation tag used for statistics and such.
+ * @param   SRC_POS The source position where call is being made from.
+ *                  Use RT_SRC_POS when possible.  Optional.
  */
 RTDECL(void *)  RTMemEfTmpAlloc(size_t cb, const char *pszTag, RT_SRC_POS_DECL) RT_NO_THROW_PROTO;
 
@@ -645,6 +641,8 @@ RTDECL(void *)  RTMemEfTmpAlloc(size_t cb, const char *pszTag, RT_SRC_POS_DECL) 
  * @returns NULL on failure.
  * @param   cb      Size in bytes of the memory block to allocate.
  * @param   pszTag  Allocation tag used for statistics and such.
+ * @param   SRC_POS The source position where call is being made from.  Use
+ *                  RT_SRC_POS when possible.  Optional.
  */
 RTDECL(void *)  RTMemEfTmpAllocZ(size_t cb, const char *pszTag, RT_SRC_POS_DECL) RT_NO_THROW_PROTO;
 
@@ -652,6 +650,8 @@ RTDECL(void *)  RTMemEfTmpAllocZ(size_t cb, const char *pszTag, RT_SRC_POS_DECL)
  * Same as RTMemTmpFree() except that it's for fenced memory.
  *
  * @param   pv      Pointer to memory block.
+ * @param   SRC_POS The source position where call is being made from.  Use
+ *                  RT_SRC_POS when possible.  Optional.
  */
 RTDECL(void)    RTMemEfTmpFree(void *pv, RT_SRC_POS_DECL) RT_NO_THROW_PROTO;
 
@@ -662,6 +662,8 @@ RTDECL(void)    RTMemEfTmpFree(void *pv, RT_SRC_POS_DECL) RT_NO_THROW_PROTO;
  * @returns NULL on failure.
  * @param   cb      Size in bytes of the memory block to allocate.
  * @param   pszTag  Allocation tag used for statistics and such.
+ * @param   SRC_POS The source position where call is being made from.  Use
+ *                  RT_SRC_POS when possible.  Optional.
  */
 RTDECL(void *)  RTMemEfAlloc(size_t cb, const char *pszTag, RT_SRC_POS_DECL) RT_NO_THROW_PROTO;
 
@@ -672,6 +674,8 @@ RTDECL(void *)  RTMemEfAlloc(size_t cb, const char *pszTag, RT_SRC_POS_DECL) RT_
  * @returns NULL on failure.
  * @param   cb      Size in bytes of the memory block to allocate.
  * @param   pszTag  Allocation tag used for statistics and such.
+ * @param   SRC_POS The source position where call is being made from.  Use
+ *                  RT_SRC_POS when possible.  Optional.
  */
 RTDECL(void *)  RTMemEfAllocZ(size_t cb, const char *pszTag, RT_SRC_POS_DECL) RT_NO_THROW_PROTO;
 
@@ -682,6 +686,8 @@ RTDECL(void *)  RTMemEfAllocZ(size_t cb, const char *pszTag, RT_SRC_POS_DECL) RT
  * @returns NULL on failure.
  * @param   cbUnaligned Size in bytes of the memory block to allocate.
  * @param   pszTag  Allocation tag used for statistics and such.
+ * @param   SRC_POS The source position where call is being made from.  Use
+ *                  RT_SRC_POS when possible.  Optional.
  */
 RTDECL(void *)  RTMemEfAllocVar(size_t cbUnaligned, const char *pszTag, RT_SRC_POS_DECL) RT_NO_THROW_PROTO;
 
@@ -692,6 +698,8 @@ RTDECL(void *)  RTMemEfAllocVar(size_t cbUnaligned, const char *pszTag, RT_SRC_P
  * @returns NULL on failure.
  * @param   cbUnaligned Size in bytes of the memory block to allocate.
  * @param   pszTag  Allocation tag used for statistics and such.
+ * @param   SRC_POS The source position where call is being made from.  Use
+ *                  RT_SRC_POS when possible.  Optional.
  */
 RTDECL(void *)  RTMemEfAllocZVar(size_t cbUnaligned, const char *pszTag, RT_SRC_POS_DECL) RT_NO_THROW_PROTO;
 
@@ -703,6 +711,8 @@ RTDECL(void *)  RTMemEfAllocZVar(size_t cbUnaligned, const char *pszTag, RT_SRC_
  * @param   pvOld   The memory block to reallocate.
  * @param   cbNew   The new block size (in bytes).
  * @param   pszTag  Allocation tag used for statistics and such.
+ * @param   SRC_POS The source position where call is being made from.  Use
+ *                  RT_SRC_POS when possible.  Optional.
  */
 RTDECL(void *)  RTMemEfRealloc(void *pvOld, size_t cbNew, const char *pszTag, RT_SRC_POS_DECL) RT_NO_THROW_PROTO;
 
@@ -710,6 +720,8 @@ RTDECL(void *)  RTMemEfRealloc(void *pvOld, size_t cbNew, const char *pszTag, RT
  * Free memory allocated by any of the RTMemEf* allocators.
  *
  * @param   pv      Pointer to memory block.
+ * @param   SRC_POS The source position where call is being made from.  Use
+ *                  RT_SRC_POS when possible.  Optional.
  */
 RTDECL(void)    RTMemEfFree(void *pv, RT_SRC_POS_DECL) RT_NO_THROW_PROTO;
 
@@ -721,6 +733,8 @@ RTDECL(void)    RTMemEfFree(void *pv, RT_SRC_POS_DECL) RT_NO_THROW_PROTO;
  * @param   pvSrc   The memory to duplicate.
  * @param   cb      The amount of memory to duplicate.
  * @param   pszTag  Allocation tag used for statistics and such.
+ * @param   SRC_POS The source position where call is being made from.  Use
+ *                  RT_SRC_POS when possible.  Optional.
  */
 RTDECL(void *) RTMemEfDup(const void *pvSrc, size_t cb, const char *pszTag, RT_SRC_POS_DECL) RT_NO_THROW_PROTO;
 
@@ -733,6 +747,8 @@ RTDECL(void *) RTMemEfDup(const void *pvSrc, size_t cb, const char *pszTag, RT_S
  * @param   cbSrc   The amount of memory to duplicate.
  * @param   cbExtra The amount of extra memory to allocate and zero.
  * @param   pszTag  Allocation tag used for statistics and such.
+ * @param   SRC_POS The source position where call is being made from.  Use
+ *                  RT_SRC_POS when possible.  Optional.
  */
 RTDECL(void *) RTMemEfDupEx(const void *pvSrc, size_t cbSrc, size_t cbExtra, const char *pszTag, RT_SRC_POS_DECL) RT_NO_THROW_PROTO;
 
@@ -744,6 +760,14 @@ RTDECL(void *) RTMemEfDupEx(const void *pvSrc, size_t cbSrc, size_t cbExtra, con
 /** @def RTMEMEF_NEW_AND_DELETE_OPERATORS
  * Defines the electric fence new and delete operators for a class when
  * RTMEM_WRAP_SOME_NEW_AND_DELETE_TO_EF is define.
+ */
+/** @def RTR0MEMEF_NEW_AND_DELETE_OPERATORS_IOKIT
+ * Defines the electric fence new and delete operators for an IOKit class when
+ * RTMEM_WRAP_SOME_NEW_AND_DELETE_TO_EF is define.
+ *
+ * This differs from RTMEMEF_NEW_AND_DELETE_OPERATORS in that the memory we
+ * allocate is initialized to zero.  It is also assuming we don't have nothrow
+ * variants and exceptions, so fewer variations.
  */
 #if defined(RTMEM_WRAP_SOME_NEW_AND_DELETE_TO_EF) && !defined(RTMEM_NO_WRAP_SOME_NEW_AND_DELETE_TO_EF)
 # if defined(RT_EXCEPTIONS_ENABLED)
@@ -835,8 +859,30 @@ RTDECL(void *) RTMemEfDupEx(const void *pvSrc, size_t cbSrc, size_t cbExtra, con
         \
         typedef int UsingElectricNewAndDeleteOperators
 # endif
+# define RTR0MEMEF_NEW_AND_DELETE_OPERATORS_IOKIT() \
+    void *operator new(size_t cb) \
+    { \
+        return RTMemEfAllocZ(cb, RTMEM_TAG, RT_SRC_POS); \
+    } \
+    void *operator new[](size_t cb) \
+    { \
+        return RTMemEfAllocZ(cb, RTMEM_TAG, RT_SRC_POS); \
+    } \
+    \
+    void operator delete(void *pv) \
+    { \
+        RTMemEfFree(pv, RT_SRC_POS); \
+    } \
+    void operator delete[](void *pv) \
+    { \
+        RTMemEfFree(pv, RT_SRC_POS); \
+    } \
+    \
+    typedef int UsingElectricNewAndDeleteOperators
 #else
 # define RTMEMEF_NEW_AND_DELETE_OPERATORS() \
+        typedef int UsingDefaultNewAndDeleteOperators
+# define RTR0MEMEF_NEW_AND_DELETE_OPERATORS_IOKIT() \
         typedef int UsingDefaultNewAndDeleteOperators
 #endif
 #ifdef DOXYGEN_RUNNING
@@ -846,7 +892,8 @@ RTDECL(void *) RTMemEfDupEx(const void *pvSrc, size_t cbSrc, size_t cbExtra, con
 /** @def RTMEM_WRAP_TO_EF_APIS
  * Define RTMEM_WRAP_TO_EF_APIS to wrap RTMem APIs to RTMemEf APIs.
  */
-#if defined(RTMEM_WRAP_TO_EF_APIS) && defined(IN_RING3) && !defined(RTMEM_NO_WRAP_TO_EF_APIS)
+#if defined(RTMEM_WRAP_TO_EF_APIS) && !defined(RTMEM_NO_WRAP_TO_EF_APIS) \
+ && ( defined(IN_RING3) || ( defined(IN_RING0) && !defined(IN_RING0_AGNOSTIC) && (defined(RT_OS_DARWIN) || 0) ) )
 # define RTMemTmpAllocTag(cb, pszTag)                   RTMemEfTmpAlloc((cb), (pszTag), RT_SRC_POS)
 # define RTMemTmpAllocZTag(cb, pszTag)                  RTMemEfTmpAllocZ((cb), (pszTag), RT_SRC_POS)
 # define RTMemTmpFree(pv)                               RTMemEfTmpFree((pv), RT_SRC_POS)
@@ -877,7 +924,7 @@ RTDECL(void *)  RTMemEfTmpAllocZNP(size_t cb, const char *pszTag) RT_NO_THROW_PR
 
 /**
  * Fenced drop-in replacement for RTMemTmpFreeTag.
- * @copydoc RTMemTmpFreeTag
+ * @copydoc RTMemTmpFree
  */
 RTDECL(void)    RTMemEfTmpFreeNP(void *pv) RT_NO_THROW_PROTO;
 
@@ -919,7 +966,7 @@ RTDECL(void)    RTMemEfFreeNP(void *pv) RT_NO_THROW_PROTO;
 
 /**
  * Fenced drop-in replacement for RTMemDupExTag.
- * @copydoc RTMemDupExTag
+ * @copydoc RTMemDupTag
  */
 RTDECL(void *) RTMemEfDupNP(const void *pvSrc, size_t cb, const char *pszTag) RT_NO_THROW_PROTO;
 

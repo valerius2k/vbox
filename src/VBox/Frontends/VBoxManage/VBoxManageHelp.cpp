@@ -682,6 +682,7 @@ void printUsage(USAGECATEGORY fCategory, uint32_t fSubCategory, PRTSTREAM pStrm)
                      "                            [--triplefaultreset on|off]\n"
                      "                            [--paravirtprovider none|default|legacy|minimal|\n"
                      "                                                hyperv|kvm]\n"
+                     "                            [--paravirtdebug <key=value> [,<key=value> ...]]\n"
                      "                            [--hwvirtex on|off]\n"
                      "                            [--nestedpaging on|off]\n"
                      "                            [--largepages on|off]\n"
@@ -890,7 +891,7 @@ void printUsage(USAGECATEGORY fCategory, uint32_t fSubCategory, PRTSTREAM pStrm)
                      "                            [--videocapfps <fps>]\n"
                      "                            [--videocapmaxtime <ms>]\n"
                      "                            [--videocapmaxsize <MB>]\n"
-                     "                            [--videocapopts <key=value> [<key=value> ...]]\n"
+                     "                            [--videocapopts <key=value> [,<key=value> ...]]\n"
 #endif
                      "                            [--defaultfrontend default|<name>]\n"
                      "\n");
@@ -1081,9 +1082,9 @@ void printUsage(USAGECATEGORY fCategory, uint32_t fSubCategory, PRTSTREAM pStrm)
         RTStrmPrintf(pStrm,
                            "%s storagectl %s      <uuid|vmname>\n"
                      "                            --name <name>\n"
-                     "                            [--add ide|sata|scsi|floppy|sas]\n"
+                     "                            [--add ide|sata|scsi|floppy|sas|pcie]\n"
                      "                            [--controller LSILogic|LSILogicSAS|BusLogic|\n"
-                     "                                          IntelAHCI|PIIX3|PIIX4|ICH6|I82078]\n"
+                     "                                          IntelAHCI|PIIX3|PIIX4|ICH6|I82078|NVMe]\n"
                      "                            [--portcount <1-n>]\n"
                      "                            [--hostiocache on|off]\n"
                      "                            [--bootable on|off]\n"

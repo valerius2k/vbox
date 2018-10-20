@@ -500,7 +500,7 @@ int VBoxVHWAGlShaderComponent::init()
     QTextStream is(&fi);
     QString program = is.readAll();
 
-    mSource = program.toAscii();
+    mSource = program.toUtf8();
 
     mInitialized = true;
     return VINF_SUCCESS;
@@ -718,7 +718,7 @@ int VBoxVHWAGlProgram::init()
         vboxglGetProgramInfoLog(mProgram, 16300, NULL, pBuf);
         VBOXQGLLOG(("link log: %s\n", pBuf));
         Assert(linked);
-        delete pBuf;
+        delete[] pBuf;
 #endif
 
         if(linked)
@@ -3665,7 +3665,11 @@ void VBoxVHWAImage::vboxDoUpdateViewport(const QRect & aRect)
 
     const OverlayList & overlays = mDisplay.overlays();
     QRect overInter = overlaysRectIntersection();
+#if QT_VERSION >= 0x050000
+    overInter = overInter.intersected(aRect);
+#else /* QT_VERSION < 0x050000 */
     overInter = overInter.intersect(aRect);
+#endif /* QT_VERSION < 0x050000 */
 
     bool bDisplayPrimary = true;
 

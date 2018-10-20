@@ -742,7 +742,7 @@ static DECLCALLBACK(int) patmSavePatchState(PAVLOU32NODECORE pNode, void *pvUser
  * Execute state save operation.
  *
  * @returns VBox status code.
- * @param   pVM             Pointer to the VM.
+ * @param   pVM             The cross context VM structure.
  * @param   pSSM            SSM operation handle.
  */
 DECLCALLBACK(int) patmR3Save(PVM pVM, PSSMHANDLE pSSM)
@@ -811,7 +811,7 @@ DECLCALLBACK(int) patmR3Save(PVM pVM, PSSMHANDLE pSSM)
  * Execute state load operation.
  *
  * @returns VBox status code.
- * @param   pVM             Pointer to the VM.
+ * @param   pVM             The cross context VM structure.
  * @param   pSSM            SSM operation handle.
  * @param   uVersion        Data layout version.
  * @param   uPass           The data pass.
@@ -822,6 +822,7 @@ DECLCALLBACK(int) patmR3Load(PVM pVM, PSSMHANDLE pSSM, uint32_t uVersion, uint32
     int  rc;
 
     if (    uVersion != PATM_SAVED_STATE_VERSION
+        &&  uVersion != PATM_SAVED_STATE_VERSION_NO_RAW_MEM
         &&  uVersion != PATM_SAVED_STATE_VERSION_MEM
         &&  uVersion != PATM_SAVED_STATE_VERSION_FIXUP_HACK
         &&  uVersion != PATM_SAVED_STATE_VERSION_VER16
@@ -1111,7 +1112,7 @@ DECLCALLBACK(int) patmR3Load(PVM pVM, PSSMHANDLE pSSM, uint32_t uVersion, uint32
  * Correct fixups to predefined hypervisor PATM regions. (their addresses might have changed)
  *
  * @returns VBox status code.
- * @param   pVM             Pointer to the VM.
+ * @param   pVM             The cross context VM structure.
  * @param   uVersion        Saved state version.
  * @param   patmInfo        Saved PATM structure
  * @param   pPatch          Patch record

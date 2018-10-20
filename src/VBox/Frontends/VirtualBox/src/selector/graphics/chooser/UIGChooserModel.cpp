@@ -4,7 +4,7 @@
  */
 
 /*
- * Copyright (C) 2012-2013 Oracle Corporation
+ * Copyright (C) 2012-2015 Oracle Corporation
  *
  * This file is part of VirtualBox Open Source Edition (OSE), as
  * available from http://www.virtualbox.org. This file is free software;
@@ -28,6 +28,7 @@
 # include <QPropertyAnimation>
 # include <QScrollBar>
 # include <QTimer>
+# include <QDrag>
 
 /* GUI includes: */
 # include "UIGChooser.h"
@@ -52,11 +53,12 @@
 
 #endif /* !VBOX_WITH_PRECOMPILED_HEADERS */
 
+/* Qt includes: */
 #include <QParallelAnimationGroup>
-
 
 /* Type defs: */
 typedef QSet<QString> UIStringSet;
+
 
 UIGChooserModel::UIGChooserModel(UIGChooser *pParent)
     : QObject(pParent)
@@ -882,7 +884,7 @@ void UIGChooserModel::sltCreateNewMachine()
         strGroupName = pGroup->fullName();
 
     /* Prepare the new VM wizard: */
-    UISafePointerWizardNewVM pWizard = new UIWizardNewVM(&vboxGlobal().selectorWnd(), strGroupName);
+    UISafePointerWizardNewVM pWizard = new UIWizardNewVM(m_pChooser->selector(), strGroupName);
     pWizard->prepare();
 
     /* Execute wizard and store created VM Id
@@ -1099,9 +1101,10 @@ void UIGChooserModel::sltStartScrolling()
     QGraphicsView *pView = scene()->views()[0];
     QScrollBar *pVerticalScrollBar = pView->verticalScrollBar();
 
-    /* Request still valid? */
+    /* Convert mouse position to view co-ordinates: */
     QPoint mousePos = pView->mapFromGlobal(QCursor::pos());
-    if (mousePos.y() < m_iScrollingTokenSize)
+    /* Mouse position is at the top of view? */
+    if (mousePos.y() < m_iScrollingTokenSize && mousePos.y() > 0)
     {
         int iValue = mousePos.y();
         if (!iValue) iValue = 1;
@@ -1114,7 +1117,8 @@ void UIGChooserModel::sltStartScrolling()
             QTimer::singleShot(10, this, SLOT(sltStartScrolling()));
         }
     }
-    else if (mousePos.y() > pView->height() - m_iScrollingTokenSize)
+    /* Mouse position is at the bottom of view? */
+    else if (mousePos.y() > pView->height() - m_iScrollingTokenSize && mousePos.y() < pView->height())
     {
         int iValue = pView->height() - mousePos.y();
         if (!iValue) iValue = 1;
@@ -1379,9 +1383,12 @@ bool UIGChooserModel::eventFilter(QObject *pWatched, QEvent *pEvent)
         /* Context-menu handler: */
         case QEvent::GraphicsSceneContextMenu:
             return processContextMenuEvent(static_cast<QGraphicsSceneContextMenuEvent*>(pEvent));
-        /* Drag&drop scroll-event handler: */
+        /* Drag&drop scroll-event (drag-move) handler: */
         case QEvent::GraphicsSceneDragMove:
             return processDragMoveEvent(static_cast<QGraphicsSceneDragDropEvent*>(pEvent));
+        /* Drag&drop scroll-event (drag-leave) handler: */
+        case QEvent::GraphicsSceneDragLeave:
+            return processDragLeaveEvent(static_cast<QGraphicsSceneDragDropEvent*>(pEvent));
     }
 
     /* Call to base-class: */
@@ -1684,6 +1691,19 @@ bool UIGChooserModel::processDragMoveEvent(QGraphicsSceneDragDropEvent *pEvent)
     return false;
 }
 
+bool UIGChooserModel::processDragLeaveEvent(QGraphicsSceneDragDropEvent *pEvent)
+{
+    /* Event object is not required here: */
+    Q_UNUSED(pEvent);
+
+    /* Make sure to stop scrolling as drag-leave event happened: */
+    if (m_fIsScrollingInProgress)
+        m_fIsScrollingInProgress = false;
+
+    /* Pass event: */
+    return false;
+}
+
 void UIGChooserModel::loadGroupTree()
 {
     /* Add all the approved machines we have into the group-tree: */
@@ -1705,27 +1725,27 @@ void UIGChooserModel::addMachineIntoTheTree(const CMachine &machine, bool fMakeI
     AssertReturnVoid(!machine.isNull());
 
     /* Which VM we are loading: */
-    LogRelFlow(("UIGChooserModel: Loading VM with ID={%s}...\n", machine.GetId().toAscii().constData()));
+    LogRelFlow(("UIGChooserModel: Loading VM with ID={%s}...\n", machine.GetId().toUtf8().constData()));
     /* Is that machine accessible? */
     if (machine.GetAccessible())
     {
         /* VM is accessible: */
         QString strName = machine.GetName();
-        LogRelFlow(("UIGChooserModel:  VM {%s} is accessible.\n", strName.toAscii().constData()));
+        LogRelFlow(("UIGChooserModel:  VM {%s} is accessible.\n", strName.toUtf8().constData()));
         /* Which groups passed machine attached to? */
         QVector<QString> groups = machine.GetGroups();
         QStringList groupList = groups.toList();
         QString strGroups = groupList.join(", ");
-        LogRelFlow(("UIGChooserModel:  VM {%s} has groups: {%s}.\n", strName.toAscii().constData(),
-                                                                     strGroups.toAscii().constData()));
+        LogRelFlow(("UIGChooserModel:  VM {%s} has groups: {%s}.\n", strName.toUtf8().constData(),
+                                                                     strGroups.toUtf8().constData()));
         foreach (QString strGroup, groups)
         {
             /* Remove last '/' if any: */
             if (strGroup.right(1) == "/")
                 strGroup.truncate(strGroup.size() - 1);
             /* Create machine-item with found group-item as parent: */
-            LogRelFlow(("UIGChooserModel:   Creating item for VM {%s} in group {%s}.\n", strName.toAscii().constData(),
-                                                                                         strGroup.toAscii().constData()));
+            LogRelFlow(("UIGChooserModel:   Creating item for VM {%s} in group {%s}.\n", strName.toUtf8().constData(),
+                                                                                         strGroup.toUtf8().constData()));
             createMachineItem(machine, getGroupItem(strGroup, mainRoot(), fMakeItVisible));
         }
         /* Update group definitions: */
@@ -1735,7 +1755,7 @@ void UIGChooserModel::addMachineIntoTheTree(const CMachine &machine, bool fMakeI
     else
     {
         /* VM is accessible: */
-        LogRelFlow(("UIGChooserModel:  VM {%s} is inaccessible.\n", machine.GetId().toAscii().constData()));
+        LogRelFlow(("UIGChooserModel:  VM {%s} is inaccessible.\n", machine.GetId().toUtf8().constData()));
         /* Create machine-item with main-root group-item as parent: */
         createMachineItem(machine, mainRoot());
     }

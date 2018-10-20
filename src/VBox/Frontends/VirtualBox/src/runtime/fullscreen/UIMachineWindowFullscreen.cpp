@@ -20,7 +20,6 @@
 #else  /* !VBOX_WITH_PRECOMPILED_HEADERS */
 
 /* Qt includes: */
-# include <QDesktopWidget>
 # include <QMenu>
 # include <QTimer>
 
@@ -66,7 +65,7 @@ void UIMachineWindowFullscreen::handleNativeNotification(const QString &strNativ
 
     /* Log all arrived notifications: */
     LogRel(("UIMachineWindowFullscreen::handleNativeNotification: Notification '%s' received.\n",
-            strNativeNotificationName.toAscii().constData()));
+            strNativeNotificationName.toLatin1().constData()));
 
     /* Handle 'NSWindowWillEnterFullScreenNotification' notification: */
     if (strNativeNotificationName == "NSWindowWillEnterFullScreenNotification")
@@ -82,6 +81,8 @@ void UIMachineWindowFullscreen::handleNativeNotification(const QString &strNativ
         m_fIsInFullscreenTransition = false;
         LogRel(("UIMachineWindowFullscreen::handleNativeNotification: "
                 "Native fullscreen mode entered, notifying listener...\n"));
+        /* Update console's display viewport and 3D overlay: */
+        machineView()->updateViewport();
         emit sigNotifyAboutNativeFullscreenDidEnter();
     }
     /* Handle 'NSWindowWillExitFullScreenNotification' notification: */
@@ -98,6 +99,8 @@ void UIMachineWindowFullscreen::handleNativeNotification(const QString &strNativ
         m_fIsInFullscreenTransition = false;
         LogRel(("UIMachineWindowFullscreen::handleNativeNotification: "
                 "Native fullscreen mode exited, notifying listener...\n"));
+        /* Update console's display viewport and 3D overlay: */
+        machineView()->updateViewport();
         emit sigNotifyAboutNativeFullscreenDidExit();
     }
     /* Handle 'NSWindowDidFailToEnterFullScreenNotification' notification: */
@@ -312,19 +315,19 @@ void UIMachineWindowFullscreen::placeOnScreen()
     /* Get corresponding host-screen: */
     const int iHostScreen = qobject_cast<UIMachineLogicFullscreen*>(machineLogic())->hostScreenForGuestScreen(m_uScreenId);
     /* And corresponding working area: */
-    const QRect workingArea = QApplication::desktop()->screenGeometry(iHostScreen);
+    const QRect workingArea = vboxGlobal().screenGeometry(iHostScreen);
 
 #if   defined(Q_WS_WIN) || defined(Q_WS_PM) || defined(Q_WS_X11)
     /* Set appropriate geometry for window: */
-    move(workingArea.topLeft());
     resize(workingArea.size());
+    move(workingArea.topLeft());
 
     /* If there is a mini-toolbar: */
     if (m_pMiniToolBar)
     {
         /* Set appropriate geometry for mini-toolbar: */
-        m_pMiniToolBar->move(workingArea.topLeft());
         m_pMiniToolBar->resize(workingArea.size());
+        m_pMiniToolBar->move(workingArea.topLeft());
     }
 #elif defined(Q_WS_MAC)
     /* Make sure this window has fullscreen logic: */

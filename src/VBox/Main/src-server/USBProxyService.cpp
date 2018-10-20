@@ -639,7 +639,7 @@ void USBProxyService::releaseDeviceCompleted(HostUSBDevice *aDevice, bool aSucce
 /**
  * Starts the service.
  *
- * @returns VBox status.
+ * @returns VBox status code.
  */
 int USBProxyService::start(void)
 {
@@ -677,7 +677,7 @@ int USBProxyService::start(void)
 /**
  * Stops the service.
  *
- * @returns VBox status.
+ * @returns VBox status code.
  */
 int USBProxyService::stop(void)
 {
@@ -788,7 +788,7 @@ int USBProxyService::wait(RTMSINTERVAL aMillies)
  *
  * The default implementation in USBProxyService just a dummy stub.
  *
- * @returns VBox status.
+ * @returns VBox status code.
  */
 int USBProxyService::interruptWait(void)
 {
@@ -1220,8 +1220,8 @@ USBProxyService::initFilterFromDevice(PUSBFILTER aFilter, HostUSBDevice *aDevice
     vrc = USBFilterSetNumExact(aFilter, USBFILTERIDX_DEVICE_CLASS,      pDev->bDeviceClass,     true); AssertRC(vrc);
     vrc = USBFilterSetNumExact(aFilter, USBFILTERIDX_DEVICE_SUB_CLASS,  pDev->bDeviceSubClass,  true); AssertRC(vrc);
     vrc = USBFilterSetNumExact(aFilter, USBFILTERIDX_DEVICE_PROTOCOL,   pDev->bDeviceProtocol,  true); AssertRC(vrc);
-    vrc = USBFilterSetNumExact(aFilter, USBFILTERIDX_PORT,              pDev->bPort,            true); AssertRC(vrc);
-    vrc = USBFilterSetNumExact(aFilter, USBFILTERIDX_BUS,               pDev->bBus,             true); AssertRC(vrc);
+    vrc = USBFilterSetNumExact(aFilter, USBFILTERIDX_PORT,              pDev->bPort,            false); AssertRC(vrc);
+    vrc = USBFilterSetNumExact(aFilter, USBFILTERIDX_BUS,               pDev->bBus,             false); AssertRC(vrc);
     if (pDev->pszSerialNumber)
     {
         vrc = USBFilterSetStringExact(aFilter, USBFILTERIDX_SERIAL_NUMBER_STR, pDev->pszSerialNumber, true);

@@ -1304,8 +1304,8 @@ int Display::i_handleSetVisibleRegion(uint32_t cRect, PRTRECT pRect)
     {
         DISPLAYFBINFO *pFBInfo = &maFramebuffers[uScreenId];
 
-        if (  !pFBInfo->pFramebuffer.isNull()
-            & RT_BOOL(pFBInfo->u32Caps & FramebufferCapabilities_VisibleRegion))
+        if (   !pFBInfo->pFramebuffer.isNull()
+            && RT_BOOL(pFBInfo->u32Caps & FramebufferCapabilities_VisibleRegion))
         {
             /* Prepare a new array of rectangles which intersect with the framebuffer.
              */
@@ -4105,7 +4105,7 @@ DECLCALLBACK(void *)  Display::i_drvQueryInterface(PPDMIBASE pInterface, const c
 /**
  * Destruct a display driver instance.
  *
- * @returns VBox status.
+ * @returns VBox status code.
  * @param   pDrvIns     The driver instance data.
  */
 DECLCALLBACK(void) Display::i_drvDestruct(PPDMDRVINS pDrvIns)

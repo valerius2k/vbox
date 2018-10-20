@@ -84,11 +84,13 @@ protected:
 
     int i_cancelOperation(void);
     int i_sendData(PSENDDATACTX pCtx, RTMSINTERVAL msTimeout);
-    int i_sendDirectory(PSENDDATACTX pCtx, GuestDnDMsg *pMsg, DnDURIObject *pObject);
-    int i_sendFile(PSENDDATACTX pCtx, GuestDnDMsg *pMsg, DnDURIObject *pObject);
-    int i_sendFileData(PSENDDATACTX pCtx, GuestDnDMsg *pMsg, DnDURIObject *pObject);
-    int i_sendURIData(PSENDDATACTX pCtx, RTMSINTERVAL msTimeout);
+    int i_sendDataBody(PSENDDATACTX pCtx, GuestDnDData *pData);
+    int i_sendDataHeader(PSENDDATACTX pCtx, GuestDnDData *pData, GuestDnDURIData *pURIData /* = NULL */);
+    int i_sendDirectory(PSENDDATACTX pCtx, GuestDnDURIObjCtx *pObjCtx, GuestDnDMsg *pMsg);
+    int i_sendFile(PSENDDATACTX pCtx, GuestDnDURIObjCtx *pObjCtx, GuestDnDMsg *pMsg);
+    int i_sendFileData(PSENDDATACTX pCtx, GuestDnDURIObjCtx *pObjCtx, GuestDnDMsg *pMsg);
     int i_sendRawData(PSENDDATACTX pCtx, RTMSINTERVAL msTimeout);
+    int i_sendURIData(PSENDDATACTX pCtx, RTMSINTERVAL msTimeout);
     int i_sendURIDataLoop(PSENDDATACTX pCtx, GuestDnDMsg *pMsg);
 
 protected:
@@ -99,6 +101,8 @@ protected:
         /** Maximum data block size (in bytes) the target can handle. */
         uint32_t mcbBlockSize;
     } mData;
+
+    friend class SendDataTask;
 };
 
 #endif /* !____H_GUESTDNDTARGETIMPL */

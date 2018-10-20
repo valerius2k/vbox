@@ -18,6 +18,9 @@
 #ifndef ___UIConsoleEventHandler_h___
 #define ___UIConsoleEventHandler_h___
 
+/* Qt includes: */
+#include <QObject>
+
 /* COM includes: */
 #include "COMEnums.h"
 #include "CEventListener.h"
@@ -28,6 +31,7 @@
 
 /* Forward declarations: */
 class UISession;
+
 
 /** Active event handler singleton for the CConsole event-source. */
 class UIConsoleEventHandler: public QObject
@@ -48,6 +52,8 @@ signals:
     void sigAdditionsChange();
     /** Notifies about network @a adapter state change. */
     void sigNetworkAdapterChange(CNetworkAdapter adapter);
+    /** Notifies about storage device change for @a attachment, which was @a fRemoved and it was @a fSilent for guest. */
+    void sigStorageDeviceChange(CMediumAttachment attachment, bool fRemoved, bool fSilent);
     /** Notifies about storage medium @a attachment state change. */
     void sigMediumChange(CMediumAttachment attachment);
     /** Notifies about VRDE device state change. */

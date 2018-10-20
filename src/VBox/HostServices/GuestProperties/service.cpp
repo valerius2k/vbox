@@ -58,6 +58,9 @@
 #include <string>
 #include <list>
 
+/** @todo Delete the old !ASYNC_HOST_NOTIFY code and remove this define. */
+#define ASYNC_HOST_NOTIFY
+
 namespace guestProp {
 
 /**
@@ -286,10 +289,14 @@ public:
         , mpvHostData(NULL)
         , mPrevTimestamp(0)
         , mcTimestampAdjustments(0)
+#ifdef ASYNC_HOST_NOTIFY
+        , mhThreadNotifyHost(NIL_RTTHREAD)
+        , mhReqQNotifyHost(NIL_RTREQQUEUE)
+#endif
     { }
 
     /**
-     * @copydoc VBOXHGCMSVCHELPERS::pfnUnload
+     * @interface_method_impl{VBOXHGCMSVCFNTABLE,pfnUnload}
      * Simply deletes the service object
      */
     static DECLCALLBACK(int) svcUnload(void *pvService)
@@ -304,7 +311,7 @@ public:
     }
 
     /**
-     * @copydoc VBOXHGCMSVCHELPERS::pfnConnect
+     * @interface_method_impl{VBOXHGCMSVCFNTABLE,pfnConnect}
      * Stub implementation of pfnConnect and pfnDisconnect.
      */
     static DECLCALLBACK(int) svcConnectDisconnect(void * /* pvService */,
@@ -315,7 +322,7 @@ public:
     }
 
     /**
-     * @copydoc VBOXHGCMSVCHELPERS::pfnCall
+     * @interface_method_impl{VBOXHGCMSVCFNTABLE,pfnCall}
      * Wraps to the call member function
      */
     static DECLCALLBACK(void) svcCall(void * pvService,
@@ -334,7 +341,7 @@ public:
     }
 
     /**
-     * @copydoc VBOXHGCMSVCHELPERS::pfnHostCall
+     * @interface_method_impl{VBOXHGCMSVCFNTABLE,pfnHostCall}
      * Wraps to the hostCall member function
      */
     static DECLCALLBACK(int) svcHostCall(void *pvService,
@@ -351,7 +358,7 @@ public:
     }
 
     /**
-     * @copydoc VBOXHGCMSVCHELPERS::pfnRegisterExtension
+     * @interface_method_impl{VBOXHGCMSVCFNTABLE,pfnRegisterExtension}
      * Installs a host callback for notifications of property changes.
      */
     static DECLCALLBACK(int) svcRegisterExtension(void *pvService,
@@ -364,6 +371,10 @@ public:
         pSelf->mpvHostData = pvExtension;
         return VINF_SUCCESS;
     }
+
+#ifdef ASYNC_HOST_NOTIFY
+    int initialize();
+#endif
 
 private:
     static DECLCALLBACK(int) reqThreadFn(RTTHREAD ThreadSelf, void *pvUser);
@@ -391,6 +402,14 @@ private:
     int uninit();
     void dbgInfoShow(PCDBGFINFOHLP pHlp);
     static DECLCALLBACK(void) dbgInfo(void *pvUser, PCDBGFINFOHLP pHlp, const char *pszArgs);
+
+#ifdef ASYNC_HOST_NOTIFY
+    /* Thread for handling host notifications. */
+    RTTHREAD mhThreadNotifyHost;
+    /* Queue for handling requests for notifications. */
+    RTREQQUEUE mhReqQNotifyHost;
+    static DECLCALLBACK(int) threadNotifyHost(RTTHREAD self, void *pvUser);
+#endif
 };
 
 
@@ -1207,6 +1226,18 @@ int Service::doNotifications(const char *pszProperty, uint64_t u64Timestamp)
     return rc;
 }
 
+#ifdef ASYNC_HOST_NOTIFY
+static DECLCALLBACK(void) notifyHostAsyncWorker(PFNHGCMSVCEXT pfnHostCallback,
+                                                void *pvHostData,
+                                                HOSTCALLBACKDATA *pHostCallbackData)
+{
+    pfnHostCallback(pvHostData, 0 /*u32Function*/,
+                   (void *)pHostCallbackData,
+                   sizeof(HOSTCALLBACKDATA));
+    RTMemFree(pHostCallbackData);
+}
+#endif
+
 /**
  * Notify the service owner that a property has been added/deleted/changed.
  * @returns  IPRT status value
@@ -1220,6 +1251,52 @@ int Service::notifyHost(const char *pszName, const char *pszValue,
 {
     LogFlowFunc(("pszName=%s, pszValue=%s, u64Timestamp=%llu, pszFlags=%s\n",
                  pszName, pszValue, u64Timestamp, pszFlags));
+#ifdef ASYNC_HOST_NOTIFY
+    int rc = VINF_SUCCESS;
+
+    /* Allocate buffer for the callback data and strings. */
+    size_t cbName = pszName? strlen(pszName): 0;
+    size_t cbValue = pszValue? strlen(pszValue): 0;
+    size_t cbFlags = pszFlags? strlen(pszFlags): 0;
+    size_t cbAlloc = sizeof(HOSTCALLBACKDATA) + cbName + cbValue + cbFlags + 3;
+    HOSTCALLBACKDATA *pHostCallbackData = (HOSTCALLBACKDATA *)RTMemAlloc(cbAlloc);
+    if (pHostCallbackData)
+    {
+        uint8_t *pu8 = (uint8_t *)pHostCallbackData;
+        pu8 += sizeof(HOSTCALLBACKDATA);
+
+        pHostCallbackData->u32Magic     = HOSTCALLBACKMAGIC;
+
+        pHostCallbackData->pcszName     = (const char *)pu8;
+        memcpy(pu8, pszName, cbName);
+        pu8 += cbName;
+        *pu8++ = 0;
+
+        pHostCallbackData->pcszValue    = (const char *)pu8;
+        memcpy(pu8, pszValue, cbValue);
+        pu8 += cbValue;
+        *pu8++ = 0;
+
+        pHostCallbackData->u64Timestamp = u64Timestamp;
+
+        pHostCallbackData->pcszFlags    = (const char *)pu8;
+        memcpy(pu8, pszFlags, cbFlags);
+        pu8 += cbFlags;
+        *pu8++ = 0;
+
+        rc = RTReqQueueCallEx(mhReqQNotifyHost, NULL, 0, RTREQFLAGS_VOID | RTREQFLAGS_NO_WAIT,
+                              (PFNRT)notifyHostAsyncWorker, 3,
+                              mpfnHostCallback, mpvHostData, pHostCallbackData);
+        if (RT_FAILURE(rc))
+        {
+            RTMemFree(pHostCallbackData);
+        }
+    }
+    else
+    {
+        rc = VERR_NO_MEMORY;
+    }
+#else
     HOSTCALLBACKDATA HostCallbackData;
     HostCallbackData.u32Magic     = HOSTCALLBACKMAGIC;
     HostCallbackData.pcszName     = pszName;
@@ -1229,6 +1306,7 @@ int Service::notifyHost(const char *pszName, const char *pszValue,
     int rc = mpfnHostCallback(mpvHostData, 0 /*u32Function*/,
                               (void *)(&HostCallbackData),
                               sizeof(HostCallbackData));
+#endif
     LogFlowFunc(("returning rc=%Rrc\n", rc));
     return rc;
 }
@@ -1236,7 +1314,7 @@ int Service::notifyHost(const char *pszName, const char *pszValue,
 
 /**
  * Handle an HGCM service call.
- * @copydoc VBOXHGCMSVCFNTABLE::pfnCall
+ * @interface_method_impl{VBOXHGCMSVCFNTABLE,pfnCall}
  * @note    All functions which do not involve an unreasonable delay will be
  *          handled synchronously.  If needed, we will add a request handler
  *          thread in future for those which do.
@@ -1354,7 +1432,7 @@ void Service::dbgInfo(void *pvUser, PCDBGFINFOHLP pHlp, const char *pszArgs)
 
 /**
  * Service call handler for the host.
- * @copydoc VBOXHGCMSVCFNTABLE::pfnHostCall
+ * @interface_method_impl{VBOXHGCMSVCFNTABLE,pfnHostCall}
  * @thread  hgcm
  */
 int Service::hostCall (uint32_t eFunction, uint32_t cParms, VBOXHGCMSVCPARM paParms[])
@@ -1439,8 +1517,85 @@ int Service::hostCall (uint32_t eFunction, uint32_t cParms, VBOXHGCMSVCPARM paPa
     return rc;
 }
 
+#ifdef ASYNC_HOST_NOTIFY
+/* static */
+DECLCALLBACK(int) Service::threadNotifyHost(RTTHREAD self, void *pvUser)
+{
+    Service *pThis = (Service *)pvUser;
+    int rc = VINF_SUCCESS;
+
+    LogFlowFunc(("ENTER: %p\n", pThis));
+
+    for (;;)
+    {
+        rc = RTReqQueueProcess(pThis->mhReqQNotifyHost, RT_INDEFINITE_WAIT);
+
+        AssertMsg(rc == VWRN_STATE_CHANGED,
+                  ("Left RTReqProcess and error code is not VWRN_STATE_CHANGED rc=%Rrc\n",
+                   rc));
+        if (rc == VWRN_STATE_CHANGED)
+        {
+            break;
+        }
+    }
+
+    LogFlowFunc(("LEAVE: %Rrc\n", rc));
+    return rc;
+}
+
+static DECLCALLBACK(int) wakeupNotifyHost(void)
+{
+    /* Returning a VWRN_* will cause RTReqQueueProcess return. */
+    return VWRN_STATE_CHANGED;
+}
+
+int Service::initialize()
+{
+    /* The host notification thread and queue. */
+    int rc = RTReqQueueCreate(&mhReqQNotifyHost);
+    if (RT_SUCCESS(rc))
+    {
+        rc = RTThreadCreate(&mhThreadNotifyHost,
+                            threadNotifyHost,
+                            this,
+                            0 /* default stack size */,
+                            RTTHREADTYPE_DEFAULT,
+                            RTTHREADFLAGS_WAITABLE,
+                            "GSTPROPNTFY");
+    }
+
+    if (RT_FAILURE(rc))
+    {
+        if (mhReqQNotifyHost != NIL_RTREQQUEUE)
+        {
+            RTReqQueueDestroy(mhReqQNotifyHost);
+            mhReqQNotifyHost = NIL_RTREQQUEUE;
+        }
+    }
+
+    return rc;
+}
+#endif
+
 int Service::uninit()
 {
+#ifdef ASYNC_HOST_NOTIFY
+    if (mhReqQNotifyHost != NIL_RTREQQUEUE)
+    {
+        /* Stop the thread */
+        PRTREQ pReq;
+        int rc = RTReqQueueCall(mhReqQNotifyHost, &pReq, 10000, (PFNRT)wakeupNotifyHost, 0);
+        if (RT_SUCCESS(rc))
+            RTReqRelease(pReq);
+        rc = RTThreadWait(mhThreadNotifyHost, 10000, NULL);
+        AssertRC(rc);
+        rc = RTReqQueueDestroy(mhReqQNotifyHost);
+        AssertRC(rc);
+        mhReqQNotifyHost = NIL_RTREQQUEUE;
+        mhThreadNotifyHost = NIL_RTTHREAD;
+    }
+#endif
+
     return VINF_SUCCESS;
 }
 
@@ -1500,6 +1655,15 @@ extern "C" DECLCALLBACK(DECLEXPORT(int)) VBoxHGCMSvcLoad (VBOXHGCMSVCFNTABLE *pt
 
                 /* Service specific initialization. */
                 ptable->pvService = pService;
+
+#ifdef ASYNC_HOST_NOTIFY
+                rc = pService->initialize();
+                if (RT_FAILURE(rc))
+                {
+                    delete pService;
+                    pService = NULL;
+                }
+#endif
             }
             else
                 Assert(!pService);

@@ -33,6 +33,7 @@ PACKAGE=VBoxGuestAdditions
 LOG="/var/log/vboxadd-install.log"
 MODPROBE=/sbin/modprobe
 OLDMODULES="vboxguest vboxadd vboxsf vboxvfs vboxvideo"
+SCRIPTNAME=vboxadd.sh
 
 if $MODPROBE -c 2>/dev/null | grep -q '^allow_unsupported_modules  *0'; then
   MODPROBE="$MODPROBE --allow-unsupported-modules"
@@ -57,100 +58,26 @@ for i in $lib_candidates; do
   fi
 done
 
-if [ -f /etc/redhat-release ]; then
-    system=redhat
-elif [ -f /etc/SuSE-release ]; then
-    system=suse
-elif [ -f /etc/gentoo-release ]; then
-    system=gentoo
-elif [ -f /etc/lfs-release -a -d /etc/rc.d/init.d ]; then
-    system=lfs
-else
-    system=other
+# Preamble for Gentoo
+if [ "`which $0`" = "/sbin/rc" ]; then
+    shift
 fi
 
-if [ "$system" = "redhat" ]; then
-    . /etc/init.d/functions
-    fail_msg() {
-        echo_failure
-        echo
-    }
-    succ_msg() {
-        echo_success
-        echo
-    }
-    begin() {
-        echo -n "$1"
-    }
-fi
+begin()
+{
+    test -n "${2}" && echo "${SCRIPTNAME}: ${1}."
+    logger -t "${SCRIPTNAME}" "${1}."
+}
 
-if [ "$system" = "suse" ]; then
-    . /etc/rc.status
-    fail_msg() {
-        rc_failed 1
-        rc_status -v
-    }
-    succ_msg() {
-        rc_reset
-        rc_status -v
-    }
-    begin() {
-        echo -n "$1"
-    }
-fi
-
-if [ "$system" = "gentoo" ]; then
-    if [ -f /sbin/functions.sh ]; then
-        . /sbin/functions.sh
-    elif [ -f /etc/init.d/functions.sh ]; then
-        . /etc/init.d/functions.sh
-    fi
-    fail_msg() {
-        eend 1
-    }
-    succ_msg() {
-        eend $?
-    }
-    begin() {
-        ebegin $1
-    }
-    if [ "`which $0`" = "/sbin/rc" ]; then
-        shift
-    fi
-fi
-
-if [ "$system" = "lfs" ]; then
-    . /etc/rc.d/init.d/functions
-    fail_msg() {
-        echo_failure
-    }
-    succ_msg() {
-        echo_ok
-    }
-    begin() {
-        echo $1
-    }
-fi
-
-if [ "$system" = "other" ]; then
-    fail_msg() {
-        echo " ...fail!"
-    }
-    succ_msg() {
-        echo " ...done."
-    }
-    begin() {
-        echo -n $1
-    }
-fi
+succ_msg()
+{
+    logger -t "${SCRIPTNAME}" "${1}."
+}
 
 show_error()
 {
-    if [ "$system" = "gentoo" ]; then
-        eerror $1
-    fi
-    fail_msg
-    echo "($1)"
+    echo "${SCRIPTNAME}: failed: ${1}." >&2
+    logger -t "${SCRIPTNAME}" "${1}."
 }
 
 fail()
@@ -164,38 +91,6 @@ userdev=/dev/vboxuser
 config=/var/lib/VBoxGuestAdditions/config
 owner=vboxadd
 group=1
-
-test_for_gcc_and_make()
-{
-    which make > /dev/null 2>&1 || printf "\nThe make utility was not found. If the following module compilation fails then\nthis could be the reason and you should try installing it.\n"
-    which gcc > /dev/null 2>&1 || printf "\nThe gcc utility was not found. If the following module compilation fails then\nthis could be the reason and you should try installing it.\n"
-}
-
-test_sane_kernel_dir()
-{
-    KERN_VER=`uname -r`
-    KERN_DIR="/lib/modules/$KERN_VER/build"
-    if [ -d "$KERN_DIR" ]; then
-        KERN_REL=`make -sC $KERN_DIR --no-print-directory kernelrelease 2>/dev/null || true`
-        if [ -z "$KERN_REL" -o "x$KERN_REL" = "x$KERN_VER" ]; then
-            return 0
-        fi
-    fi
-    printf "\nThe headers for the current running kernel were not found. If the following\nmodule compilation fails then this could be the reason.\n"
-    if [ "$system" = "redhat" ]; then
-        if echo "$KERN_VER" | grep -q "uek"; then
-            printf "The missing package can be probably installed with\nyum install kernel-uek-devel-$KERN_VER\n"
-        else
-            printf "The missing package can be probably installed with\nyum install kernel-devel-$KERN_VER\n"
-        fi
-    elif [ "$system" = "suse" ]; then
-        KERN_VER_SUSE=`echo "$KERN_VER" | sed 's/.*-\([^-]*\)/\1/g'`
-        KERN_VER_BASE=`echo "$KERN_VER" | sed 's/\(.*\)-[^-]*/\1/g'`
-        printf "The missing package can be probably installed with\nzypper install kernel-$KERN_VER_SUSE-devel-$KERN_VER_BASE\n"
-    elif [ "$system" = "debian" ]; then
-        printf "The missing package can be probably installed with\napt-get install linux-headers-$KERN_VER\n"
-    fi
-}
 
 running_vboxguest()
 {
@@ -267,7 +162,14 @@ do_vboxguest_non_udev()
 
 start()
 {
-    begin "Starting the VirtualBox Guest Additions ";
+    begin "Starting the VirtualBox Guest Additions" console;
+    if test -r $config; then
+      . $config
+    else
+      fail "Configuration file $config not found"
+    fi
+    test -n "$INSTALL_DIR" -a -n "$INSTALL_VER" ||
+      fail "Configuration file $config not complete"
     uname -r | grep -q -E '^2\.6|^3|^4' 2>/dev/null &&
         ps -A -o comm | grep -q '/*udevd$' 2>/dev/null ||
         no_udev=1
@@ -281,7 +183,9 @@ start()
         }
 
         $MODPROBE vboxguest >/dev/null 2>&1 || {
-            fail "modprobe vboxguest failed"
+            setup
+            $MODPROBE vboxguest >/dev/null 2>&1 ||
+                fail "modprobe vboxguest failed"
         }
         case "$no_udev" in 1)
             sleep .5;;
@@ -294,9 +198,8 @@ start()
     running_vboxsf || {
         $MODPROBE vboxsf > /dev/null 2>&1 || {
             if dmesg | grep "vboxConnect failed" > /dev/null 2>&1; then
-                fail_msg
-                echo "Unable to start shared folders support.  Make sure that your VirtualBox build"
-                echo "supports this feature."
+                show_error "Unable to start shared folders support.  Make sure that your VirtualBox build"
+                show_error "supports this feature."
                 exit 1
             fi
             fail "modprobe vboxsf failed"
@@ -317,7 +220,7 @@ start()
 
 stop()
 {
-    begin "Stopping VirtualBox Additions ";
+    begin "Stopping VirtualBox Additions" console;
     if ! umount -a -t vboxsf 2>/dev/null; then
         fail "Cannot unmount vboxsf folders"
     fi
@@ -343,12 +246,11 @@ restart()
 # from the kernel as they may still be in use
 cleanup_modules()
 {
-    if [ -n "$(which dkms 2>/dev/null)" ]; then
-        begin "Removing existing VirtualBox DKMS kernel modules"
-        $DODKMS uninstall $OLDMODULES > $LOG
-        succ_msg
-    fi
-    begin "Removing existing VirtualBox non-DKMS kernel modules"
+    begin "Removing existing VirtualBox kernel modules"
+    # We no longer support DKMS, remove any leftovers.
+    for i in vboxguest vboxadd vboxsf vboxvfs vboxvideo; do
+        rm -rf "/var/lib/dkms/${i}"*
+    done
     for i in $OLDMODULES; do
         find /lib/modules -name $i\* | xargs rm 2>/dev/null
     done
@@ -362,17 +264,6 @@ setup_modules()
     cleanup_modules
     begin "Building the VirtualBox Guest Additions kernel modules"
 
-    # Short cut out if a dkms build succeeds
-    if [ -n "$(which dkms 2>/dev/null)" ] &&
-       $DODKMS install vboxguest $INSTALL_VER >> $LOG 2>&1; then
-        succ_msg
-        return 0
-    fi
-
-    test_for_gcc_and_make
-    test_sane_kernel_dir
-
-    echo
     begin "Building the main Guest Additions module"
     if ! $BUILDINTMP \
         --save-module-symvers /tmp/vboxguest-Module.symvers \
@@ -400,10 +291,10 @@ setup_modules()
             --use-module-symvers /tmp/vboxguest-Module.symvers \
             --module-source $MODULE_SRC/vboxvideo \
             --no-print-directory install >> $LOG 2>&1; then
-            show_error "Look at $LOG to find out what went wrong"
-            return 1
+            show_error "Look at $LOG to find out what went wrong.  All other modules were built successfully."
+        else
+            succ_msg
         fi
-        succ_msg
     fi
     depmod
     return 0
@@ -478,6 +369,7 @@ extra_setup()
 # setup_script
 setup()
 {
+    begin "Building Guest Additions kernel modules" console
     if test -r $config; then
       . $config
     else
@@ -488,22 +380,24 @@ setup()
     export BUILD_TYPE
     export USERNAME
 
+    rm -f $LOG
     MODULE_SRC="$INSTALL_DIR/src/vboxguest-$INSTALL_VER"
     BUILDINTMP="$MODULE_SRC/build_in_tmp"
-    DODKMS="$MODULE_SRC/do_dkms"
     chcon -t bin_t "$BUILDINTMP" > /dev/null 2>&1
-    chcon -t bin_t "$DODKMS"     > /dev/null 2>&1
 
-    setup_modules
-    mod_succ="$?"
+    if setup_modules; then
+        mod_succ=0
+    else
+        mod_succ=1
+        show_error "Please check that you have gcc, make, the header files for your Linux kernel and possibly perl installed."
+    fi
     extra_setup
     if [ "$mod_succ" -eq "0" ]; then
         if running_vboxguest || running_vboxadd; then
-            printf "You should restart your guest to make sure the new modules are actually used\n\n"
-        else
-            start
+            begin "You should restart your guest to make sure the new modules are actually used" console
         fi
     fi
+    return "${mod_succ}"
 }
 
 # cleanup_script
@@ -513,9 +407,6 @@ cleanup()
       . $config
       test -n "$INSTALL_DIR" -a -n "$INSTALL_VER" ||
         fail "Configuration file $config not complete"
-      DODKMS="$INSTALL_DIR/src/vboxguest-$INSTALL_VER/do_dkms"
-    elif test -x ./do_dkms; then  # Executing as part of the installer...
-      DODKMS=./do_dkms
     else
       fail "Configuration file $config not found"
     fi
@@ -556,7 +447,7 @@ restart)
     restart
     ;;
 setup)
-    setup
+    setup && start
     ;;
 cleanup)
     cleanup

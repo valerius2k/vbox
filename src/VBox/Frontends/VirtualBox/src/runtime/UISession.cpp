@@ -81,9 +81,6 @@
 # include <QX11Info>
 # include <X11/Xlib.h>
 # include <X11/Xutil.h>
-# ifndef VBOX_WITHOUT_XCURSOR
-#  include <X11/Xcursor/Xcursor.h>
-# endif /* VBOX_WITHOUT_XCURSOR */
 #endif /* Q_WS_X11 */
 
 #ifdef VBOX_GUI_WITH_KEYS_RESET_HANDLER
@@ -779,6 +776,15 @@ void UISession::sltGuestMonitorChange(KGuestMonitorChangedEventType changeType, 
     emit sigGuestMonitorChange(changeType, uScreenId, screenGeo);
 }
 
+void UISession::sltHandleStorageDeviceChange(const CMediumAttachment &attachment, bool fRemoved, bool fSilent)
+{
+    /* Update action restrictions: */
+    updateActionRestrictions();
+
+    /* Notify listeners about storage device change: */
+    emit sigStorageDeviceChange(attachment, fRemoved, fSilent);
+}
+
 #ifdef RT_OS_DARWIN
 /**
  * MacOS X: Restarts display-reconfiguration watchdog timer from the beginning.
@@ -804,11 +810,8 @@ void UISession::sltCheckIfHostDisplayChanged()
 {
     LogRelFlow(("GUI: UISession::sltCheckIfHostDisplayChanged()\n"));
 
-    /* Acquire desktop wrapper: */
-    QDesktopWidget *pDesktop = QApplication::desktop();
-
     /* Check if display count changed: */
-    if (pDesktop->screenCount() != m_hostScreens.size())
+    if (vboxGlobal().screenCount() != m_hostScreens.size())
     {
         /* Reset watchdog: */
         m_pWatchdogDisplayChange->setProperty("tryNumber", 0);
@@ -818,9 +821,9 @@ void UISession::sltCheckIfHostDisplayChanged()
     else
     {
         /* Check if at least one display geometry changed: */
-        for (int iScreenIndex = 0; iScreenIndex < pDesktop->screenCount(); ++iScreenIndex)
+        for (int iScreenIndex = 0; iScreenIndex < vboxGlobal().screenCount(); ++iScreenIndex)
         {
-            if (pDesktop->screenGeometry(iScreenIndex) != m_hostScreens.at(iScreenIndex))
+            if (vboxGlobal().screenGeometry(iScreenIndex) != m_hostScreens.at(iScreenIndex))
             {
                 /* Reset watchdog: */
                 m_pWatchdogDisplayChange->setProperty("tryNumber", 0);
@@ -1062,83 +1065,8 @@ void UISession::prepareActions()
         /* Configure action-pool: */
         actionPool()->toRuntime()->setSession(this);
 
-        /* Get host: */
-        const CHost host = vboxGlobal().host();
-        UIExtraDataMetaDefs::RuntimeMenuViewActionType restrictionForView = UIExtraDataMetaDefs::RuntimeMenuViewActionType_Invalid;
-        UIExtraDataMetaDefs::RuntimeMenuDevicesActionType restrictionForDevices = UIExtraDataMetaDefs::RuntimeMenuDevicesActionType_Invalid;
-
-        /* VRDE server stuff: */
-        {
-            /* Initialize 'View' menu: */
-            const CVRDEServer server = machine().GetVRDEServer();
-            if (server.isNull())
-                restrictionForView = (UIExtraDataMetaDefs::RuntimeMenuViewActionType)(restrictionForView | UIExtraDataMetaDefs::RuntimeMenuViewActionType_VRDEServer);
-        }
-
-        /* Storage stuff: */
-        {
-            /* Initialize CD/FD menus: */
-            int iDevicesCountCD = 0;
-            int iDevicesCountFD = 0;
-            foreach (const CMediumAttachment &attachment, machine().GetMediumAttachments())
-            {
-                if (attachment.GetType() == KDeviceType_DVD)
-                    ++iDevicesCountCD;
-                if (attachment.GetType() == KDeviceType_Floppy)
-                    ++iDevicesCountFD;
-            }
-            QAction *pOpticalDevicesMenu = actionPool()->action(UIActionIndexRT_M_Devices_M_OpticalDevices);
-            QAction *pFloppyDevicesMenu = actionPool()->action(UIActionIndexRT_M_Devices_M_FloppyDevices);
-            pOpticalDevicesMenu->setData(iDevicesCountCD);
-            pFloppyDevicesMenu->setData(iDevicesCountFD);
-            if (!iDevicesCountCD)
-                restrictionForDevices = (UIExtraDataMetaDefs::RuntimeMenuDevicesActionType)(restrictionForDevices | UIExtraDataMetaDefs::RuntimeMenuDevicesActionType_OpticalDevices);
-            if (!iDevicesCountFD)
-                restrictionForDevices = (UIExtraDataMetaDefs::RuntimeMenuDevicesActionType)(restrictionForDevices | UIExtraDataMetaDefs::RuntimeMenuDevicesActionType_FloppyDevices);
-        }
-
-        /* Network stuff: */
-        {
-            /* Initialize Network menu: */
-            bool fAtLeastOneAdapterActive = false;
-            const KChipsetType chipsetType = machine().GetChipsetType();
-            ULONG uSlots = vboxGlobal().virtualBox().GetSystemProperties().GetMaxNetworkAdapters(chipsetType);
-            for (ULONG uSlot = 0; uSlot < uSlots; ++uSlot)
-            {
-                const CNetworkAdapter &adapter = machine().GetNetworkAdapter(uSlot);
-                if (adapter.GetEnabled())
-                {
-                    fAtLeastOneAdapterActive = true;
-                    break;
-                }
-            }
-            if (!fAtLeastOneAdapterActive)
-                restrictionForDevices = (UIExtraDataMetaDefs::RuntimeMenuDevicesActionType)(restrictionForDevices | UIExtraDataMetaDefs::RuntimeMenuDevicesActionType_Network);
-        }
-
-        /* USB stuff: */
-        {
-            /* Check whether there is at least one USB controller with an available proxy. */
-            const bool fUSBEnabled =    !machine().GetUSBDeviceFilters().isNull()
-                                     && !machine().GetUSBControllers().isEmpty()
-                                     && machine().GetUSBProxyAvailable();
-            if (!fUSBEnabled)
-                restrictionForDevices = (UIExtraDataMetaDefs::RuntimeMenuDevicesActionType)(restrictionForDevices | UIExtraDataMetaDefs::RuntimeMenuDevicesActionType_USBDevices);
-        }
-
-        /* WebCams stuff: */
-        {
-            /* Check whether there is an accessible video input devices pool: */
-            host.GetVideoInputDevices();
-            const bool fWebCamsEnabled = host.isOk() && !machine().GetUSBControllers().isEmpty();
-            if (!fWebCamsEnabled)
-                restrictionForDevices = (UIExtraDataMetaDefs::RuntimeMenuDevicesActionType)(restrictionForDevices | UIExtraDataMetaDefs::RuntimeMenuDevicesActionType_WebCams);
-        }
-
-        /* Apply cumulative restriction for 'View' menu: */
-        actionPool()->toRuntime()->setRestrictionForMenuView(UIActionRestrictionLevel_Session, restrictionForView);
-        /* Apply cumulative restriction for 'Devices' menu: */
-        actionPool()->toRuntime()->setRestrictionForMenuDevices(UIActionRestrictionLevel_Session, restrictionForDevices);
+        /* Update action restrictions: */
+        updateActionRestrictions();
 
 #ifdef Q_WS_MAC
         /* Create Mac OS X menu-bar: */
@@ -1203,6 +1131,9 @@ void UISession::prepareConsoleEventHandlers()
     connect(gConsoleEvents, SIGNAL(sigNetworkAdapterChange(CNetworkAdapter)),
             this, SIGNAL(sigNetworkAdapterChange(CNetworkAdapter)));
 
+    connect(gConsoleEvents, SIGNAL(sigStorageDeviceChange(CMediumAttachment, bool, bool)),
+            this, SLOT(sltHandleStorageDeviceChange(CMediumAttachment, bool, bool)));
+
     connect(gConsoleEvents, SIGNAL(sigMediumChange(CMediumAttachment)),
             this, SIGNAL(sigMediumChange(CMediumAttachment)));
 
@@ -1250,6 +1181,10 @@ void UISession::prepareScreens()
     m_monitorVisibilityVector.resize(machine().GetMonitorCount());
     m_monitorVisibilityVector.fill(false);
     m_monitorVisibilityVector[0] = true;
+
+    /* Prepare empty last full-screen size vector: */
+    m_monitorLastFullScreenSizeVector.resize(machine().GetMonitorCount());
+    m_monitorLastFullScreenSizeVector.fill(QSize(-1, -1));
 
     /* If machine is in 'saved' state: */
     if (isSaved())
@@ -1522,6 +1457,103 @@ WId UISession::winId() const
     return mainMachineWindow()->winId();
 }
 
+/** Generate a BGRA bitmap which approximates a XOR/AND mouse pointer.
+ *
+ * Pixels which has 1 in the AND mask and not 0 in the XOR mask are replaced by
+ * the inverted pixel and 8 surrounding pixels with the original color.
+ * Fort example a white pixel (W) is replaced with a black (B) pixel:
+ *         WWW
+ *  W   -> WBW
+ *         WWW
+ * The surrounding pixels are written only if the corresponding source pixel
+ * does not affect the screen, i.e. AND bit is 1 and XOR value is 0.
+ */
+static void renderCursorPixels(const uint32_t *pu32XOR, const uint8_t *pu8AND,
+                               uint32_t u32Width, uint32_t u32Height,
+                               uint32_t *pu32Pixels, uint32_t cbPixels)
+{
+    /* Output pixels set to 0 which allow to not write transparent pixels anymore. */
+    memset(pu32Pixels, 0, cbPixels);
+
+    const uint32_t *pu32XORSrc = pu32XOR;  /* Iterator for source XOR pixels. */
+    const uint8_t *pu8ANDSrcLine = pu8AND; /* The current AND mask scanline. */
+    uint32_t *pu32Dst = pu32Pixels;        /* Iterator for all destination BGRA pixels. */
+
+    /* Some useful constants. */
+    const int cbANDLine = ((int)u32Width + 7) / 8;
+
+    int y;
+    for (y = 0; y < (int)u32Height; ++y)
+    {
+        int x;
+        for (x = 0; x < (int)u32Width; ++x)
+        {
+            const uint32_t u32Pixel = *pu32XORSrc; /* Current pixel at (x,y) */
+            const uint8_t *pu8ANDSrc = pu8ANDSrcLine + x / 8; /* Byte which containt current AND bit. */
+
+            if ((*pu8ANDSrc << (x % 8)) & 0x80)
+            {
+                if (u32Pixel)
+                {
+                    const uint32_t u32PixelInverted = ~u32Pixel;
+
+                    /* Scan neighbor pixels and assign them if they are transparent. */
+                    int dy;
+                    for (dy = -1; dy <= 1; ++dy)
+                    {
+                        const int yn = y + dy;
+                        if (yn < 0 || yn >= (int)u32Height)
+                            continue; /* Do not cross the bounds. */
+
+                        int dx;
+                        for (dx = -1; dx <= 1; ++dx)
+                        {
+                            const int xn = x + dx;
+                            if (xn < 0 || xn >= (int)u32Width)
+                                continue;  /* Do not cross the bounds. */
+
+                            if (dx != 0 || dy != 0)
+                            {
+                                /* Check if the neighbor pixel is transparent. */
+                                const uint32_t *pu32XORNeighborSrc = &pu32XORSrc[dy * (int)u32Width + dx];
+                                const uint8_t *pu8ANDNeighborSrc = pu8ANDSrcLine + dy * cbANDLine + xn / 8;
+                                if (   *pu32XORNeighborSrc == 0
+                                    && ((*pu8ANDNeighborSrc << (xn % 8)) & 0x80) != 0)
+                                {
+                                    /* Transparent neighbor pixels are replaced with the source pixel value. */
+                                    uint32_t *pu32PixelNeighborDst = &pu32Dst[dy * (int)u32Width + dx];
+                                    *pu32PixelNeighborDst = u32Pixel | 0xFF000000;
+                                }
+                            }
+                            else
+                            {
+                                /* The pixel itself is replaced with inverted value. */
+                                *pu32Dst = u32PixelInverted | 0xFF000000;
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    /* The pixel does not affect the screen.
+                     * Do nothing. Do not touch destination which can already contain generated pixels.
+                     */
+                }
+            }
+            else
+            {
+                /* AND bit is 0, the pixel will be just drawn. */
+                *pu32Dst = u32Pixel | 0xFF000000;
+            }
+
+            ++pu32XORSrc; /* Next source pixel. */
+            ++pu32Dst;    /* Next destination pixel. */
+        }
+
+        /* Next AND scanline. */
+        pu8ANDSrcLine += cbANDLine;
+    }
+}
 void UISession::setPointerShape(const uchar *pShapeData, bool fHasAlpha,
                                 uint uXHot, uint uYHot, uint uWidth, uint uHeight)
 {
@@ -1659,57 +1691,14 @@ void UISession::setPointerShape(const uchar *pShapeData, bool fHasAlpha,
     if (hBitmap)
         DeleteObject(hBitmap);
 
-#elif defined (Q_WS_X11) && !defined (VBOX_WITHOUT_XCURSOR)
+#elif defined(Q_WS_X11) || defined(Q_WS_MAC)
 
-    XcursorImage *img = XcursorImageCreate(uWidth, uHeight);
-    Assert(img);
-    if (img)
+    /* Create a ARGB image out of the shape data: */
+    QImage image(uWidth, uHeight, QImage::Format_ARGB32);
+
+    if (fHasAlpha)
     {
-        img->xhot = uXHot;
-        img->yhot = uYHot;
-
-        XcursorPixel *dstShapePtr = img->pixels;
-
-        for (uint y = 0; y < uHeight; y ++)
-        {
-            memcpy (dstShapePtr, srcShapePtr, srcShapePtrScan);
-
-            if (!fHasAlpha)
-            {
-                /* Convert AND mask to the alpha channel: */
-                uchar byte = 0;
-                for (uint x = 0; x < uWidth; x ++)
-                {
-                    if (!(x % 8))
-                        byte = *(srcAndMaskPtr ++);
-                    else
-                        byte <<= 1;
-
-                    if (byte & 0x80)
-                    {
-                        /* Linux doesn't support inverted pixels (XOR ops,
-                         * to be exact) in cursor shapes, so we detect such
-                         * pixels and always replace them with black ones to
-                         * make them visible at least over light colors */
-                        if (dstShapePtr [x] & 0x00FFFFFF)
-                            dstShapePtr [x] = 0xFF000000;
-                        else
-                            dstShapePtr [x] = 0x00000000;
-                    }
-                    else
-                        dstShapePtr [x] |= 0xFF000000;
-                }
-            }
-
-            srcShapePtr += srcShapePtrScan;
-            dstShapePtr += uWidth;
-        }
-
-        /* Set the new cursor: */
-        m_cursor = QCursor(XcursorImageLoadCursor(QX11Info::display(), img));
-        m_fIsValidPointerShapePresent = true;
-
-        XcursorImageDestroy(img);
+        memcpy(image.bits(), srcShapePtr, uHeight * uWidth * 4);
     }
 
 #elif defined(Q_WS_PM)
@@ -1937,29 +1926,9 @@ void UISession::setPointerShape(const uchar *pShapeData, bool fHasAlpha,
     unsigned cbSrcMaskLine = RT_ALIGN (uWidth, 8) / 8;
     for (unsigned int y = 0; y < uHeight; ++y)
     {
-        for (unsigned int x = 0; x < uWidth; ++x)
-        {
-           unsigned int color = ((unsigned int*)srcShapePtr)[y*uWidth+x];
-           /* If the alpha channel isn't in the shape data, we have to
-            * create them from the and-mask. This is a bit field where 1
-            * represent transparency & 0 opaque respectively. */
-           if (!fHasAlpha)
-           {
-               if (!(pbSrcMask[x / 8] & (1 << (7 - (x % 8)))))
-                   color  |= 0xff000000;
-               else
-               {
-                   /* This isn't quite right, but it's the best we can do I think... */
-                   if (color & 0x00ffffff)
-                       color = 0xff000000;
-                   else
-                       color = 0x00000000;
-               }
-           }
-           image.setPixel (x, y, color);
-        }
-        /* Move one scanline forward. */
-        pbSrcMask += cbSrcMaskLine;
+        renderCursorPixels((uint32_t *)srcShapePtr, srcAndMaskPtr,
+                           uWidth, uHeight,
+                           (uint32_t *)image.bits(), uHeight * uWidth * 4);
     }
 
     /* Set the new cursor: */
@@ -2154,6 +2123,24 @@ void UISession::setScreenVisible(ulong uScreenId, bool fIsMonitorVisible)
     gEDataManager->setLastGuestScreenVisibilityStatus(uScreenId, fIsMonitorVisible, vboxGlobal().managedVMUuid());
 }
 
+QSize UISession::lastFullScreenSize(ulong uScreenId) const
+{
+    /* Make sure index fits the bounds: */
+    AssertReturn(uScreenId < (ulong)m_monitorLastFullScreenSizeVector.size(), QSize(-1, -1));
+
+    /* Return last full-screen size: */
+    return m_monitorLastFullScreenSizeVector.value((int)uScreenId);
+}
+
+void UISession::setLastFullScreenSize(ulong uScreenId, QSize size)
+{
+    /* Make sure index fits the bounds: */
+    AssertReturnVoid(uScreenId < (ulong)m_monitorLastFullScreenSizeVector.size());
+
+    /* Remember last full-screen size: */
+    m_monitorLastFullScreenSizeVector[(int)uScreenId] = size;
+}
+
 int UISession::countOfVisibleWindows()
 {
     int cCountOfVisibleWindows = 0;
@@ -2179,9 +2166,89 @@ void UISession::setFrameBuffer(ulong uScreenId, UIFrameBuffer* pFrameBuffer)
 void UISession::updateHostScreenData()
 {
     m_hostScreens.clear();
-    QDesktopWidget *pDesktop = QApplication::desktop();
-    for (int iScreenIndex = 0; iScreenIndex < pDesktop->screenCount(); ++iScreenIndex)
-        m_hostScreens << pDesktop->screenGeometry(iScreenIndex);
+    for (int iScreenIndex = 0; iScreenIndex < vboxGlobal().screenCount(); ++iScreenIndex)
+        m_hostScreens << vboxGlobal().screenGeometry(iScreenIndex);
+}
+
+void UISession::updateActionRestrictions()
+{
+    /* Get host and prepare restrictions: */
+    const CHost host = vboxGlobal().host();
+    UIExtraDataMetaDefs::RuntimeMenuViewActionType restrictionForView = UIExtraDataMetaDefs::RuntimeMenuViewActionType_Invalid;
+    UIExtraDataMetaDefs::RuntimeMenuDevicesActionType restrictionForDevices = UIExtraDataMetaDefs::RuntimeMenuDevicesActionType_Invalid;
+
+    /* VRDE server stuff: */
+    {
+        /* Initialize 'View' menu: */
+        const CVRDEServer server = machine().GetVRDEServer();
+        if (server.isNull())
+            restrictionForView = (UIExtraDataMetaDefs::RuntimeMenuViewActionType)(restrictionForView | UIExtraDataMetaDefs::RuntimeMenuViewActionType_VRDEServer);
+    }
+
+    /* Storage stuff: */
+    {
+        /* Initialize CD/FD menus: */
+        int iDevicesCountCD = 0;
+        int iDevicesCountFD = 0;
+        foreach (const CMediumAttachment &attachment, machine().GetMediumAttachments())
+        {
+            if (attachment.GetType() == KDeviceType_DVD)
+                ++iDevicesCountCD;
+            if (attachment.GetType() == KDeviceType_Floppy)
+                ++iDevicesCountFD;
+        }
+        QAction *pOpticalDevicesMenu = actionPool()->action(UIActionIndexRT_M_Devices_M_OpticalDevices);
+        QAction *pFloppyDevicesMenu = actionPool()->action(UIActionIndexRT_M_Devices_M_FloppyDevices);
+        pOpticalDevicesMenu->setData(iDevicesCountCD);
+        pFloppyDevicesMenu->setData(iDevicesCountFD);
+        if (!iDevicesCountCD)
+            restrictionForDevices = (UIExtraDataMetaDefs::RuntimeMenuDevicesActionType)(restrictionForDevices | UIExtraDataMetaDefs::RuntimeMenuDevicesActionType_OpticalDevices);
+        if (!iDevicesCountFD)
+            restrictionForDevices = (UIExtraDataMetaDefs::RuntimeMenuDevicesActionType)(restrictionForDevices | UIExtraDataMetaDefs::RuntimeMenuDevicesActionType_FloppyDevices);
+    }
+
+    /* Network stuff: */
+    {
+        /* Initialize Network menu: */
+        bool fAtLeastOneAdapterActive = false;
+        const KChipsetType chipsetType = machine().GetChipsetType();
+        ULONG uSlots = vboxGlobal().virtualBox().GetSystemProperties().GetMaxNetworkAdapters(chipsetType);
+        for (ULONG uSlot = 0; uSlot < uSlots; ++uSlot)
+        {
+            const CNetworkAdapter &adapter = machine().GetNetworkAdapter(uSlot);
+            if (adapter.GetEnabled())
+            {
+                fAtLeastOneAdapterActive = true;
+                break;
+            }
+        }
+        if (!fAtLeastOneAdapterActive)
+            restrictionForDevices = (UIExtraDataMetaDefs::RuntimeMenuDevicesActionType)(restrictionForDevices | UIExtraDataMetaDefs::RuntimeMenuDevicesActionType_Network);
+    }
+
+    /* USB stuff: */
+    {
+        /* Check whether there is at least one USB controller with an available proxy. */
+        const bool fUSBEnabled =    !machine().GetUSBDeviceFilters().isNull()
+                                 && !machine().GetUSBControllers().isEmpty()
+                                 && machine().GetUSBProxyAvailable();
+        if (!fUSBEnabled)
+            restrictionForDevices = (UIExtraDataMetaDefs::RuntimeMenuDevicesActionType)(restrictionForDevices | UIExtraDataMetaDefs::RuntimeMenuDevicesActionType_USBDevices);
+    }
+
+    /* WebCams stuff: */
+    {
+        /* Check whether there is an accessible video input devices pool: */
+        host.GetVideoInputDevices();
+        const bool fWebCamsEnabled = host.isOk() && !machine().GetUSBControllers().isEmpty();
+        if (!fWebCamsEnabled)
+            restrictionForDevices = (UIExtraDataMetaDefs::RuntimeMenuDevicesActionType)(restrictionForDevices | UIExtraDataMetaDefs::RuntimeMenuDevicesActionType_WebCams);
+    }
+
+    /* Apply cumulative restriction for 'View' menu: */
+    actionPool()->toRuntime()->setRestrictionForMenuView(UIActionRestrictionLevel_Session, restrictionForView);
+    /* Apply cumulative restriction for 'Devices' menu: */
+    actionPool()->toRuntime()->setRestrictionForMenuDevices(UIActionRestrictionLevel_Session, restrictionForDevices);
 }
 
 #ifdef VBOX_GUI_WITH_KEYS_RESET_HANDLER
@@ -2194,10 +2261,10 @@ void UISession::updateHostScreenData()
 /* static */
 static void signalHandlerSIGUSR1(int sig, siginfo_t * /* pInfo */, void * /*pSecret */)
 {
-    /* only SIGUSR1 is interesting */
+    /* Only SIGUSR1 is interesting: */
     if (sig == SIGUSR1)
-        if (UIMachine *pMachine = vboxGlobal().virtualMachine())
-            pMachine->uisession()->machineLogic()->keyboardHandler()->releaseAllPressedKeys();
+        if (gpMachine)
+            gpMachine->uisession()->machineLogic()->keyboardHandler()->releaseAllPressedKeys();
 }
 #endif /* VBOX_GUI_WITH_KEYS_RESET_HANDLER */
 

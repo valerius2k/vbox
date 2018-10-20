@@ -955,12 +955,6 @@ void UIMediumManager::prepare()
     /* Translate dialog: */
     retranslateUi();
 
-#ifdef Q_WS_MAC
-    /* Prepare Mac window-menu.
-     * Should go *after* translation! */
-    prepareMacWindowMenu();
-#endif /* Q_WS_MAC */
-
     /* Center according pseudo-parent widget: */
     VBoxGlobal::centerWidget(this, m_pPseudoParentWidget, false);
 
@@ -1080,17 +1074,24 @@ void UIMediumManager::prepareActions()
 
 void UIMediumManager::prepareMenuBar()
 {
-    /* Create menu-bar-menu: */
+    /* Create 'Actions' menu: */
     m_pMenu = menuBar()->addMenu(QString());
     AssertPtrReturnVoid(m_pMenu);
     {
-        /* Configure menu-bar-menu: */
+        /* Configure 'Actions' menu: */
         m_pMenu->addAction(m_pActionCopy);
         m_pMenu->addAction(m_pActionModify);
         m_pMenu->addAction(m_pActionRemove);
         m_pMenu->addAction(m_pActionRelease);
         m_pMenu->addAction(m_pActionRefresh);
     }
+
+#ifdef Q_WS_MAC
+    /* Prepare 'Window' menu: */
+    AssertPtrReturnVoid(gpWindowMenuManager);
+    menuBar()->addMenu(gpWindowMenuManager->createMenu(this));
+    gpWindowMenuManager->addWindow(this);
+#endif /* Q_WS_MAC */
 }
 
 void UIMediumManager::prepareContextMenu()
@@ -1229,11 +1230,23 @@ void UIMediumManager::prepareTreeWidget(UIMediumType type, int iColumns)
         pTreeWidget->setColumnCount(iColumns);
         pTreeWidget->sortItems(0, Qt::AscendingOrder);
         if (iColumns > 0)
+#if QT_VERSION >= 0x050000
+            pTreeWidget->header()->setSectionResizeMode(0, QHeaderView::Fixed);
+#else /* QT_VERSION < 0x050000 */
             pTreeWidget->header()->setResizeMode(0, QHeaderView::Fixed);
+#endif /* QT_VERSION < 0x050000 */
         if (iColumns > 1)
+#if QT_VERSION >= 0x050000
+            pTreeWidget->header()->setSectionResizeMode(1, QHeaderView::ResizeToContents);
+#else /* QT_VERSION < 0x050000 */
             pTreeWidget->header()->setResizeMode(1, QHeaderView::ResizeToContents);
+#endif /* QT_VERSION < 0x050000 */
         if (iColumns > 2)
+#if QT_VERSION >= 0x050000
+            pTreeWidget->header()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+#else /* QT_VERSION < 0x050000 */
             pTreeWidget->header()->setResizeMode(2, QHeaderView::ResizeToContents);
+#endif /* QT_VERSION < 0x050000 */
         pTreeWidget->header()->setStretchLastSection(false);
         pTreeWidget->setSortingEnabled(true);
         connect(pTreeWidget, SIGNAL(currentItemChanged(QTreeWidgetItem*, QTreeWidgetItem*)),
@@ -1327,15 +1340,6 @@ void UIMediumManager::prepareProgressBar()
         m_pButtonBox->addExtraWidget(m_pProgressBar);
     }
 }
-
-#ifdef Q_WS_MAC
-void UIMediumManager::prepareMacWindowMenu()
-{
-    /* Create window-menu for menu-bar: */
-    menuBar()->addMenu(UIWindowMenuManager::instance()->createMenu(this));
-    UIWindowMenuManager::instance()->addWindow(this);
-}
-#endif /* Q_WS_MAC */
 
 void UIMediumManager::repopulateTreeWidgets()
 {
@@ -1708,21 +1712,20 @@ void UIMediumManager::updateInformationFieldsFD()
         infoContainer(UIMediumType_Floppy)->setEnabled(pCurrentItem);
 }
 
-#ifdef Q_WS_MAC
-void UIMediumManager::cleanupMacWindowMenu()
+void UIMediumManager::cleanupMenuBar()
 {
-    /* Destroy window-menu of menu-bar: */
-    UIWindowMenuManager::instance()->removeWindow(this);
-    UIWindowMenuManager::instance()->destroyMenu(this);
-}
+#ifdef Q_WS_MAC
+    /* Cleanup 'Window' menu: */
+    AssertPtrReturnVoid(gpWindowMenuManager);
+    gpWindowMenuManager->removeWindow(this);
+    gpWindowMenuManager->destroyMenu(this);
 #endif /* Q_WS_MAC */
+}
 
 void UIMediumManager::cleanup()
 {
-#ifdef Q_WS_MAC
-    /* Cleanup Mac window-menu: */
-    cleanupMacWindowMenu();
-#endif /* Q_WS_MAC */
+    /* Cleanup menu-bar: */
+    cleanupMenuBar();
 }
 
 void UIMediumManager::retranslateUi()
@@ -1909,7 +1912,7 @@ UIMediumItem* UIMediumManager::createMediumItem(const UIMedium &medium)
                 /* Make sure item was created: */
                 if (!pMediumItem)
                     break;
-                LogRel2(("UIMediumManager: Optical medium-item with ID={%s} created.\n", medium.id().toAscii().constData()));
+                LogRel2(("UIMediumManager: Optical medium-item with ID={%s} created.\n", medium.id().toUtf8().constData()));
                 if (pMediumItem->id() == m_strCurrentIdCD)
                 {
                     setCurrentItem(pTreeWidget, pMediumItem);
@@ -1930,7 +1933,7 @@ UIMediumItem* UIMediumManager::createMediumItem(const UIMedium &medium)
                 /* Make sure item was created: */
                 if (!pMediumItem)
                     break;
-                LogRel2(("UIMediumManager: Floppy medium-item with ID={%s} created.\n", medium.id().toAscii().constData()));
+                LogRel2(("UIMediumManager: Floppy medium-item with ID={%s} created.\n", medium.id().toUtf8().constData()));
                 if (pMediumItem->id() == m_strCurrentIdFD)
                 {
                     setCurrentItem(pTreeWidget, pMediumItem);
@@ -1983,7 +1986,7 @@ UIMediumItem* UIMediumManager::createHardDiskItem(const UIMedium &medium)
                     /* Make sure corresponding parent medium is already cached! */
                     UIMedium parentMedium = vboxGlobal().medium(medium.parentID());
                     if (parentMedium.isNull())
-                        AssertMsgFailed(("Parent medium with ID={%s} was not found!\n", medium.parentID().toAscii().constData()));
+                        AssertMsgFailed(("Parent medium with ID={%s} was not found!\n", medium.parentID().toUtf8().constData()));
                     /* Try to create parent medium-item: */
                     else
                         pParentMediumItem = createHardDiskItem(parentMedium);
@@ -1992,14 +1995,14 @@ UIMediumItem* UIMediumManager::createHardDiskItem(const UIMedium &medium)
                 if (pParentMediumItem)
                 {
                     pMediumItem = new UIMediumItemHD(medium, pParentMediumItem);
-                    LogRel2(("UIMediumManager: Child hard-disk medium-item with ID={%s} created.\n", medium.id().toAscii().constData()));
+                    LogRel2(("UIMediumManager: Child hard-disk medium-item with ID={%s} created.\n", medium.id().toUtf8().constData()));
                 }
             }
             /* Else just create item as top-level one: */
             if (!pMediumItem)
             {
                 pMediumItem = new UIMediumItemHD(medium, pTreeWidget);
-                LogRel2(("UIMediumManager: Root hard-disk medium-item with ID={%s} created.\n", medium.id().toAscii().constData()));
+                LogRel2(("UIMediumManager: Root hard-disk medium-item with ID={%s} created.\n", medium.id().toUtf8().constData()));
             }
         }
 
@@ -2029,7 +2032,7 @@ void UIMediumManager::updateMediumItem(const UIMedium &medium)
 
     /* Update medium-item: */
     pMediumItem->setMedium(medium);
-    LogRel2(("UIMediumManager: Medium-item with ID={%s} updated.\n", medium.id().toAscii().constData()));
+    LogRel2(("UIMediumManager: Medium-item with ID={%s} updated.\n", medium.id().toUtf8().constData()));
 
     /* Update tab-icons: */
     updateTabIcons(pMediumItem, Action_Edit);
@@ -2065,7 +2068,7 @@ void UIMediumManager::deleteMediumItem(const QString &strMediumID)
 
     /* Delete medium-item: */
     delete pMediumItem;
-    LogRel2(("UIMediumManager: Medium-item with ID={%s} deleted.\n", strMediumID.toAscii().constData()));
+    LogRel2(("UIMediumManager: Medium-item with ID={%s} deleted.\n", strMediumID.toUtf8().constData()));
 
     /* If there is no current medium-item now selected
      * we have to choose first-available medium-item as current one: */

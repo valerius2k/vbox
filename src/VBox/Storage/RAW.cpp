@@ -150,7 +150,7 @@ static int rawFreeImage(PRAWIMAGE pImage, bool fDelete)
                     /* Write data to all image blocks. */
                     while (uOff < pImage->cbSize)
                     {
-                        unsigned cbChunk = (unsigned)RT_MIN(pImage->cbSize,
+                        unsigned cbChunk = (unsigned)RT_MIN(pImage->cbSize - uOff,
                                                             RAW_FILL_SIZE);
 
                         rc = vdIfIoIntFileWriteSync(pImage->pIfIo, pImage->pStorage,
@@ -638,10 +638,21 @@ static DECLCALLBACK(int) rawRead(void *pBackendData, uint64_t uOffset, size_t cb
     int rc = VINF_SUCCESS;
     PRAWIMAGE pImage = (PRAWIMAGE)pBackendData;
 
+    /* For sequential access do not allow to go back. */
+    if (   pImage->uOpenFlags & VD_OPEN_FLAGS_SEQUENTIAL
+        && uOffset < pImage->offAccess)
+    {
+        *pcbActuallyRead = 0;
+        return VERR_INVALID_PARAMETER;
+    }
+
     rc = vdIfIoIntFileReadUser(pImage->pIfIo, pImage->pStorage, uOffset,
                                pIoCtx, cbRead);
     if (RT_SUCCESS(rc))
+    {
         *pcbActuallyRead = cbRead;
+        pImage->offAccess = uOffset + cbRead;
+    }
 
     return rc;
 }
@@ -654,6 +665,16 @@ static DECLCALLBACK(int) rawWrite(void *pBackendData, uint64_t uOffset, size_t c
     int rc = VINF_SUCCESS;
     PRAWIMAGE pImage = (PRAWIMAGE)pBackendData;
 
+    /* For sequential access do not allow to go back. */
+    if (   pImage->uOpenFlags & VD_OPEN_FLAGS_SEQUENTIAL
+        && uOffset < pImage->offAccess)
+    {
+        *pcbWriteProcess = 0;
+        *pcbPostRead = 0;
+        *pcbPreRead  = 0;
+        return VERR_INVALID_PARAMETER;
+    }
+
     rc = vdIfIoIntFileWriteUser(pImage->pIfIo, pImage->pStorage, uOffset,
                                 pIoCtx, cbWrite, NULL, NULL);
     if (RT_SUCCESS(rc))
@@ -661,6 +682,7 @@ static DECLCALLBACK(int) rawWrite(void *pBackendData, uint64_t uOffset, size_t c
         *pcbWriteProcess = cbWrite;
         *pcbPostRead = 0;
         *pcbPreRead  = 0;
+        pImage->offAccess = uOffset + cbWrite;
     }
 
     return rc;
@@ -1222,11 +1244,11 @@ const VBOXHDDBACKEND g_RawBackend =
     rawSetParentModificationUuid,
     /* pfnDump */
     rawDump,
-    /* pfnGetTimeStamp */
+    /* pfnGetTimestamp */
     NULL,
-    /* pfnGetParentTimeStamp */
+    /* pfnGetParentTimestamp */
     NULL,
-    /* pfnSetParentTimeStamp */
+    /* pfnSetParentTimestamp */
     NULL,
     /* pfnGetParentFilename */
     NULL,

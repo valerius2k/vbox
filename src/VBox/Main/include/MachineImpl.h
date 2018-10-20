@@ -18,6 +18,7 @@
 #ifndef ____H_MACHINEIMPL
 #define ____H_MACHINEIMPL
 
+#include "AuthLibrary.h"
 #include "VirtualBoxBase.h"
 #include "SnapshotImpl.h"
 #include "ProgressImpl.h"
@@ -312,6 +313,7 @@ public:
         PointingHIDType_T   mPointingHIDType;
         ChipsetType_T       mChipsetType;
         ParavirtProvider_T  mParavirtProvider;
+        Utf8Str             mParavirtDebug;
         BOOL                mEmulatedUSBCardReaderEnabled;
 
         BOOL                mIOCacheEnabled;
@@ -499,6 +501,7 @@ public:
      */
     ChipsetType_T i_getChipsetType() const { return mHWData->mChipsetType; }
     ParavirtProvider_T i_getParavirtProvider() const { return mHWData->mParavirtProvider; }
+    Utf8Str i_getParavirtDebug() const { return mHWData->mParavirtDebug; }
 
     void i_setModified(uint32_t fl, bool fAllowStateModification = true);
     void i_setModifiedLock(uint32_t fl, bool fAllowStateModification = true);
@@ -536,8 +539,8 @@ public:
     void i_copyPathRelativeToMachine(const Utf8Str &strSource, Utf8Str &strTarget);
 
     void i_getLogFolder(Utf8Str &aLogFolder);
-    Utf8Str i_queryLogFilename(ULONG idx);
-    Utf8Str i_getStartupLogFilename(void);
+    Utf8Str i_getLogFilename(ULONG idx);
+    Utf8Str i_getHardeningLogFilename(void);
 
     void i_composeSavedStateFilename(Utf8Str &strStateFilePath);
 
@@ -956,6 +959,8 @@ private:
     HRESULT setTeleporterPassword(const com::Utf8Str &aTeleporterPassword);
     HRESULT getParavirtProvider(ParavirtProvider_T *aParavirtProvider);
     HRESULT setParavirtProvider(ParavirtProvider_T aParavirtProvider);
+    HRESULT getParavirtDebug(com::Utf8Str &aParavirtDebug);
+    HRESULT setParavirtDebug(const com::Utf8Str &aParavirtDebug);
     HRESULT getFaultToleranceState(FaultToleranceState_T *aFaultToleranceState);
     HRESULT setFaultToleranceState(FaultToleranceState_T aFaultToleranceState);
     HRESULT getFaultTolerancePort(ULONG *aFaultTolerancePort);
@@ -1259,6 +1264,8 @@ private:
                                ULONG aMemSharedTotal,
                                ULONG aVmNetRx,
                                ULONG aVmNetTx);
+    HRESULT authenticateExternal(const std::vector<com::Utf8Str> &aAuthParams,
+                                 com::Utf8Str &aResult);
 };
 
 // SessionMachine class
@@ -1407,6 +1414,8 @@ private:
                                ULONG aMemSharedTotal,
                                ULONG aVmNetRx,
                                ULONG aVmNetTx);
+    HRESULT authenticateExternal(const std::vector<com::Utf8Str> &aAuthParams,
+                                 com::Utf8Str &aResult);
 
 
     struct ConsoleTaskData
@@ -1509,6 +1518,8 @@ private:
     ClientToken *mClientToken;
 
     int miNATNetworksStarted;
+
+    AUTHLIBRARYCONTEXT mAuthLibCtx;
 };
 
 // SnapshotMachine class

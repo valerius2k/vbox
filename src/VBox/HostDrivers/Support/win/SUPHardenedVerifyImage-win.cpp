@@ -578,8 +578,8 @@ static bool supHardViUtf16PathEndsWith(PCRTUTF16 pwsz, const char *pszSuffix)
  * Simple case insensitive UTF-16 / ASCII starts-with path predicate.
  *
  * @returns true if starts with given string, false if not.
- * @param   pwsz                The UTF-16 path string.
- * @param   pszPrefix           The ascii prefix string.
+ * @param   pwszLeft            The UTF-16 path string.
+ * @param   pszRight            The ascii prefix string.
  */
 static bool supHardViUtf16PathStartsWithAscii(PCRTUTF16 pwszLeft, const char *pszRight)
 {
@@ -920,7 +920,17 @@ static int supHardNtViCheckIfNotSignedOk(RTLDRMOD hLdrMod, PCRTUTF16 pwszName, u
 
 
 /**
- * @callback_method_impl{RTCRPKCS7VERIFYCERTCALLBACK,
+ * @callback_method_impl{FNRTDUMPPRINTFV, Formats into RTERRINFO. }
+ */
+static DECLCALLBACK(void) supHardNtViAsn1DumpToErrInfo(void *pvUser, const char *pszFormat, va_list va)
+{
+    PRTERRINFO pErrInfo = (PRTERRINFO)pvUser;
+    RTErrInfoAddV(pErrInfo, pErrInfo->rc, pszFormat, va);
+}
+
+
+/**
+ * @callback_method_impl{FNRTCRPKCS7VERIFYCERTCALLBACK,
  * Standard code signing.  Use this for Microsoft SPC.}
  */
 static DECLCALLBACK(int) supHardNtViCertVerifyCallback(PCRTCRX509CERTIFICATE pCert, RTCRX509CERTPATHS hCertPaths,
@@ -938,7 +948,15 @@ static DECLCALLBACK(int) supHardNtViCertVerifyCallback(PCRTCRX509CERTIFICATE pCe
     {
         if (RTCrX509Certificate_Compare(pCert, &g_BuildX509Cert) == 0) /* healthy paranoia */
             return VINF_SUCCESS;
-        return RTErrInfoSetF(pErrInfo, VERR_SUP_VP_NOT_BUILD_CERT_IPE, "Not valid kernel code signature.");
+        int rc = RTErrInfoSetF(pErrInfo, VERR_SUP_VP_NOT_BUILD_CERT_IPE, "Not valid kernel code signature (fFlags=%#x).", fFlags);
+        if (pErrInfo)
+        {
+            RTErrInfoAdd(pErrInfo, rc, "\n\nExe cert:\n");
+            RTAsn1Dump(&pCert->SeqCore.Asn1Core, 0 /*fFlags*/, 0 /*uLevel*/, supHardNtViAsn1DumpToErrInfo, pErrInfo);
+            RTErrInfoAdd(pErrInfo, rc, "\n\nBuild cert:\n");
+            RTAsn1Dump(&g_BuildX509Cert.SeqCore.Asn1Core, 0 /*fFlags*/, 0 /*uLevel*/, supHardNtViAsn1DumpToErrInfo, pErrInfo);
+        }
+        return rc;
     }
 
     /*
@@ -1112,7 +1130,7 @@ DECLHIDDEN(int) supHardenedWinVerifyImageByLdrMod(RTLDRMOD hLdrMod, PCRTUTF16 pw
      * In one report by 'thor' the WinSxS resident comctl32.dll was owned by
      * SECURITY_BUILTIN_DOMAIN_RID + DOMAIN_ALIAS_RID_ADMINS (with 4.3.16).
      */
-    /** @todo Since we're now allowing Builtin\Administrators after all, perhaps we
+    /** @todo Since we're now allowing Builtin\\Administrators after all, perhaps we
      *        could drop these system32 + winsxs hacks?? */
     if (   (pNtViRdr->fFlags & SUPHNTVI_F_TRUSTED_INSTALLER_OWNER)
         && !supHardNtViCheckIsOwnedByTrustedInstallerOrSimilar(pNtViRdr->hFile, pwszName))
@@ -2257,8 +2275,24 @@ static int supR3HardNtViCallWinVerifyTrust(HANDLE hFile, PCRTUTF16 pwszName, uin
             case TRUST_E_NOSIGNATURE:             pszErrConst = "TRUST_E_NOSIGNATURE";          break;
             case TRUST_E_FAIL:                    pszErrConst = "TRUST_E_FAIL";                 break;
             case TRUST_E_EXPLICIT_DISTRUST:       pszErrConst = "TRUST_E_EXPLICIT_DISTRUST";    break;
+            case CERT_E_EXPIRED:                  pszErrConst = "CERT_E_EXPIRED";               break;
+            case CERT_E_VALIDITYPERIODNESTING:    pszErrConst = "CERT_E_VALIDITYPERIODNESTING"; break;
+            case CERT_E_ROLE:                     pszErrConst = "CERT_E_ROLE";                  break;
+            case CERT_E_PATHLENCONST:             pszErrConst = "CERT_E_PATHLENCONST";          break;
+            case CERT_E_CRITICAL:                 pszErrConst = "CERT_E_CRITICAL";              break;
+            case CERT_E_PURPOSE:                  pszErrConst = "CERT_E_PURPOSE";               break;
+            case CERT_E_ISSUERCHAINING:           pszErrConst = "CERT_E_ISSUERCHAINING";        break;
+            case CERT_E_MALFORMED:                pszErrConst = "CERT_E_MALFORMED";             break;
+            case CERT_E_UNTRUSTEDROOT:            pszErrConst = "CERT_E_UNTRUSTEDROOT";         break;
             case CERT_E_CHAINING:                 pszErrConst = "CERT_E_CHAINING";              break;
+            case CERT_E_REVOKED:                  pszErrConst = "CERT_E_REVOKED";               break;
+            case CERT_E_UNTRUSTEDTESTROOT:        pszErrConst = "CERT_E_UNTRUSTEDTESTROOT";     break;
             case CERT_E_REVOCATION_FAILURE:       pszErrConst = "CERT_E_REVOCATION_FAILURE";    break;
+            case CERT_E_CN_NO_MATCH:              pszErrConst = "CERT_E_CN_NO_MATCH";           break;
+            case CERT_E_WRONG_USAGE:              pszErrConst = "CERT_E_WRONG_USAGE";           break;
+            case CERT_E_UNTRUSTEDCA:              pszErrConst = "CERT_E_UNTRUSTEDCA";           break;
+            case CERT_E_INVALID_POLICY:           pszErrConst = "CERT_E_INVALID_POLICY";        break;
+            case CERT_E_INVALID_NAME:             pszErrConst = "CERT_E_INVALID_NAME";          break;
             case CRYPT_E_FILE_ERROR:              pszErrConst = "CRYPT_E_FILE_ERROR";           break;
             case CRYPT_E_REVOKED:                 pszErrConst = "CRYPT_E_REVOKED";              break;
         }
@@ -2602,11 +2636,13 @@ l_fresh_context:
  * This is used by supHardenedWinVerifyImageByLdrMod as well as
  * supR3HardenedScreenImage.
  *
- * @returns IPRT status code.
+ * @returns IPRT status code, modified @a rc.
  * @param   hFile               Handle of the file to verify.
  * @param   pwszName            Full NT path to the DLL in question, used for
  *                              dealing with unsigned system dlls as well as for
  *                              error/logging.
+ * @param   fFlags              SUPHNTVI_F_XXX.
+ * @param   rc                  The current status code.
  * @param   pfWinVerifyTrust    Where to return whether WinVerifyTrust was
  *                              actually used.
  * @param   pErrInfo            Pointer to error info structure. Optional.

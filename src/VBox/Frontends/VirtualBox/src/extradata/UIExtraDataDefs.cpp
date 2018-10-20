@@ -135,6 +135,7 @@ const char* UIExtraDataDefs::GUI_StatusBar_IndicatorOrder = "GUI/StatusBar/Indic
 #ifdef Q_WS_MAC
 const char* UIExtraDataDefs::GUI_RealtimeDockIconUpdateEnabled = "GUI/RealtimeDockIconUpdateEnabled";
 const char* UIExtraDataDefs::GUI_RealtimeDockIconUpdateMonitor = "GUI/RealtimeDockIconUpdateMonitor";
+const char* UIExtraDataDefs::GUI_DockIconDisableOverlay = "GUI/DockIconDisableOverlay";
 #endif /* Q_WS_MAC */
 const char* UIExtraDataDefs::GUI_PassCAD = "GUI/PassCAD";
 const char* UIExtraDataDefs::GUI_MouseCapturePolicy = "GUI/MouseCapturePolicy";
@@ -145,6 +146,7 @@ const char* UIExtraDataDefs::GUI_Scaling_Optimization = "GUI/Scaling/Optimizatio
 
 /* Virtual Machine: Information dialog: */
 const char* UIExtraDataDefs::GUI_InformationWindowGeometry = "GUI/InformationWindowGeometry";
+const char* UIExtraDataDefs::GUI_InformationWindowElements = "GUI/InformationWindowElements";
 
 /* Virtual Machine: Close dialog: */
 const char* UIExtraDataDefs::GUI_DefaultCloseAction = "GUI/DefaultCloseAction";
@@ -163,4 +165,7 @@ const char* UIExtraDataDefs::GUI_Dbg_AutoShow = "GUI/Dbg/AutoShow";
 const char* UIExtraDataDefs::GUI_ExtraDataManager_Geometry = "GUI/ExtraDataManager/Geometry";
 const char* UIExtraDataDefs::GUI_ExtraDataManager_SplitterHints = "GUI/ExtraDataManager/SplitterHints";
 #endif /* DEBUG */
+
+/* Virtual Machine: Log dialog: */
+const char* UIExtraDataDefs::GUI_LogWindowGeometry = "GUI/LogWindowGeometry";
 

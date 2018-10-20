@@ -350,6 +350,7 @@ UIIconPoolGeneral::UIIconPoolGeneral()
     m_guestOSTypeIconNames.insert("MacOS1010_64",    ":/os_macosx_64.png");
     m_guestOSTypeIconNames.insert("MacOS1011_64",    ":/os_macosx_64.png");
     m_guestOSTypeIconNames.insert("JRockitVE",       ":/os_jrockitve.png");
+    m_guestOSTypeIconNames.insert("VBoxBS_64",       ":/os_other_64.png");
 }
 
 QPixmap UIIconPoolGeneral::guestOSTypeIcon(const QString &strOSTypeID, QSize *pLogicalSize /* = 0 */) const
@@ -391,5 +392,67 @@ QPixmap UIIconPoolGeneral::guestOSTypeIcon(const QString &strOSTypeID, QSize *pL
 
     /* Return pixmap of first available size: */
     return icon.pixmap(iconSize);
+}
+
+QPixmap UIIconPoolGeneral::guestOSTypePixmap(const QString &strOSTypeID, const QSize &physicalSize) const
+{
+    /* Prepare fallback pixmap: */
+    static QPixmap nullPixmap;
+
+    /* If we do NOT have that 'guest OS type' pixmap cached already: */
+    if (!m_guestOSTypePixmaps.contains(strOSTypeID))
+    {
+        /* Compose proper pixmap if we have that 'guest OS type' known: */
+        if (m_guestOSTypeIconNames.contains(strOSTypeID))
+            m_guestOSTypePixmaps[strOSTypeID] = QPixmap(m_guestOSTypeIconNames[strOSTypeID]);
+        /* Assign fallback pixmap if we do NOT have that 'guest OS type' known: */
+        else
+            m_guestOSTypePixmaps[strOSTypeID] = nullPixmap;
+    }
+
+    /* Retrieve corresponding pixmap: */
+    const QPixmap &pixmap = m_guestOSTypePixmaps.value(strOSTypeID);
+    AssertMsgReturn(!pixmap.isNull(),
+                    ("Undefined pixmap for type '%s'.", strOSTypeID.toLatin1().constData()),
+                    nullPixmap);
+
+    /* Return pixmap of the requested size: */
+    return pixmap.size() == physicalSize ? pixmap : pixmap.scaled(physicalSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+}
+
+QPixmap UIIconPoolGeneral::guestOSTypePixmapHiDPI(const QString &strOSTypeID, const QSize &physicalSize) const
+{
+    /* Prepare fallback pixmap: */
+    static QPixmap nullPixmap;
+
+    /* If we do NOT have that 'guest OS type' pixmap cached already: */
+    if (!m_guestOSTypePixmapsHiDPI.contains(strOSTypeID))
+    {
+        /* Compose proper pixmap if we have that 'guest OS type' known: */
+        if (m_guestOSTypeIconNames.contains(strOSTypeID))
+        {
+            /* Get name: */
+            const QString strName =  m_guestOSTypeIconNames.value(strOSTypeID);
+            /* Parse name to prefix and suffix: */
+            const QString strPrefix = strName.section('.', 0, -2);
+            const QString strSuffix = strName.section('.', -1, -1);
+            /* Prepare HiDPI pixmap on the basis of values above: */
+            const QPixmap pixmapHiDPI(strPrefix + "_hidpi." + strSuffix);
+            /* Remember HiDPI pixmap: */
+            m_guestOSTypePixmapsHiDPI[strOSTypeID] = pixmapHiDPI;
+        }
+        /* Assign fallback pixmap if we do NOT have that 'guest OS type' known: */
+        else
+            m_guestOSTypePixmapsHiDPI[strOSTypeID] = nullPixmap;
+    }
+
+    /* Retrieve corresponding pixmap: */
+    const QPixmap &pixmap = m_guestOSTypePixmapsHiDPI.value(strOSTypeID);
+    AssertMsgReturn(!pixmap.isNull(),
+                    ("Undefined pixmap for type '%s'.", strOSTypeID.toLatin1().constData()),
+                    nullPixmap);
+
+    /* Return pixmap of the requested size: */
+    return pixmap.size() == physicalSize ? pixmap : pixmap.scaled(physicalSize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 }
 

@@ -30,7 +30,7 @@
 #include <iprt/err.h>
 
 
-/** @defgroup grp_err       Error Codes
+/** @defgroup grp_err       VBox Error Codes
  * @{
  */
 
@@ -246,6 +246,8 @@
 #define VERR_EM_CANNOT_EXEC_GUEST           (-1156)
 /** Reason for leaving RC: Inject a TRPM event. */
 #define VINF_EM_RAW_INJECT_TRPM_EVENT       1157
+/** Guest tried to trigger a CPU hang.  The guest is probably up to no good. */
+#define VERR_EM_GUEST_CPU_HANG              (-1158)
 /** @} */
 
 
@@ -491,7 +493,7 @@
 #define VINF_PGM_PHYS_TLB_CATCH_WRITE           1635
 /** Catch write access and route it thru PGM. */
 #define VERR_PGM_PHYS_TLB_CATCH_WRITE           (-1635)
-/** No CR3 root shadow page table.. */
+/** No CR3 root shadow page table. */
 #define VERR_PGM_NO_CR3_SHADOW_ROOT             (-1636)
 /** Trying to free a page with an invalid Page ID. */
 #define VERR_PGM_PHYS_INVALID_PAGE_ID           (-1637)
@@ -1143,8 +1145,8 @@
 #define VERR_VMM_RING3_CALL_DISABLED        (-2703)
 /** The VMMR0.r0 module version does not match VBoxVMM.dll/so/dylib.
  * If you just upgraded VirtualBox, please terminate all VMs and make sure
- * VBoxNetDHCP is not running.  Then try again.  If this error persists, try
- * re-installing VirtualBox. */
+ * that neither VBoxNetDHCP nor VBoxNetNAT is running.  Then try again.
+ * If this error persists, try re-installing VirtualBox. */
 #define VERR_VMM_R0_VERSION_MISMATCH        (-2704)
 /** The VMMRC.rc module version does not match VBoxVMM.dll/so/dylib.
  * Re-install if you are a user.  Developers should make sure the build is
@@ -2358,7 +2360,7 @@
 #define VINF_DBGC_BP_NO_COMMAND                     5406
 /** Generic debugger command failure. */
 #define VERR_DBGC_COMMAND_FAILED                    (-5407)
-/** Logic bug in the DBGC code.. */
+/** Logic bug in the DBGC code. */
 #define VERR_DBGC_IPE                               (-5408)
 
 /** The lowest parse status code.   */
@@ -2670,6 +2672,16 @@
 #define VERR_GIM_DEVICE_NOT_REGISTERED              (-6310)
 /** Hypercall cannot be enabled/performed due to access/permissions/CPL. */
 #define VERR_GIM_HYPERCALL_ACCESS_DENIED            (-6311)
+/** Failed to read to a memory region while performing a hypercall. */
+#define VERR_GIM_HYPERCALL_MEMORY_READ_FAILED       (-6312)
+/** Failed to write to a memory region while performing a hypercall. */
+#define VERR_GIM_HYPERCALL_MEMORY_WRITE_FAILED      (-6313)
+/** Generic hypercall operation failure. */
+#define VERR_GIM_HYPERCALL_FAILED                   (-6314)
+/** No debug connection configured. */
+#define VERR_GIM_NO_DEBUG_CONNECTION                (-6315)
+/** Return to ring-3 to perform the hypercall there. */
+#define VINF_GIM_R3_HYPERCALL                       6316
 /** @} */
 
 /** @name Main API Status Codes

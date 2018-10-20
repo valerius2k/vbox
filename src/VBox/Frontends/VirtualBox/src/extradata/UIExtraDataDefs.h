@@ -20,9 +20,11 @@
 
 /* Qt includes: */
 #include <QMetaType>
+#include <QObject>
 
 /* Other VBox includes: */
 #include <iprt/cdefs.h>
+
 
 /** Extra-data namespace. */
 namespace UIExtraDataDefs
@@ -234,6 +236,8 @@ namespace UIExtraDataDefs
         extern const char* GUI_RealtimeDockIconUpdateEnabled;
         /** Mac OS X: Holds guest-screen which Dock icon should reflect at runtime. */
         extern const char* GUI_RealtimeDockIconUpdateMonitor;
+        /** Mac OS X: Holds whether Dock icon should have overlay disabled. */
+        extern const char* GUI_DockIconDisableOverlay;
 #endif /* Q_WS_MAC */
         /** Holds whether machine should pass CAD to guest. */
         extern const char* GUI_PassCAD;
@@ -253,6 +257,8 @@ namespace UIExtraDataDefs
       * @{ */
         /** Holds information-window geometry. */
         extern const char* GUI_InformationWindowGeometry;
+        /** Holds information-window elements. */
+        extern const char* GUI_InformationWindowElements;
     /** @} */
 
     /** @name Virtual Machine: Close dialog
@@ -286,6 +292,12 @@ namespace UIExtraDataDefs
         extern const char* GUI_ExtraDataManager_SplitterHints;
     /** @} */
 #endif /* DEBUG */
+
+    /** @name Virtual Machine: Log dialog
+      * @{ */
+        /** Holds log-window geometry. */
+        extern const char* GUI_LogWindowGeometry;
+    /** @} */
 }
 
 /** Extra-data meta definitions. */
@@ -648,4 +660,30 @@ enum MiniToolbarAlignment
 };
 #endif /* !Q_WS_MAC */
 
+/** Runtime UI: Information-element types. */
+enum InformationElementType
+{
+    InformationElementType_Invalid,
+    InformationElementType_General,
+    InformationElementType_System,
+    InformationElementType_Preview,
+    InformationElementType_Display,
+    InformationElementType_Storage,
+    InformationElementType_Audio,
+    InformationElementType_Network,
+    InformationElementType_Serial,
+#ifdef VBOX_WITH_PARALLEL_PORTS
+    InformationElementType_Parallel,
+#endif /* VBOX_WITH_PARALLEL_PORTS */
+    InformationElementType_USB,
+    InformationElementType_SF,
+    InformationElementType_UI,
+    InformationElementType_Description,
+    InformationElementType_RuntimeAttributes,
+    InformationElementType_StorageStatistics,
+    InformationElementType_NetworkStatistics
+};
+Q_DECLARE_METATYPE(InformationElementType);
+
 #endif /* !___UIExtraDataDefs_h___ */
+

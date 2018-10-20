@@ -61,10 +61,11 @@ if !defined(VBOX_ONLY_BUILD) || defined(VBOX_ONLY_EXTPACKS)
  	scmstream.cpp
 endif
 
-BLDPROGS.win += VBoxPeSetVersion
+ifeq ($(KBUILD_TARGET),win)
+ BLDPROGS += VBoxPeSetVersion
+endif
 VBoxPeSetVersion_TEMPLATE = VBoxBldProg
 VBoxPeSetVersion_SOURCES  = VBoxPeSetVersion.cpp
-
 
 BLDPROGS += VBoxDef2LazyLoad
 VBoxDef2LazyLoad_TEMPLATE = VBoxBldProg
@@ -76,7 +77,7 @@ gccplugin$(SUFF_DLL): VBoxCompilerPlugInsGcc.cpp VBoxCompilerPlugInsCommon.cpp V
 	g++ -shared -fPIC -g \
 		-DIN_RING3 \
 		$(if-expr "$(KBUILD_TYPE)" != "release",-DDEBUG,) \
-		-I$(shell gcc -print-file-name=plugin/include) \
+		-I$(shell gcc -print-file-name=plugin)/include \
 		-I$(PATH_ROOT)/include \
 		$(if-expr "$(KBUILD_HOST)" == "solaris", -I/usr/include/gmp -I$(PATH_ROOT)/src/bldprogs/solgcc/,) \
 		-o $@ \

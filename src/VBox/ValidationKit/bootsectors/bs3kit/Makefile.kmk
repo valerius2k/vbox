@@ -1,0 +1,672 @@
+# $Id$
+## @file
+# VirtualBox Validation Kit - Bootsector Kit v3
+#
+
+#
+# Copyright (C) 2006-2015 Oracle Corporation
+#
+# This file is part of VirtualBox Open Source Edition (OSE), as
+# available from http://www.virtualbox.org. This file is free software;
+# you can redistribute it and/or modify it under the terms of the GNU
+# General Public License (GPL) as published by the Free Software
+# Foundation, in version 2 as it comes in the "COPYING" file of the
+# VirtualBox OSE distribution. VirtualBox OSE is distributed in the
+# hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
+#
+# The contents of this file may alternatively be used under the terms
+# of the Common Development and Distribution License Version 1.0
+# (CDDL) only, as it comes in the "COPYING.CDDL" file of the
+# VirtualBox OSE distribution, in which case the provisions of the
+# CDDL are applicable instead of those of the GPL.
+#
+# You may elect to license modified versions of this file under the
+# terms and conditions of either the GPL or the CDDL or both.
+#
+
+SUB_DEPTH = ../../../../..
+include $(KBUILD_PATH)/subheader.kmk
+
+
+#
+# ----- Config.kmk: start -----
+#
+
+# The bs3kit source directory.
+VBOX_PATH_BS3KIT_SRC = $(VBOX_PATH_VALIDATIONKIT_SRC)/bootsectors/bs3kit
+
+# Boot Sector post-link tool used below.
+BLDPROGS += VBoxBs3Linker
+VBoxBs3Linker_TEMPLATE = VBoxBldProg
+VBoxBs3Linker_SOURCES  = $(VBOX_PATH_BS3KIT_SRC)/VBoxBs3Linker.cpp
+
+# 64-bit relocation conversion tool
+BLDPROGS += VBoxBs3ObjConverter
+VBoxBs3ObjConverter_TEMPLATE = VBoxBldProg
+VBoxBs3ObjConverter_SOURCES  = $(VBOX_PATH_BS3KIT_SRC)/VBoxBs3ObjConverter.cpp
+
+# Dummy CP "linker" tool.
+TOOL_VBoxBsCpLd = Dummy copy linker.
+TOOL_VBoxBsCpLd_LINK_MISCBIN_OUTPUT =
+TOOL_VBoxBsCpLd_LINK_MISCBIN_DEPEND =
+TOOL_VBoxBsCpLd_LINK_MISCBIN_DEPORD =
+define TOOL_VBoxBsCpLd_LINK_MISCBIN_CMDS
+	$(CP) -- $(objs) $(othersrc) "$(out)"
+endef
+
+# Dummy exit 1 "linker" tool.
+TOOL_VBoxBsUnusedLd = Dummy unused linker.
+TOOL_VBoxBsUnusedLd_LINK_MISCBIN_OUTPUT =
+TOOL_VBoxBsUnusedLd_LINK_MISCBIN_DEPEND =
+TOOL_VBoxBsUnusedLd_LINK_MISCBIN_DEPORD =
+define TOOL_VBoxBsUnusedLd_LINK_MISCBIN_CMDS
+	echo "cannot use this template for linking"
+	exit 1
+endef
+
+#
+# elf cross compiling 64-bit gcc (mac): sudo port install x86_64-elf-gcc
+#
+TOOL_Bs3Gcc64Elf64 := AMD64/ELF64 gcc/g++ cross compiler for mac.
+TOOL_Bs3Gcc64Elf64_CC  ?= x86_64-elf-gcc$(HOSTSUFF_EXE) -m64
+TOOL_Bs3Gcc64Elf64_CXX ?= x86_64-elf-g++$(HOSTSUFF_EXE) -m64
+ifdef SLKRUNS
+ TOOL_Bs3Gcc64Elf64_CC  += -fmessage-length=0
+ TOOL_Bs3Gcc64Elf64_CXX += -fmessage-length=0
+endif
+TOOL_Bs3Gcc64Elf64_COBJSUFF         ?= .o
+TOOL_Bs3Gcc64Elf64_CFLAGS           ?=
+TOOL_Bs3Gcc64Elf64_CFLAGS.debug     ?= -g
+TOOL_Bs3Gcc64Elf64_CFLAGS.profile   ?= -O2 #-g -pg
+TOOL_Bs3Gcc64Elf64_CFLAGS.release   ?= -O2
+TOOL_Bs3Gcc64Elf64_CINCS            ?=
+TOOL_Bs3Gcc64Elf64_CDEFS            ?=
+TOOL_Bs3Gcc64Elf64_COMPILE_C_DEPEND = $(VBoxBs3ObjConverter_1_TARGET)
+TOOL_Bs3Gcc64Elf64_COMPILE_C_DEPORD =
+TOOL_Bs3Gcc64Elf64_COMPILE_C_OUTPUT =
+define TOOL_Bs3Gcc64Elf64_COMPILE_C_CMDS
+	$(QUIET)$(TOOL_Bs3Gcc64Elf64_CC) -c\
+		$(flags) $(addprefix -I, $(incs)) $(addprefix -D, $(defs))\
+		-Wp,-MD,$(dep) -Wp,-MT,$(obj) -Wp,-MP\
+		-o $(obj)\
+		$(abspath $(source))
+	$(QUIET)$(VBoxBs3ObjConverter_1_TARGET) "$(obj)"
+	$(QUIET)$(APPEND) -n "$(dep)" "" "$(source):" ""
+endef
+
+TOOL_Bs3Gcc64Elf64_CXXOBJSUFF       ?= .o
+TOOL_Bs3Gcc64Elf64_CXXOBJSUFF       ?= .o
+TOOL_Bs3Gcc64Elf64_CXXFLAGS         ?=
+TOOL_Bs3Gcc64Elf64_CXXFLAGS.debug   ?= -g0 # no debug info, thank you
+TOOL_Bs3Gcc64Elf64_CXXFLAGS.profile ?= -O2 #-g -pg
+TOOL_Bs3Gcc64Elf64_CXXFLAGS.release ?= -O2
+TOOL_Bs3Gcc64Elf64_CXXINCS          ?=
+TOOL_Bs3Gcc64Elf64_CXXDEFS          ?=
+TOOL_Bs3Gcc64Elf64_COMPILE_CXX_DEPEND = $(VBoxBs3ObjConverter_1_TARGET)
+TOOL_Bs3Gcc64Elf64_COMPILE_CXX_DEPORD =
+TOOL_Bs3Gcc64Elf64_COMPILE_CXX_OUTPUT =
+define TOOL_Bs3Gcc64Elf64_COMPILE_CXX_CMDS
+	$(QUIET)$(TOOL_Bs3Gcc64Elf64_CXX) -c\
+		$(flags) $(addprefix -I, $(incs)) $(addprefix -D, $(defs))\
+		-Wp,-MD,$(dep) -Wp,-MT,$(obj) -Wp,-MP\
+		-o $(obj)\
+		$(abspath $(source))
+	$(QUIET)$(VBoxBs3ObjConverter_1_TARGET) "$(obj)"
+	$(QUIET)$(APPEND) -n "$(dep)" "" "$(source):" ""
+endef
+
+#
+# Visual C++ tool variant that runs the object converter afterwards.
+#
+TOOL_Bs3Vcc64 := Visual C++ 64-bit
+TOOL_Bs3Vcc64_CC  = $(TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_CC)
+TOOL_Bs3Vcc64_CXX = $(TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_CXX)
+TOOL_Bs3Vcc64_COBJSUFF                 = $(TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_COBJSUFF)
+TOOL_Bs3Vcc64_CFLAGS                   = $(filter-out -TC,$(TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_CFLAGS)) -TP # compile as C++
+TOOL_Bs3Vcc64_CFLAGS.debug             =
+TOOL_Bs3Vcc64_CFLAGS.dbgopt            = -O1
+TOOL_Bs3Vcc64_CFLAGS.profile           = -O1
+TOOL_Bs3Vcc64_CFLAGS.release           = -O1
+TOOL_Bs3Vcc64_CINCS                    = $(PATH_TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_INC)
+TOOL_Bs3Vcc64_CDEFS                    =
+TOOL_Bs3Vcc64_COMPILE_C_DEPEND         = $(TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_COMPILE_C_DEPEND) $(VBoxBs3ObjConverter_1_TARGET)
+TOOL_Bs3Vcc64_COMPILE_C_DEPORD         = $(TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_COMPILE_C_DEPORD)
+TOOL_Bs3Vcc64_COMPILE_C_OUTPUT         = $(TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_COMPILE_C_OUTPUT)
+TOOL_Bs3Vcc64_COMPILE_C_OUTPUT_MAYBE   = $(TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_COMPILE_C_OUTPUT_MAYBE)
+define TOOL_Bs3Vcc64_COMPILE_C_CMDS
+$(TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_COMPILE_C_CMDS)
+	$(QUIET)$(VBoxBs3ObjConverter_1_TARGET) "$(obj)"
+endef
+
+TOOL_Bs3Vcc64_CXXOBJSUFF               = $(TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_CXXOBJSUFF)
+TOOL_Bs3Vcc64_CXXFLAGS                 = $(TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_CXXFLAGS)
+TOOL_Bs3Vcc64_CXXFLAGS.debug           =
+TOOL_Bs3Vcc64_CXXFLAGS.dbgopt          = -O1
+TOOL_Bs3Vcc64_CXXFLAGS.profile         = -O1
+TOOL_Bs3Vcc64_CXXFLAGS.release         = -O1
+TOOL_Bs3Vcc64_CXXINCS                  = $(PATH_TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_INC)
+TOOL_Bs3Vcc64_CXXDEFS                  =
+TOOL_Bs3Vcc64_COMPILE_CXX_DEPEND       = $(TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_COMPILE_CXX_DEPEND) $(VBoxBs3ObjConverter_1_TARGET)
+TOOL_Bs3Vcc64_COMPILE_CXX_DEPORD       = $(TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_COMPILE_CXX_DEPORD)
+TOOL_Bs3Vcc64_COMPILE_CXX_OUTPUT       = $(TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_COMPILE_CXX_OUTPUT)
+TOOL_Bs3Vcc64_COMPILE_CXX_OUTPUT_MAYBE = $(TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_COMPILE_CXX_OUTPUT_MAYBE)
+define TOOL_Bs3Vcc64_COMPILE_CXX_CMDS
+$(TOOL_$(VBOX_VCC_TOOL_STEM)AMD64_COMPILE_CXX_CMDS)
+	$(QUIET)$(VBoxBs3ObjConverter_1_TARGET)  "$(obj)"
+endef
+
+#
+# 32-bit OpenWatcom C/C++ tool variant that runs the object converter afterwards
+# to rename intrinsic functions so they don't clash with the 16-bit compiler.
+#
+TOOL_Bs3Ow32 := OpenWatcom C/C++ 32-bit with object convertsion
+TOOL_Bs3Ow32_CC  = $(TOOL_OPENWATCOM_CC)
+TOOL_Bs3Ow32_CXX = $(TOOL_OPENWATCOM_CXX)
+TOOL_Bs3Ow32_COBJSUFF                 = $(TOOL_OPENWATCOM_COBJSUFF)
+TOOL_Bs3Ow32_CFLAGS                   = $(TOOL_OPENWATCOM_CFLAGS)
+TOOL_Bs3Ow32_CFLAGS.debug             = $(TOOL_OPENWATCOM_CFLAGS.debug)
+TOOL_Bs3Ow32_CFLAGS.dbgopt            = $(TOOL_OPENWATCOM_CFLAGS.dbgopt)
+TOOL_Bs3Ow32_CFLAGS.profile           = $(TOOL_OPENWATCOM_CFLAGS.profile)
+TOOL_Bs3Ow32_CFLAGS.release           = $(TOOL_OPENWATCOM_CFLAGS.release)
+TOOL_Bs3Ow32_CINCS                    = $(TOOL_OPENWATCOM_CINCS)
+TOOL_Bs3Ow32_CDEFS                    =
+TOOL_Bs3Ow32_COMPILE_C_DEPEND         = $(TOOL_OPENWATCOM_COMPILE_C_DEPEND) $(VBoxBs3ObjConverter_1_TARGET)
+TOOL_Bs3Ow32_COMPILE_C_DEPORD         = $(TOOL_OPENWATCOM_COMPILE_C_DEPORD)
+TOOL_Bs3Ow32_COMPILE_C_OUTPUT         = $(TOOL_OPENWATCOM_COMPILE_C_OUTPUT)
+TOOL_Bs3Ow32_COMPILE_C_OUTPUT_MAYBE   = $(TOOL_OPENWATCOM_COMPILE_C_OUTPUT_MAYBE)
+define TOOL_Bs3Ow32_COMPILE_C_CMDS
+$(TOOL_OPENWATCOM_COMPILE_C_CMDS)
+	$(QUIET)$(VBoxBs3ObjConverter_1_TARGET) "$(obj)"
+endef
+
+TOOL_Bs3Ow32_CXXOBJSUFF               = $(TOOL_OPENWATCOM_CXXOBJSUFF)
+TOOL_Bs3Ow32_CXXFLAGS                 = $(TOOL_OPENWATCOM_CXXFLAGS)
+TOOL_Bs3Ow32_CXXFLAGS.debug           = $(TOOL_OPENWATCOM_CXXFLAGS.debug)
+TOOL_Bs3Ow32_CXXFLAGS.dbgopt          = $(TOOL_OPENWATCOM_CXXFLAGS.dbgopt)
+TOOL_Bs3Ow32_CXXFLAGS.profile         = $(TOOL_OPENWATCOM_CXXFLAGS.profile)
+TOOL_Bs3Ow32_CXXFLAGS.release         = $(TOOL_OPENWATCOM_CXXFLAGS.release)
+TOOL_Bs3Ow32_CXXINCS                  = $(TOOL_OPENWATCOM_CXXINCS)
+TOOL_Bs3Ow32_CXXDEFS                  =
+TOOL_Bs3Ow32_COMPILE_CXX_DEPEND       = $(TOOL_OPENWATCOM_COMPILE_CXX_DEPEND) $(VBoxBs3ObjConverter_1_TARGET)
+TOOL_Bs3Ow32_COMPILE_CXX_DEPORD       = $(TOOL_OPENWATCOM_COMPILE_CXX_DEPORD)
+TOOL_Bs3Ow32_COMPILE_CXX_OUTPUT       = $(TOOL_OPENWATCOM_COMPILE_CXX_OUTPUT)
+TOOL_Bs3Ow32_COMPILE_CXX_OUTPUT_MAYBE = $(TOOL_OPENWATCOM_COMPILE_CXX_OUTPUT_MAYBE)
+define TOOL_Bs3Ow32_COMPILE_CXX_CMDS
+$(TOOL_OPENWATCOM_COMPILE_CXX_CMDS)
+	$(QUIET)$(VBoxBs3ObjConverter_1_TARGET) "$(obj)"
+endef
+
+
+#
+# 16-bit OpenWatcom C/C++ tool variant that runs the object converter afterwards
+# to rename intrinsic functions so they don't clash with the 16-bit compiler.
+#
+TOOL_Bs3Ow16 := OpenWatcom C/C++ 16-bit with object convertsion
+TOOL_Bs3Ow16_CC  = $(TOOL_OPENWATCOM-16_CC)
+TOOL_Bs3Ow16_CXX = $(TOOL_OPENWATCOM-16_CXX)
+TOOL_Bs3Ow16_COBJSUFF                 = $(TOOL_OPENWATCOM-16_COBJSUFF)
+TOOL_Bs3Ow16_CFLAGS                   = $(TOOL_OPENWATCOM-16_CFLAGS)
+TOOL_Bs3Ow16_CFLAGS.debug             = $(TOOL_OPENWATCOM-16_CFLAGS.debug)
+TOOL_Bs3Ow16_CFLAGS.dbgopt            = $(TOOL_OPENWATCOM-16_CFLAGS.dbgopt)
+TOOL_Bs3Ow16_CFLAGS.profile           = $(TOOL_OPENWATCOM-16_CFLAGS.profile)
+TOOL_Bs3Ow16_CFLAGS.release           = $(TOOL_OPENWATCOM-16_CFLAGS.release)
+TOOL_Bs3Ow16_CINCS                    = $(TOOL_OPENWATCOM-16_CINCS)
+TOOL_Bs3Ow16_CDEFS                    =
+TOOL_Bs3Ow16_COMPILE_C_DEPEND         = $(TOOL_OPENWATCOM-16_COMPILE_C_DEPEND) $(VBoxBs3ObjConverter_1_TARGET)
+TOOL_Bs3Ow16_COMPILE_C_DEPORD         = $(TOOL_OPENWATCOM-16_COMPILE_C_DEPORD)
+TOOL_Bs3Ow16_COMPILE_C_OUTPUT         = $(TOOL_OPENWATCOM-16_COMPILE_C_OUTPUT)
+TOOL_Bs3Ow16_COMPILE_C_OUTPUT_MAYBE   = $(TOOL_OPENWATCOM-16_COMPILE_C_OUTPUT_MAYBE)
+define TOOL_Bs3Ow16_COMPILE_C_CMDS
+$(TOOL_OPENWATCOM-16_COMPILE_C_CMDS)
+	$(QUIET)$(VBoxBs3ObjConverter_1_TARGET) "$(obj)"
+endef
+
+TOOL_Bs3Ow16_CXXOBJSUFF               = $(TOOL_OPENWATCOM-16_CXXOBJSUFF)
+TOOL_Bs3Ow16_CXXFLAGS                 = $(TOOL_OPENWATCOM-16_CXXFLAGS)
+TOOL_Bs3Ow16_CXXFLAGS.debug           = $(TOOL_OPENWATCOM-16_CXXFLAGS.debug)
+TOOL_Bs3Ow16_CXXFLAGS.dbgopt          = $(TOOL_OPENWATCOM-16_CXXFLAGS.dbgopt)
+TOOL_Bs3Ow16_CXXFLAGS.profile         = $(TOOL_OPENWATCOM-16_CXXFLAGS.profile)
+TOOL_Bs3Ow16_CXXFLAGS.release         = $(TOOL_OPENWATCOM-16_CXXFLAGS.release)
+TOOL_Bs3Ow16_CXXINCS                  = $(TOOL_OPENWATCOM-16_CXXINCS)
+TOOL_Bs3Ow16_CXXDEFS                  =
+TOOL_Bs3Ow16_COMPILE_CXX_DEPEND       = $(TOOL_OPENWATCOM-16_COMPILE_CXX_DEPEND) $(VBoxBs3ObjConverter_1_TARGET)
+TOOL_Bs3Ow16_COMPILE_CXX_DEPORD       = $(TOOL_OPENWATCOM-16_COMPILE_CXX_DEPORD)
+TOOL_Bs3Ow16_COMPILE_CXX_OUTPUT       = $(TOOL_OPENWATCOM-16_COMPILE_CXX_OUTPUT)
+TOOL_Bs3Ow16_COMPILE_CXX_OUTPUT_MAYBE = $(TOOL_OPENWATCOM-16_COMPILE_CXX_OUTPUT_MAYBE)
+define TOOL_Bs3Ow16_COMPILE_CXX_CMDS
+$(TOOL_OPENWATCOM-16_COMPILE_CXX_CMDS)
+	$(QUIET)$(VBoxBs3ObjConverter_1_TARGET) "$(obj)"
+endef
+
+# Debug info format depends on what we use for 64-bit.
+if1of ($(KBUILD_HOST), win)
+ BS3_OW_DBG_OPT   = -hc
+ BS3_OW_DBG_LDOPT = codeview
+else
+ BS3_OW_DBG_OPT   = -hd
+ BS3_OW_DBG_LDOPT = dwarf
+endif
+
+#
+# BS3Kit template for assembly and 16-bit code.
+#
+# Note! Using -d1 as -d1+ and -d2 causes suboptimal code to be generated (strlen
+#       reloading string pointer argument all the time).
+# Note! Optimization options should come after debug stuff as -d2 for instance
+#       disables all optimziations.
+#
+# Compiler options explained:
+#       -nt=xxxx               Sets the text segment name.
+#       -nc=xxxx               Sets the text segment class name.
+#       -nd=xxxx               Sets the data segment name.
+#       -ecc                   Sets the default calling convension to __cdecl
+#                              Update: We don't use this in 16-bit code as it causes unfavorable reloading of DS before calling
+#                                      inlined functions (e.g. iprt/asm.h). Instead we use -ecw and __cdecl where needed.
+#       -ecw                   Sets the default calling convension to __watcall ()
+#       -q                     Quiet, no logos or stuff.
+#       -3                     Use 386 instruction set (16-bit only).
+#       -wx                    Maxium warning level.
+#       -zl                    Don't emit default library information.
+#       -zu                    Assume SS != DS.
+#       -mc                    Compact memory model, far data, small code.
+#       -mf                    Flat memory model (32-bit).
+#       -d1                    Debug info: Globals and line numbers.
+#       -s                     No stack overflow checks.
+#       -oa                    Relaxed aliasing constraints.
+#       -ob                    Branch prediction.
+#       -of                    Generate stack frames when needed.
+#       -oi                    Inline instrinsics functions.
+#       -ol                    Loop optimizations.
+#       -or                    Reorder for best pipeline.
+#       -os                    Favor size over speed.
+#
+TEMPLATE_VBoxBS3KitImg = Template for building BS3Kit test images.
+TEMPLATE_VBoxBS3KitImg_BLD_TRG      = os-agnostic
+TEMPLATE_VBoxBS3KitImg_BLD_TRG_ARCH = x86
+TEMPLATE_VBoxBS3KitImg_INST         = $(INST_VALIDATIONKIT)bootsectors/
+TEMPLATE_VBoxBS3KitImg_BINSUFF      = .img
+TEMPLATE_VBoxBS3KitImg_MODE         = 0644
+TEMPLATE_VBoxBS3KitImg_ASTOOL       = NASM
+TEMPLATE_VBoxBS3KitImg_ASFLAGS      = -f obj -g --allow-64bit-code-anywhere -w+orphan-labels
+TEMPLATE_VBoxBS3KitImg_ASDEFS       = ASM_FORMAT_OMF RT_NOINC_SEGMENTS __NASM__
+TEMPLATE_VBoxBS3KitImg_DEFS         = ARCH_BITS=16 IN_BS3KIT
+TEMPLATE_VBoxBS3KitImg_ARTOOL       = OPENWATCOM-16
+TEMPLATE_VBoxBS3KitImg_CTOOL        = Bs3Ow16
+TEMPLATE_VBoxBS3KitImg_CXXTOOL      = Bs3Ow16
+TEMPLATE_VBoxBS3KitImg_CFLAGS       = \
+	-nt=BS3TEXT16 -nd=BS3DATA16 -nc=BS3CODE16 -ecw -q -3 -wx -zl -zu -mc $(BS3_OW_DBG_OPT) -d1 -s -oa -ob -of -oi -ol -or -os
+TEMPLATE_VBoxBS3KitImg_CXXFLAGS     = \
+	-nt=BS3TEXT16 -nd=BS3DATA16 -nc=BS3CODE16 -ecw -q -3 -wx -zl -zu -mc $(BS3_OW_DBG_OPT) -d1 -s -oa -ob -of -oi -ol -or -os
+TEMPLATE_VBoxBS3KitImg_INCS         = $(VBOX_PATH_BS3KIT_SRC) .
+TEMPLATE_VBoxBS3KitImg_LDTOOL       = OPENWATCOM-WL
+# 	option quiet, nofarcalls\
+#	disable 1014, 1023, 2120, 1080
+
+# linker options:
+#      system dos:                 Link a 16-bit DOS binary.
+#      output raw ...:             Produce a raw DOS binary for loading at flat address 10000h.
+#                                  The following is for ordering segments.
+#      option start=_start: 	    The start symbol in bs3-first-xxx.asm.
+#      debug codeview/dwarf all:   Full debug information either in codeview or dwarf.
+#      option symfile:             Produce a separate symbol file with the debug info.
+#      option map:                 Produce a map file.
+#      option statics:             ?
+#      option verbose:             Verbose map file?
+#  	option disable 1014:        Disable warning about
+#  	option disable 1080:        Disable warning about
+#  	option disable 1150:        Disable warning about
+#
+# Note! We're pushing DATA16 to 0x20000 because it's impossible to force wlink
+#       to give us a real-mode + GDT compatible alignment (0ffffff80h), i.e.
+#       real-mode address on the form 0fff8:0000.
+TEMPLATE_VBoxBS3KitImg_LDFLAGS  = system dos \
+	debug $(BS3_OW_DBG_LDOPT) all \
+	option quiet, map, statics, verbose, symfile, start=_start \
+       disable 1014, 1080, 1150 \
+	\
+ 	output raw offset=0x10000 \
+ 	order \
+ 	 clname BS3FLAT segaddr=0x0000 \
+ 	   segment BS3FLAT segaddr=0x0000 \
+ 	 clname BS3CODE16 segaddr=0x1000 \
+ 	  segment BS3TEXT16 \
+ 	  segment BS3TEXT16_END \
+        clname BS3SYSTEM16 segaddr=0x2000 \
+         segment BS3SYSTEM16 \
+ 	 clname FAR_DATA \
+ 	  segment BS3DATA16 segaddr=0x2700 \
+ 	  segment BS3DATA16CONST \
+ 	  segment BS3DATA16CONST2 \
+ 	  segment BS3DATA16_DATA \
+ 	  segment BS3DATA16_END \
+	  segment BS3DATA32 \
+	  segment BS3DATA32_CONST \
+	  segment BS3DATA32_CONST2 \
+	  segment BS3DATA32_DATA \
+ 	  segment DATA32 \
+        clname BS3CODE32 \
+ 	  segment BS3TEXT32 \
+ 	  segment TEXT32 \
+        clname CODE \
+ 	  segment BS3TEXT64 \
+ 	  segment TEXT64 \
+ 	  segment .text \
+ 	  segment .rdata \
+        clname DATA \
+	  segment BS3DATA64 \
+ 	  segment DATA64 \
+ 	  segment .data \
+ 	  segment .pdata \
+ 	  segment .xdata \
+
+TEMPLATE_VBoxBS3KitImg_DEPS = \
+	$(bs3-bootsector_1_TARGET) \
+	$(VBoxBs3Linker_1_TARGET)
+TEMPLATE_VBoxBS3KitImg_POST_CMDS = $(if $(eq $(tool_do),LINK_LIBRARY)\
+	,,$(QUIET)$(MV_EXT) -f -- "$(out)" "$(out).tmp" \
+	$$(NLTAB)$(QUIET)$(VBoxBs3Linker_1_TARGET) -o $(out) $(bs3-bootsector_1_TARGET) $(out).tmp \
+	$$(NLTAB)$(QUIET)$(RM_EXT) -f -- "$(out).tmp")
+
+TEMPLATE_VBoxBS3KitImg_LIBS = \
+	$(PATH_OBJ)/bs3kit-common-16/bs3kit-common-16.lib \
+	$(PATH_OBJ)/bs3kit-common-32/bs3kit-common-32.lib \
+	$(PATH_OBJ)/bs3kit-common-64-asm/bs3kit-common-64-asm.lib \
+	$(PATH_OBJ)/bs3kit-common-64-c/bs3kit-common-64-c.lib \
+       \
+	$(PATH_OBJ)/bs3kit-rm/bs3kit-rm.lib \
+	$(PATH_OBJ)/bs3kit-pe16/bs3kit-pe16.lib \
+	$(PATH_OBJ)/bs3kit-pe32/bs3kit-pe32.lib \
+	$(PATH_OBJ)/bs3kit-pev86/bs3kit-pev86.lib \
+	$(PATH_OBJ)/bs3kit-pp16/bs3kit-pp16.lib \
+	$(PATH_OBJ)/bs3kit-pp32/bs3kit-pp32.lib \
+	$(PATH_OBJ)/bs3kit-ppv86/bs3kit-ppv86.lib \
+	$(PATH_OBJ)/bs3kit-pae16/bs3kit-pae16.lib \
+	$(PATH_OBJ)/bs3kit-pae32/bs3kit-pae32.lib \
+	$(PATH_OBJ)/bs3kit-paev86/bs3kit-paev86.lib \
+	$(PATH_OBJ)/bs3kit-lm16/bs3kit-lm16.lib \
+	$(PATH_OBJ)/bs3kit-lm32/bs3kit-lm32.lib \
+	$(PATH_OBJ)/bs3kit-lm64-asm/bs3kit-lm64-asm.lib \
+	$(PATH_OBJ)/bs3kit-lm64-c/bs3kit-lm64-c.lib
+
+# BS3Kit template for 32-bit code.
+TEMPLATE_VBoxBS3KitImg32 = Template for building BS3Kit test images.
+TEMPLATE_VBoxBS3KitImg32_BLD_TRG      = os-agnostic
+TEMPLATE_VBoxBS3KitImg32_BLD_TRG_ARCH = x86
+TEMPLATE_VBoxBS3KitImg32_INSTTYPE     = none
+TEMPLATE_VBoxBS3KitImg32_ASTOOL       = NASM
+TEMPLATE_VBoxBS3KitImg32_ASFLAGS      = -f obj -g --allow-64bit-code-anywhere -w+orphan-labels
+TEMPLATE_VBoxBS3KitImg32_ASDEFS       = ASM_FORMAT_OMF RT_NOINC_SEGMENTS __NASM__
+TEMPLATE_VBoxBS3KitImg32_DEFS         = ARCH_BITS=32 IN_BS3KIT
+TEMPLATE_VBoxBS3KitImg32_ARTOOL       = OPENWATCOM
+TEMPLATE_VBoxBS3KitImg32_CTOOL        = Bs3Ow32
+TEMPLATE_VBoxBS3KitImg32_CXXTOOL      = Bs3Ow32
+TEMPLATE_VBoxBS3KitImg32_CFLAGS       = \
+	-nt=BS3TEXT32 -nd=BS3DATA32 -nc=BS3CODE32 -ecc -q -wx -zl -mf $(BS3_OW_DBG_OPT) -d1 -s -oa -ob -of -oi -ol -or -os
+TEMPLATE_VBoxBS3KitImg32_CXXFLAGS     = \
+	-nt=BS3TEXT32 -nd=BS3DATA32 -nc=BS3CODE32 -ecc -q -wx -zl -mf $(BS3_OW_DBG_OPT) -d1 -s -oa -ob -of -oi -ol -or -os
+TEMPLATE_VBoxBS3KitImg32_INCS         = $(VBOX_PATH_BS3KIT_SRC) .
+TEMPLATE_VBoxBS3KitImg32_LDTOOL       = VBoxBsUnusedLd
+
+# BS3Kit template for 64-bit code.
+TEMPLATE_VBoxBS3KitImg64 = Template for building BS3Kit test images.
+TEMPLATE_VBoxBS3KitImg64_BLD_TRG      = os-agnostic
+TEMPLATE_VBoxBS3KitImg64_BLD_TRG_ARCH = amd64
+TEMPLATE_VBoxBS3KitImg64_INSTTYPE     = none
+TEMPLATE_VBoxBS3KitImg64_ASTOOL       = NASM
+TEMPLATE_VBoxBS3KitImg64_ASFLAGS      = -f obj -g --allow-64bit-code-anywhere -w+orphan-labels
+TEMPLATE_VBoxBS3KitImg64_ASDEFS       = ASM_FORMAT_OMF RT_NOINC_SEGMENTS __NASM__
+TEMPLATE_VBoxBS3KitImg64_DEFS         = IN_BS3KIT ARCH_BITS=64
+TEMPLATE_VBoxBS3KitImg64_ARTOOL       = OPENWATCOM
+TEMPLATE_VBoxBS3KitImg64_INCS         = $(VBOX_PATH_BS3KIT_SRC) .
+if1of ($(KBUILD_HOST), win)
+ TEMPLATE_VBoxBS3KitImg64_CTOOL      := Bs3Vcc64
+ TEMPLATE_VBoxBS3KitImg64_CXXTOOL    := Bs3Vcc64
+ TEMPLATE_VBoxBS3KitImg64_CFLAGS      = -Zi -O1 -Oi -GF -GS- -Gy -Gs65536
+ TEMPLATE_VBoxBS3KitImg64_CXXFLAGS    = -Zi -O1 -Oi -GF -GS- -Gy -Gs65536
+else
+ if1of ($(KBUILD_HOST), darwin)
+  TEMPLATE_VBoxBS3KitImg64_CTOOL     := Bs3Gcc64Elf64
+  TEMPLATE_VBoxBS3KitImg64_CXXTOOL   := Bs3Gcc64Elf64
+ else
+  TEMPLATE_VBoxBS3KitImg64_CTOOL     := $(VBOX_GCC_TOOL)
+  TEMPLATE_VBoxBS3KitImg64_CXXTOOL   := $(VBOX_GCC_TOOL)
+ endif
+ TEMPLATE_VBoxBS3KitImg64_CFLAGS      = -m64 -maccumulate-outgoing-args -g -Os -fno-omit-frame-pointer $(VBOX_GCC_WARN_PEDANTIC_C)
+ TEMPLATE_VBoxBS3KitImg64_CXXFLAGS    = -m64 -maccumulate-outgoing-args -g -Os -fno-omit-frame-pointer $(VBOX_GCC_WARN_PEDANTIC_CXX)
+endif
+TEMPLATE_VBoxBS3KitImg64_LDTOOL       = VBoxBsUnusedLd
+
+# BS3Kit template for the bootsector.
+TEMPLATE_VBoxBS3KitBS = Template for building BS3Kit test images.
+TEMPLATE_VBoxBS3KitBS_BLD_TRG         = os-agnostic
+TEMPLATE_VBoxBS3KitBS_BLD_TRG_ARCH    = x86
+TEMPLATE_VBoxBS3KitBS_INST            = $(INST_VALIDATIONKIT)bootsectors/
+TEMPLATE_VBoxBS3KitBS_INSTTYPE        = none
+TEMPLATE_VBoxBS3KitBS_BINSUFF         = .img
+TEMPLATE_VBoxBS3KitBS_MODE            = 0644
+TEMPLATE_VBoxBS3KitBS_ASTOOL          = YASM
+TEMPLATE_VBoxBS3KitBS_ASFLAGS         = -f bin --mapfile
+TEMPLATE_VBoxBS3KitBS_ASDEFS          = ASM_FORMAT_BIN RT_NOINC_SEGMENTS ARCH_BITS=16 __YASM__
+TEMPLATE_VBoxBS3KitBS_INCS            = $(VBOX_PATH_BS3KIT_SRC) .
+TEMPLATE_VBoxBS3KitBS_LDTOOL          = VBoxBsCpLd
+
+#
+# ----- Config.kmk: end -----
+#
+
+
+# The boot sector.
+MISCBINS += bs3-bootsector
+bs3-bootsector_TEMPLATE = VBoxBS3KitBS
+bs3-bootsector_SOURCES  = bs3-bootsector.asm
+
+#
+# Common sources to be compiled into _p16, _p32 and _p64 versions.
+#
+VBOX_BS3KIT_COMMON_SOURCES = \
+	bs3-cmn-Shutdown.asm \
+	bs3-cmn-Panic.asm \
+	bs3-cmn-PrintChr.asm \
+	bs3-cmn-Printf.c \
+	bs3-cmn-PrintU32.asm \
+	bs3-cmn-PrintX32.asm \
+	bs3-cmn-PrintStr.c \
+       bs3-cmn-PrintStrColonSpaces.asm \
+       bs3-cmn-PrintStrSpacesColonSpace.c \
+       bs3-cmn-StrFormatV.c \
+       bs3-cmn-StrPrintf.c \
+       bs3-cmn-StrLen.c \
+       bs3-cmn-StrNLen.c \
+       bs3-cmn-StrCpy.c \
+       bs3-cmn-MemCpy.c \
+       bs3-cmn-MemPCpy.c \
+       bs3-cmn-MemMove.c \
+       bs3-cmn-MemZero.asm \
+       bs3-cmn-MemAlloc.c \
+       bs3-cmn-MemAllocZ.c \
+       bs3-cmn-MemFree.c \
+       bs3-cmn-SlabInit.c \
+       bs3-cmn-SlabAlloc.c \
+       bs3-cmn-SlabAllocEx.c \
+       bs3-cmn-SlabFree.c \
+       bs3-cmn-SlabListInit.c \
+       bs3-cmn-SlabListAdd.c \
+       bs3-cmn-SlabListAlloc.c \
+       bs3-cmn-SlabListAllocEx.c \
+       bs3-cmn-SlabListFree.c \
+       bs3-cmn-SwitchToRing0.asm \
+       bs3-cmn-SwitchToRing1.asm \
+       bs3-cmn-SwitchToRing2.asm \
+       bs3-cmn-SwitchToRing3.asm \
+       bs3-cmn-SwitchTo16Bit.asm \
+       bs3-cmn-SwitchTo32Bit.asm \
+       bs3-cmn-SwitchTo64Bit.asm \
+       bs3-cmn-TestData.c \
+       bs3-cmn-TestInit.c \
+	bs3-cmn-TestSendStrCmd.asm \
+	bs3-cmn-TestIsVmmDevTestingPresent.asm \
+       ../../../Runtime/common/asm/ASMBitFirstClear.asm \
+       ../../../Runtime/common/asm/ASMBitFirstSet.asm \
+       ../../../Runtime/common/asm/ASMBitNextClear.asm \
+       ../../../Runtime/common/asm/ASMBitNextSet.asm
+
+# The 16-bit BS3Kit library.
+LIBRARIES += bs3kit-common-16
+bs3kit-common-16_TEMPLATE = VBoxBS3KitImg
+bs3kit-common-16_DEFS     = TMPL_PE16 BS3_CMN_ONLY
+bs3kit-common-16_ASDEFS   = RT_ASMDEFS_INC_FIRST_FILE
+bs3kit-common-16_SOURCES  = $(VBOX_BS3KIT_COMMON_SOURCES) \
+	bs3-system-data.asm \
+	bs3-rm-InitMemory.c \
+	bs3-cmn-hexdigits.c \
+	bs3-wc16-U8DR.asm \
+	bs3-wc16-U8DQ.asm \
+	bs3-wc16-I8DR.asm \
+	bs3-wc16-I8DQ.asm \
+	bs3-wc16-I8RS.asm \
+	bs3-wc16-U8RS.asm \
+	bs3-wc16-U8LS.asm \
+	bs3-wc16-U4D.asm \
+	bs3-wc16-I4D.asm \
+
+# The 32-bit BS3Kit library.
+LIBRARIES += bs3kit-common-32
+bs3kit-common-32_TEMPLATE = VBoxBS3KitImg32
+bs3kit-common-32_DEFS     = TMPL_PE32 BS3_CMN_ONLY
+bs3kit-common-32_ASDEFS   = RT_ASMDEFS_INC_FIRST_FILE
+bs3kit-common-32_SOURCES  = $(VBOX_BS3KIT_COMMON_SOURCES) \
+	bs3-wc32-U8D.asm \
+	bs3-wc32-I8D.asm \
+	bs3-wc32-I8RS.asm \
+	bs3-wc32-U8RS.asm \
+	bs3-wc32-U8LS.asm \
+
+# The 64-bit BS3Kit library.
+LIBRARIES += bs3kit-common-64-asm
+bs3kit-common-64-asm_TEMPLATE = VBoxBS3KitImg64
+bs3kit-common-64-asm_DEFS     = TMPL_LM64 BS3_CMN_ONLY
+bs3kit-common-64-asm_ASDEFS   = RT_ASMDEFS_INC_FIRST_FILE
+bs3kit-common-64-asm_SOURCES  = $(filter %.asm,$(VBOX_BS3KIT_COMMON_SOURCES))
+
+# The 64-bit BS3Kit library.
+LIBRARIES += bs3kit-common-64-c
+bs3kit-common-64-c_TEMPLATE = VBoxBS3KitImg64
+bs3kit-common-64-c_DEFS     = TMPL_LM64 BS3_CMN_ONLY
+bs3kit-common-64-c_SOURCES  = $(filter-out %.asm,$(VBOX_BS3KIT_COMMON_SOURCES))
+
+
+#
+# Common sources to be compiled for each CPU mode.
+#
+VBOX_BS3KIT_MODE_SOURCES = \
+	bs3-mode-SwitchToRM.asm \
+	bs3-mode-SwitchToPE16.asm \
+	bs3-mode-SwitchToPE32.asm \
+	bs3-mode-SwitchToPP16.asm \
+	bs3-mode-SwitchToPP32.asm \
+	bs3-mode-EnteredMode.asm \
+
+# The 16-bit real mode BS3Kit library.
+LIBRARIES += bs3kit-rm
+bs3kit-rm_TEMPLATE = VBoxBS3KitImg
+bs3kit-rm_DEFS     = TMPL_RM
+bs3kit-rm_SOURCES  = $(VBOX_BS3KIT_MODE_SOURCES) \
+	bs3-first-rm.asm
+
+
+# The 16-bit protected mode BS3Kit library.
+LIBRARIES += bs3kit-pe16
+bs3kit-pe16_TEMPLATE = VBoxBS3KitImg
+bs3kit-pe16_DEFS     = TMPL_PE16
+bs3kit-pe16_SOURCES  = $(VBOX_BS3KIT_MODE_SOURCES) \
+	bs3-first-pe16.asm
+
+# The virtual 8086 under protected mode BS3Kit library.
+LIBRARIES += bs3kit-pev86
+bs3kit-pev86_TEMPLATE = VBoxBS3KitImg
+bs3kit-pev86_DEFS     = TMPL_PEV86
+bs3kit-pev86_SOURCES  = $(VBOX_BS3KIT_MODE_SOURCES) \
+
+# The 32-bit protected mode BS3Kit library.
+LIBRARIES += bs3kit-pe32
+bs3kit-pe32_TEMPLATE = VBoxBS3KitImg
+bs3kit-pe32_DEFS     = TMPL_PE32
+bs3kit-pe32_SOURCES  = $(VBOX_BS3KIT_MODE_SOURCES)
+
+
+# The 16-bit paged protected mode BS3Kit library.
+LIBRARIES += bs3kit-pp16
+bs3kit-pp16_TEMPLATE = VBoxBS3KitImg
+bs3kit-pp16_DEFS     = TMPL_PP16
+bs3kit-pp16_SOURCES  = $(VBOX_BS3KIT_MODE_SOURCES) \
+
+# The 32-bit paged protected mode BS3Kit library.
+LIBRARIES += bs3kit-pp32
+bs3kit-pp32_TEMPLATE = VBoxBS3KitImg
+bs3kit-pp32_DEFS     = TMPL_PP32
+bs3kit-pp32_SOURCES  = $(VBOX_BS3KIT_MODE_SOURCES)
+
+# The virtual 8086 under protected mode BS3Kit library.
+LIBRARIES += bs3kit-ppv86
+bs3kit-ppv86_TEMPLATE = VBoxBS3KitImg
+bs3kit-ppv86_DEFS     = TMPL_PPV86
+bs3kit-ppv86_SOURCES  = $(VBOX_BS3KIT_MODE_SOURCES) \
+
+
+# The 16-bit paged protected mode BS3Kit library.
+LIBRARIES += bs3kit-pae16
+bs3kit-pae16_TEMPLATE = VBoxBS3KitImg
+bs3kit-pae16_DEFS     = TMPL_PAE16
+bs3kit-pae16_SOURCES  = $(VBOX_BS3KIT_MODE_SOURCES)
+
+# The 32-bit paged protected mode BS3Kit library.
+LIBRARIES += bs3kit-pae32
+bs3kit-pae32_TEMPLATE = VBoxBS3KitImg
+bs3kit-pae32_DEFS     = TMPL_PAE32
+bs3kit-pae32_SOURCES  = $(VBOX_BS3KIT_MODE_SOURCES)
+
+# The virtual 8086 under protected mode BS3Kit library.
+LIBRARIES += bs3kit-paev86
+bs3kit-paev86_TEMPLATE = VBoxBS3KitImg
+bs3kit-paev86_DEFS     = TMPL_PAEV86
+bs3kit-paev86_SOURCES  = $(VBOX_BS3KIT_MODE_SOURCES) \
+
+
+# The 16-bit long mode BS3Kit library.
+LIBRARIES += bs3kit-lm16
+bs3kit-lm16_TEMPLATE = VBoxBS3KitImg
+bs3kit-lm16_DEFS     = TMPL_LM16
+bs3kit-lm16_SOURCES  = $(VBOX_BS3KIT_MODE_SOURCES) \
+
+# The 32-bit long mode BS3Kit library.
+LIBRARIES += bs3kit-lm32
+bs3kit-lm32_TEMPLATE = VBoxBS3KitImg
+bs3kit-lm32_DEFS     = TMPL_LM32
+bs3kit-lm32_SOURCES  = $(VBOX_BS3KIT_MODE_SOURCES) \
+
+# The 64-bit long mode BS3Kit library.
+LIBRARIES += bs3kit-lm64-asm
+bs3kit-lm64-asm_TEMPLATE = VBoxBS3KitImg
+bs3kit-lm64-asm_DEFS     = TMPL_LM64
+bs3kit-lm64-asm_SOURCES  = $(filter %.asm,$(VBOX_BS3KIT_MODE_SOURCES)) \
+
+# The 64-bit long mode BS3Kit library.
+LIBRARIES += bs3kit-lm64-c
+bs3kit-lm64-c_TEMPLATE = VBoxBS3KitImg
+bs3kit-lm64-c_DEFS     = TMPL_LM64
+bs3kit-lm64-c_SOURCES  = $(filter-out %.asm, $(VBOX_BS3KIT_MODE_SOURCES)) \
+
+
+#
+# shutdown example.
+#
+MISCBINS += bs3-shutdown
+bs3-shutdown_TEMPLATE = VBoxBS3KitImg
+bs3-shutdown_SOURCES = \
+	bs3-first-pe16.asm \
+	bs3-shutdown.c
+
+
+include $(FILE_KBUILD_SUB_FOOTER)
+
+.PRECIOUS: E:/vbox/svn/trunk/out/win.amd64/debug/obj/bs3-shutdown/bs3-shutdown.map

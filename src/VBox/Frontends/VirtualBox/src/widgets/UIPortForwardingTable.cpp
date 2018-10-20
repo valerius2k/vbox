@@ -29,7 +29,6 @@
 # include <QComboBox>
 # include <QLineEdit>
 # include <QSpinBox>
-# include <QHostAddress>
 
 /* GUI includes: */
 # include "UIPortForwardingTable.h"
@@ -723,14 +722,22 @@ bool UIPortForwardingTable::validate() const
         const IpData hostIp = m_pModel->data(m_pModel->index(i, UIPortForwardingModel::UIPortForwardingDataType_HostIp), Qt::EditRole).value<IpData>();
         const IpData guestIp = m_pModel->data(m_pModel->index(i, UIPortForwardingModel::UIPortForwardingDataType_GuestIp), Qt::EditRole).value<IpData>();
 
-        /* If at aleast one port is 'zero': */
+        /* If at least one port is 'zero': */
         if (hostPort.value() == 0 || guestPort.value() == 0)
             return msgCenter().warnAboutIncorrectPort(window());
-        /* If at aleast one address is incorrect: */
-        if (   (!hostIp.isEmpty() && QHostAddress(hostIp).isNull())
-            || (!guestIp.isEmpty() && QHostAddress(guestIp).isNull()))
+        /* If at least one address is incorrect: */
+        if (!hostIp.trimmed().isEmpty() &&
+            (   (   !RTNetIsIPv4AddrStr(hostIp.toUtf8().constData())
+                 && !RTNetIsIPv6AddrStr(hostIp.toUtf8().constData()))
+             || RTNetStrIsIPv4AddrAny(hostIp.toUtf8().constData())
+             || RTNetStrIsIPv6AddrAny(hostIp.toUtf8().constData())))
             return msgCenter().warnAboutIncorrectAddress(window());
-
+        if (!guestIp.trimmed().isEmpty() &&
+            (   (   !RTNetIsIPv4AddrStr(guestIp.toUtf8().constData())
+                 && !RTNetIsIPv6AddrStr(guestIp.toUtf8().constData()))
+             || RTNetStrIsIPv4AddrAny(guestIp.toUtf8().constData())
+             || RTNetStrIsIPv6AddrAny(guestIp.toUtf8().constData())))
+            return msgCenter().warnAboutIncorrectAddress(window());
         /* If empty guest address is not allowed: */
         if (   !m_fAllowEmptyGuestIPs
             && guestIp.isEmpty())

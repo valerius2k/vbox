@@ -24,6 +24,9 @@
 # include <QToolTip>
 # include <QTranslator>
 # include <QDesktopWidget>
+# if QT_VERSION >= 0x050000
+#  include <QStandardPaths>
+# endif /* QT_VERSION >= 0x050000 */
 # include <QDesktopServices>
 # include <QMutex>
 # include <QToolButton>
@@ -34,30 +37,27 @@
 # include <QDir>
 # include <QLocale>
 # include <QSpinBox>
-
 # ifdef Q_WS_WIN
 #  include <QEventLoop>
 # endif /* Q_WS_WIN */
-
 # ifdef Q_WS_X11
 #  include <QTextBrowser>
 #  include <QScrollBar>
 #  include <QX11Info>
 # endif /* Q_WS_X11 */
-
 # ifdef VBOX_GUI_WITH_PIDFILE
 #  include <QTextStream>
 # endif /* VBOX_GUI_WITH_PIDFILE */
 
 /* GUI includes: */
 # include "VBoxGlobal.h"
-# include "VBoxUtils.h"
 # include "UISelectorWindow.h"
 # include "UIMessageCenter.h"
 # include "UIPopupCenter.h"
 # include "QIMessageBox.h"
 # include "QIDialogButtonBox.h"
 # include "UIIconPool.h"
+# include "UIThreadPool.h"
 # include "UIShortcutPool.h"
 # include "UIExtraDataManager.h"
 # include "QIFileDialog.h"
@@ -73,24 +73,22 @@
 # include "UIModalWindowManager.h"
 # include "UIIconPool.h"
 # include "UIVirtualBoxEventHandler.h"
-
 # ifdef Q_WS_PM
 #  include "UIHostComboEditor.h"
 # endif
 
 # ifdef Q_WS_X11
 #  include "UIHostComboEditor.h"
+#  include "UIDesktopWidgetWatchdog.h"
 #  ifndef VBOX_OSE
-#  include "VBoxLicenseViewer.h"
+#   include "VBoxLicenseViewer.h"
 #  endif /* VBOX_OSE */
 # endif /* Q_WS_X11 */
-
 # ifdef Q_WS_MAC
 #  include "VBoxUtils-darwin.h"
 #  include "UIMachineWindowFullscreen.h"
 #  include "UIMachineWindowSeamless.h"
 # endif /* Q_WS_MAC */
-
 # ifdef VBOX_WITH_VIDEOHWACCEL
 #  include "VBoxFBOverlay.h"
 # endif /* VBOX_WITH_VIDEOHWACCEL */
@@ -128,10 +126,10 @@
 # ifdef Q_WS_X11
 #  include <iprt/mem.h>
 # endif /* Q_WS_X11 */
-
 # include <VBox/sup.h>
 # include <VBox/com/Guid.h>
 
+/* External includes: */
 # ifdef Q_WS_WIN
 #  include "shlobj.h"
 # endif /* Q_WS_WIN */
@@ -145,28 +143,24 @@
 # include "VirtualBox_XPCOM.h"
 #endif /* VBOX_WITH_XPCOM */
 
+/* Qt includes: */
 #include <QLibraryInfo>
 #include <QProgressDialog>
-#ifdef VBOX_GUI_WITH_NETWORK_MANAGER
-# include <QNetworkProxy>
-#endif /* VBOX_GUI_WITH_NETWORK_MANAGER */
 #include <QSettings>
 #include <QStyleOptionSpinBox>
 
+/* Other VBox includes: */
 #include <VBox/VBoxOGL.h>
 #include <VBox/vd.h>
-
 #include <iprt/ctype.h>
 #include <iprt/err.h>
 #include <iprt/file.h>
 
+/* External includes: */
+# include <math.h>
 #ifdef Q_WS_MAC
 # include <sys/utsname.h>
 #endif /* Q_WS_MAC */
-
-/* External includes: */
-# include <math.h>
-
 #ifdef Q_WS_X11
 # undef BOOL /* typedef CARD8 BOOL in Xmd.h conflicts with #define BOOL PRBool
               * in COMDefs.h. A better fix would be to isolate X11-specific
@@ -176,7 +170,6 @@
 # include <X11/Xlib.h>
 # include <X11/Xatom.h>
 # include <X11/extensions/Xinerama.h>
-
 # define BOOL PRBool
 #endif /* Q_WS_X11 */
 
@@ -233,12 +226,17 @@ void VBoxGlobal::destroy()
 
 VBoxGlobal::VBoxGlobal()
     : mValid (false)
+#ifdef Q_WS_MAC
+    , m_osRelease(MacOSXRelease_Old)
+#endif /* Q_WS_MAC */
+    , m_fWrappersValid(false)
     , m_fVBoxSVCAvailable(true)
-    , mSelectorWnd (NULL)
     , m_fSeparateProcess(false)
     , m_pMediumEnumerator(0)
 #ifdef Q_WS_X11
+    , m_fCompositingManagerRunning(false)
     , m_enmWindowManagerType(X11WMType_Unknown)
+    , m_pDesktopWidgetWatchdog(0)
 #endif /* Q_WS_X11 */
 #if defined(DEBUG_bird)
     , mAgressiveCaching(false)
@@ -256,6 +254,7 @@ VBoxGlobal::VBoxGlobal()
     , m3DAvailable(-1)
     , mSettingsPwSet(false)
     , m_pIconPool(0)
+    , m_pThreadPool(0)
 {
     /* Assign instance: */
     m_spInstance = this;
@@ -313,33 +312,100 @@ bool VBoxGlobal::isBeta() const
 }
 
 #ifdef Q_WS_MAC
-/** Returns #MacOSXRelease determined using <i>uname</i> call. */
-MacOSXRelease VBoxGlobal::osRelease()
+/* static */
+MacOSXRelease VBoxGlobal::determineOsRelease()
 {
     /* Prepare 'utsname' struct: */
     utsname info;
     if (uname(&info) != -1)
     {
-        /* Parse known .release types: */
-            if (QString(info.release).startsWith("14."))
-                return MacOSXRelease_Yosemite;
-        else
-            if (QString(info.release).startsWith("13."))
-                return MacOSXRelease_Mavericks;
-        else
-            if (QString(info.release).startsWith("12."))
-                return MacOSXRelease_MountainLion;
-        else
-            if (QString(info.release).startsWith("11."))
-                return MacOSXRelease_Lion;
-        else
-            if (QString(info.release).startsWith("10."))
-                return MacOSXRelease_SnowLeopard;
+        /* Compose map of known releases: */
+        QMap<int, MacOSXRelease> release;
+        release[10] = MacOSXRelease_SnowLeopard;
+        release[11] = MacOSXRelease_Lion;
+        release[12] = MacOSXRelease_MountainLion;
+        release[13] = MacOSXRelease_Mavericks;
+        release[14] = MacOSXRelease_Yosemite;
+        release[15] = MacOSXRelease_ElCapitan;
+
+        /* Cut the major release index of the string we have, s.a. 'man uname': */
+        const int iRelease = QString(info.release).section('.', 0, 0).toInt();
+
+        /* Return release if determined, return 'New' if version more recent than latest, return 'Old' otherwise: */
+        return release.value(iRelease, iRelease > release.keys().last() ? MacOSXRelease_New : MacOSXRelease_Old);
     }
-    /* Unknown by default: */
-    return MacOSXRelease_Unknown;
+    /* Return 'Old' by default: */
+    return MacOSXRelease_Old;
 }
 #endif /* Q_WS_MAC */
+
+int VBoxGlobal::screenCount() const
+{
+    /* Redirect call to QDesktopWidget: */
+    return QApplication::desktop()->screenCount();
+}
+
+int VBoxGlobal::screenNumber(const QWidget *pWidget) const
+{
+    /* Redirect call to QDesktopWidget: */
+    return QApplication::desktop()->screenNumber(pWidget);
+}
+
+int VBoxGlobal::screenNumber(const QPoint &point) const
+{
+    /* Redirect call to QDesktopWidget: */
+    return QApplication::desktop()->screenNumber(point);
+}
+
+const QRect VBoxGlobal::screenGeometry(int iHostScreenIndex /* = -1 */) const
+{
+#ifdef Q_WS_X11
+    /* Make sure desktop-widget watchdog already created: */
+    AssertPtrReturn(m_pDesktopWidgetWatchdog, QApplication::desktop()->screenGeometry(iHostScreenIndex));
+    /* Redirect call to UIDesktopWidgetWatchdog: */
+    return m_pDesktopWidgetWatchdog->screenGeometry(iHostScreenIndex);
+#endif /* Q_WS_X11 */
+
+    /* Redirect call to QDesktopWidget: */
+    return QApplication::desktop()->screenGeometry(iHostScreenIndex);
+}
+
+const QRect VBoxGlobal::availableGeometry(int iHostScreenIndex /* = -1 */) const
+{
+#ifdef Q_WS_X11
+    /* Make sure desktop-widget watchdog already created: */
+    AssertPtrReturn(m_pDesktopWidgetWatchdog, QApplication::desktop()->availableGeometry(iHostScreenIndex));
+    /* Redirect call to UIDesktopWidgetWatchdog: */
+    return m_pDesktopWidgetWatchdog->availableGeometry(iHostScreenIndex);
+#endif /* Q_WS_X11 */
+
+    /* Redirect call to QDesktopWidget: */
+    return QApplication::desktop()->availableGeometry(iHostScreenIndex);
+}
+
+const QRect VBoxGlobal::screenGeometry(const QWidget *pWidget) const
+{
+    /* Redirect call to existing wrapper: */
+    return screenGeometry(screenNumber(pWidget));
+}
+
+const QRect VBoxGlobal::availableGeometry(const QWidget *pWidget) const
+{
+    /* Redirect call to existing wrapper: */
+    return availableGeometry(screenNumber(pWidget));
+}
+
+const QRect VBoxGlobal::screenGeometry(const QPoint &point) const
+{
+    /* Redirect call to existing wrapper: */
+    return screenGeometry(screenNumber(point));
+}
+
+const QRect VBoxGlobal::availableGeometry(const QPoint &point) const
+{
+    /* Redirect call to existing wrapper: */
+    return availableGeometry(screenNumber(point));
+}
 
 /**
  *  Sets the new global settings and saves them to the VirtualBox server.
@@ -359,39 +425,6 @@ bool VBoxGlobal::setSettings (VBoxGlobalSettings &gs)
      * sent to the VirtualBox server by gs.save(). */
 
     return true;
-}
-
-/**
- *  Returns a reference to the main VBox VM Selector window.
- *  The reference is valid until application termination.
- *
- *  There is only one such a window per VirtualBox application.
- */
-UISelectorWindow &VBoxGlobal::selectorWnd()
-{
-    AssertMsg (!vboxGlobal().isVMConsoleProcess(),
-               ("Must NOT be a VM console process"));
-    Assert (mValid);
-
-    if (!mSelectorWnd)
-    {
-        /*
-         *  We pass the address of mSelectorWnd to the constructor to let it be
-         *  initialized right after the constructor is called. It is necessary
-         *  to avoid recursion, since this method may be (and will be) called
-         *  from the below constructor or from constructors/methods it calls.
-         */
-        UISelectorWindow *w = new UISelectorWindow (&mSelectorWnd, 0);
-        Assert (w == mSelectorWnd);
-        NOREF(w);
-    }
-
-    return *mSelectorWnd;
-}
-
-UIMachine* VBoxGlobal::virtualMachine() const
-{
-    return gpMachine;
 }
 
 QWidget* VBoxGlobal::activeMachineWindow() const
@@ -595,8 +628,8 @@ QList<ulong> XGetStrut(Window window)
 QList<CGuestOSType> VBoxGlobal::vmGuestOSFamilyList() const
 {
     QList<CGuestOSType> result;
-    for (int i = 0; i < mFamilyIDs.size(); ++i)
-        result << mTypes[i][0];
+    for (int i = 0; i < m_guestOSFamilyIDs.size(); ++i)
+        result << m_guestOSTypes[i][0];
     return result;
 }
 
@@ -606,9 +639,9 @@ QList<CGuestOSType> VBoxGlobal::vmGuestOSFamilyList() const
  */
 QList<CGuestOSType> VBoxGlobal::vmGuestOSTypeList(const QString &aFamilyId) const
 {
-    AssertMsg(mFamilyIDs.contains(aFamilyId), ("Family ID incorrect: '%s'.", aFamilyId.toLatin1().constData()));
-    return mFamilyIDs.contains(aFamilyId) ?
-           mTypes[mFamilyIDs.indexOf(aFamilyId)] : QList<CGuestOSType>();
+    AssertMsg(m_guestOSFamilyIDs.contains(aFamilyId), ("Family ID incorrect: '%s'.", aFamilyId.toLatin1().constData()));
+    return m_guestOSFamilyIDs.contains(aFamilyId) ?
+           m_guestOSTypes[m_guestOSFamilyIDs.indexOf(aFamilyId)] : QList<CGuestOSType>();
 }
 
 QPixmap VBoxGlobal::vmGuestOSTypeIcon(const QString &strOSTypeID, QSize *pLogicalSize /* = 0 */) const
@@ -623,6 +656,30 @@ QPixmap VBoxGlobal::vmGuestOSTypeIcon(const QString &strOSTypeID, QSize *pLogica
     return m_pIconPool->guestOSTypeIcon(strOSTypeID, pLogicalSize);
 }
 
+QPixmap VBoxGlobal::vmGuestOSTypePixmap(const QString &strOSTypeID, const QSize &physicalSize) const
+{
+    /* Prepare fallback pixmap: */
+    static QPixmap nullPixmap;
+
+    /* Make sure general icon-pool initialized: */
+    AssertReturn(m_pIconPool, nullPixmap);
+
+    /* Redirect to general icon-pool: */
+    return m_pIconPool->guestOSTypePixmap(strOSTypeID, physicalSize);
+}
+
+QPixmap VBoxGlobal::vmGuestOSTypePixmapHiDPI(const QString &strOSTypeID, const QSize &physicalSize) const
+{
+    /* Prepare fallback pixmap: */
+    static QPixmap nullPixmap;
+
+    /* Make sure general icon-pool initialized: */
+    AssertReturn(m_pIconPool, nullPixmap);
+
+    /* Redirect to general icon-pool: */
+    return m_pIconPool->guestOSTypePixmapHiDPI(strOSTypeID, physicalSize);
+}
+
 /**
  *  Returns the guest OS type object corresponding to the given type id of list
  *  containing OS types related to OS family determined by family id attribute.
@@ -632,14 +689,14 @@ CGuestOSType VBoxGlobal::vmGuestOSType(const QString &aTypeId,
              const QString &aFamilyId /* = QString::null */) const
 {
     QList <CGuestOSType> list;
-    if (mFamilyIDs.contains (aFamilyId))
+    if (m_guestOSFamilyIDs.contains (aFamilyId))
     {
-        list = mTypes [mFamilyIDs.indexOf (aFamilyId)];
+        list = m_guestOSTypes [m_guestOSFamilyIDs.indexOf (aFamilyId)];
     }
     else
     {
-        for (int i = 0; i < mFamilyIDs.size(); ++ i)
-            list += mTypes [i];
+        for (int i = 0; i < m_guestOSFamilyIDs.size(); ++ i)
+            list += m_guestOSTypes [i];
     }
     for (int j = 0; j < list.size(); ++ j)
         if (!list [j].GetId().compare (aTypeId))
@@ -653,9 +710,9 @@ CGuestOSType VBoxGlobal::vmGuestOSType(const QString &aTypeId,
  */
 QString VBoxGlobal::vmGuestOSTypeDescription (const QString &aTypeId) const
 {
-    for (int i = 0; i < mFamilyIDs.size(); ++ i)
+    for (int i = 0; i < m_guestOSFamilyIDs.size(); ++ i)
     {
-        QList <CGuestOSType> list (mTypes [i]);
+        QList <CGuestOSType> list (m_guestOSTypes [i]);
         for ( int j = 0; j < list.size(); ++ j)
             if (!list [j].GetId().compare (aTypeId))
                 return list [j].GetDescription();
@@ -1518,40 +1575,6 @@ CSession VBoxGlobal::openSession(const QString &strId, KLockType lockType /* = K
     return session;
 }
 
-#ifdef VBOX_GUI_WITH_NETWORK_MANAGER
-void VBoxGlobal::reloadProxySettings()
-{
-    UIProxyManager proxyManager(settings().proxySettings());
-    if (proxyManager.authEnabled())
-    {
-        proxyManager.setAuthEnabled(false);
-        proxyManager.setAuthLogin(QString());
-        proxyManager.setAuthPassword(QString());
-        VBoxGlobalSettings globalSettings = settings();
-        globalSettings.setProxySettings(proxyManager.toString());
-        vboxGlobal().setSettings(globalSettings);
-    }
-    if (proxyManager.proxyEnabled())
-    {
-#if 0
-        QNetworkProxy::setApplicationProxy(QNetworkProxy(QNetworkProxy::HttpProxy,
-                                                         proxyManager.proxyHost(),
-                                                         proxyManager.proxyPort().toInt(),
-                                                         proxyManager.authEnabled() ? proxyManager.authLogin() : QString(),
-                                                         proxyManager.authEnabled() ? proxyManager.authPassword() : QString()));
-#else
-        QNetworkProxy::setApplicationProxy(QNetworkProxy(QNetworkProxy::HttpProxy,
-                                                         proxyManager.proxyHost(),
-                                                         proxyManager.proxyPort().toInt()));
-#endif
-    }
-    else
-    {
-        QNetworkProxy::setApplicationProxy(QNetworkProxy(QNetworkProxy::NoProxy));
-    }
-}
-#endif /* VBOX_GUI_WITH_NETWORK_MANAGER */
-
 void VBoxGlobal::createMedium(const UIMedium &medium)
 {
     if (m_mediumEnumeratorDtorRwLock.tryLockForRead())
@@ -2075,6 +2098,13 @@ void VBoxGlobal::updateMachineStorage(const CMachine &constMachine, const UIMedi
                     msgCenter().cannotRemountMedium(machine, vboxGlobal().medium(strActualID),
                                                     fMount, false /* retry? */);
             }
+        }
+        /* Mounting successful: */
+        else
+        {
+            /* Disable First RUN Wizard: */
+            if (gEDataManager->machineFirstTimeStarted(machine.GetId()))
+                gEDataManager->setMachineFirstTimeStarted(false, machine.GetId());
         }
     }
 
@@ -2918,8 +2948,9 @@ quint64 VBoxGlobal::requiredVideoMemory(const QString &strGuestOSTypeId, int cMo
      * correct, but as we can't predict on which host screens the user will
      * open the guest windows, this is the best assumption we can do, cause it
      * is the worst case. */
-    QVector<int> screenSize(qMax(cMonitors, pDW->numScreens()), 0);
-    for (int i = 0; i < pDW->numScreens(); ++i)
+    const int cHostScreens = pDW->screenCount();
+    QVector<int> screenSize(qMax(cMonitors, cHostScreens), 0);
+    for (int i = 0; i < cHostScreens; ++i)
     {
         QRect r = pDW->screenGeometry(i);
         screenSize[i] = r.width() * r.height();
@@ -3347,7 +3378,7 @@ bool VBoxGlobal::supportsFullScreenMonitorsProtocolX11()
 /* static */
 bool VBoxGlobal::setFullScreenMonitorX11(QWidget *pWidget, ulong uScreenId)
 {
-    return XXSendClientMessage(pWidget->x11Info().display(),
+    return XXSendClientMessage(QX11Info::display(),
                                pWidget->window()->winId(),
                                "_NET_WM_FULLSCREEN_MONITORS",
                                uScreenId, uScreenId, uScreenId, uScreenId,
@@ -3358,7 +3389,7 @@ bool VBoxGlobal::setFullScreenMonitorX11(QWidget *pWidget, ulong uScreenId)
 QVector<Atom> VBoxGlobal::flagsNetWmState(QWidget *pWidget)
 {
     /* Get display: */
-    Display *pDisplay = pWidget->x11Info().display();
+    Display *pDisplay = QX11Info::display();
 
     /* Prepare atoms: */
     QVector<Atom> resultNetWmState;
@@ -3402,7 +3433,7 @@ QVector<Atom> VBoxGlobal::flagsNetWmState(QWidget *pWidget)
 bool VBoxGlobal::isFullScreenFlagSet(QWidget *pWidget)
 {
     /* Get display: */
-    Display *pDisplay = pWidget->x11Info().display();
+    Display *pDisplay = QX11Info::display();
 
     /* Prepare atoms: */
     Atom net_wm_state_fullscreen = XInternAtom(pDisplay, "_NET_WM_STATE_FULLSCREEN", True /* only if exists */);
@@ -3415,7 +3446,7 @@ bool VBoxGlobal::isFullScreenFlagSet(QWidget *pWidget)
 void VBoxGlobal::setFullScreenFlag(QWidget *pWidget)
 {
     /* Get display: */
-    Display *pDisplay = pWidget->x11Info().display();
+    Display *pDisplay = QX11Info::display();
 
     /* Prepare atoms: */
     QVector<Atom> resultNetWmState = flagsNetWmState(pWidget);
@@ -3529,7 +3560,7 @@ QWidget *VBoxGlobal::findWidget (QWidget *aParent, const char *aName,
         QWidgetList list = QApplication::topLevelWidgets();
         foreach(QWidget *w, list)
         {
-            if ((!aName || strcmp (w->objectName().toAscii().constData(), aName) == 0) &&
+            if ((!aName || strcmp (w->objectName().toLatin1().constData(), aName) == 0) &&
                 (!aClassName || strcmp (w->metaObject()->className(), aClassName) == 0))
                 return w;
             if (aRecursive)
@@ -3544,7 +3575,7 @@ QWidget *VBoxGlobal::findWidget (QWidget *aParent, const char *aName,
 
     /* Find the first children of aParent with the appropriate properties.
      * Please note that this call is recursively. */
-    QList<QWidget *> list = qFindChildren<QWidget *> (aParent, aName);
+    QList<QWidget *> list = aParent->findChildren<QWidget*>(aName);
     foreach(QWidget *child, list)
     {
         if (!aClassName || strcmp (child->metaObject()->className(), aClassName) == 0)
@@ -3620,7 +3651,11 @@ QList <QPair <QString, QString> > VBoxGlobal::FloppyBackends()
 /* static */
 QString VBoxGlobal::documentsPath()
 {
+#if QT_VERSION >= 0x050000
+    QString path = QStandardPaths::writableLocation(QStandardPaths::DocumentsLocation);
+#else /* QT_VERSION < 0x050000 */
     QString path = QDesktopServices::storageLocation(QDesktopServices::DocumentsLocation);
+#endif /* QT_VERSION < 0x050000 */
     QDir dir(path);
     if (dir.exists())
         return QDir::cleanPath(dir.canonicalPath());
@@ -3840,14 +3875,6 @@ void VBoxGlobal::sltGUILanguageChange(QString strLang)
     loadLanguage(strLang);
 }
 
-void VBoxGlobal::sltProcessGlobalSettingChange()
-{
-#ifdef VBOX_GUI_WITH_NETWORK_MANAGER
-    /* Reload proxy settings: */
-    reloadProxySettings();
-#endif /* VBOX_GUI_WITH_NETWORK_MANAGER */
-}
-
 // Protected members
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -3941,7 +3968,8 @@ bool VBoxGlobal::processArgs()
     if (!list.isEmpty())
     {
         m_ArgUrlList = list;
-        QTimer::singleShot(0, &vboxGlobal().selectorWnd(), SLOT(sltOpenUrls()));
+        UISelectorWindow::create();
+        QTimer::singleShot(0, gpSelectorWindow, SLOT(sltOpenUrls()));
     }
     return fResult;
 }
@@ -3950,6 +3978,11 @@ void VBoxGlobal::prepare()
 {
     /* Make sure QApplication cleanup us on exit: */
     connect(qApp, SIGNAL(aboutToQuit()), this, SLOT(cleanup()));
+
+#ifdef Q_WS_MAC
+    /* Determine OS release early: */
+    m_osRelease = determineOsRelease();
+#endif /* Q_WS_MAC */
 
     /* Create message-center: */
     UIMessageCenter::create();
@@ -3990,14 +4023,15 @@ void VBoxGlobal::prepare()
         msgCenter().cannotCreateVirtualBoxClient(m_client);
         return;
     }
-    /* Fetch corresponding objects/values: */
-    m_vbox = virtualBoxClient().GetVirtualBox();
-    m_host = virtualBox().GetHost();
-    m_strHomeFolder = virtualBox().GetHomeFolder();
+    /* Init wrappers: */
+    comWrappersReinit();
 
     /* Watch for the VBoxSVC availability changes: */
     connect(gVBoxEvents, SIGNAL(sigVBoxSVCAvailabilityChange(bool)),
             this, SLOT(sltHandleVBoxSVCAvailabilityChange(bool)));
+
+    /* Prepare thread-pool instance: */
+    m_pThreadPool = new UIThreadPool(3 /* worker count */, 5000 /* worker timeout */);
 
     /* create default non-null global settings */
     gset = VBoxGlobalSettings (false);
@@ -4020,33 +4054,6 @@ void VBoxGlobal::prepare()
     connect(gEDataManager, SIGNAL(sigLanguageChange(QString)),
             this, SLOT(sltGUILanguageChange(QString)));
 
-    /* Initialize guest OS Type list. */
-    CGuestOSTypeVector coll = m_vbox.GetGuestOSTypes();
-    int osTypeCount = coll.size();
-    AssertMsg(osTypeCount > 0, ("Number of OS types must not be zero"));
-    if (osTypeCount > 0)
-    {
-        /* Here we ASSUME the 'Other' types are always the first, so we
-         * remember it and will append it to the list when finished.
-         * We do a two pass, first adding the specific types, then the two
-         * 'Other' types. */
-        for (int j = 0; j < 2; j++)
-        {
-            int cMax = j == 0 ? coll.size() : RT_MIN(2, coll.size());
-            for (int i = j == 0 ? 2 : 0; i < cMax; ++i)
-            {
-                CGuestOSType os = coll[i];
-                QString familyId(os.GetFamilyId());
-                if (!mFamilyIDs.contains(familyId))
-                {
-                    mFamilyIDs << familyId;
-                    mTypes << QList<CGuestOSType>();
-                }
-                mTypes[mFamilyIDs.indexOf(familyId)].append(os);
-            }
-        }
-    }
-
     qApp->installEventFilter (this);
 
     /* process command line */
@@ -4054,8 +4061,14 @@ void VBoxGlobal::prepare()
     UIVisualStateType visualStateType = UIVisualStateType_Invalid;
 
 #ifdef Q_WS_X11
+    /* Check whether we have compositing manager running: */
+    m_fCompositingManagerRunning = X11IsCompositingManagerRunning();
+
     /* Acquire current Window Manager type: */
     m_enmWindowManagerType = X11WindowManagerType();
+
+    /* Create desktop-widget watchdog instance: */
+    m_pDesktopWidgetWatchdog = new UIDesktopWidgetWatchdog(this);
 #endif /* Q_WS_X11 */
 
 #ifdef VBOX_WITH_DEBUGGER_GUI
@@ -4074,11 +4087,20 @@ void VBoxGlobal::prepare()
     bool fSeparateProcess = false;
     QString vmNameOrUuid;
 
+#if QT_VERSION >= 0x050000
+    const QStringList arguments = qApp->arguments();
+    const int argc = arguments.size();
+#else /* QT_VERSION < 0x050000 */
     int argc = qApp->argc();
+#endif /* QT_VERSION < 0x050000 */
     int i = 1;
     while (i < argc)
     {
+#if QT_VERSION >= 0x050000
+        const char *arg = arguments.at(i).toLocal8Bit().constData();
+#else /* QT_VERSION < 0x050000 */
         const char *arg = qApp->argv() [i];
+#endif /* QT_VERSION < 0x050000 */
         /* NOTE: the check here must match the corresponding check for the
          * options to start a VM in main.cpp and hardenedmain.cpp exactly,
          * otherwise there will be weird error messages. */
@@ -4087,7 +4109,11 @@ void VBoxGlobal::prepare()
         {
             if (++i < argc)
             {
+#if QT_VERSION >= 0x050000
+                vmNameOrUuid = arguments.at(i);
+#else /* QT_VERSION < 0x050000 */
                 vmNameOrUuid = QString (qApp->argv() [i]);
+#endif /* QT_VERSION < 0x050000 */
                 startVM = true;
             }
         }
@@ -4099,7 +4125,11 @@ void VBoxGlobal::prepare()
         else if (!::strcmp(arg, "-pidfile") || !::strcmp(arg, "--pidfile"))
         {
             if (++i < argc)
+# if QT_VERSION >= 0x050000
+                m_strPidfile = arguments.at(i);
+# else /* QT_VERSION < 0x050000 */
                 m_strPidfile = QString(qApp->argv()[i]);
+# endif /* QT_VERSION < 0x050000 */
         }
 #endif /* VBOX_GUI_WITH_PIDFILE */
         /* Visual state type options: */
@@ -4116,7 +4146,11 @@ void VBoxGlobal::prepare()
         {
             if (++i < argc)
             {
+#if QT_VERSION >= 0x050000
+                RTStrCopy(mSettingsPw, sizeof(mSettingsPw), arguments.at(i).toLocal8Bit().constData());
+#else /* QT_VERSION < 0x050000 */
                 RTStrCopy(mSettingsPw, sizeof(mSettingsPw), qApp->argv() [i]);
+#endif /* QT_VERSION < 0x050000 */
                 mSettingsPwSet = true;
             }
         }
@@ -4125,7 +4159,11 @@ void VBoxGlobal::prepare()
             if (++i < argc)
             {
                 size_t cbFile;
+#if QT_VERSION >= 0x050000
+                const char *pszFile = arguments.at(i).toLocal8Bit().constData();
+#else /* QT_VERSION < 0x050000 */
                 char *pszFile = qApp->argv() [i];
+#endif /* QT_VERSION < 0x050000 */
                 bool fStdIn = !::strcmp(pszFile, "stdin");
                 int vrc = VINF_SUCCESS;
                 PRTSTREAM pStrm;
@@ -4169,12 +4207,20 @@ void VBoxGlobal::prepare()
         else if (!::strcmp(arg, "--fda"))
         {
             if (++i < argc)
+# if QT_VERSION >= 0x050000
+                m_strFloppyImage = arguments.at(i);
+# else /* QT_VERSION < 0x050000 */
                 m_strFloppyImage = qApp->argv()[i];
+# endif /* QT_VERSION < 0x050000 */
         }
         else if (!::strcmp(arg, "--dvd") || !::strcmp(arg, "--cdrom"))
         {
             if (++i < argc)
+# if QT_VERSION >= 0x050000
+                m_strDvdImage = arguments.at(i);
+# else /* QT_VERSION < 0x050000 */
                 m_strDvdImage = qApp->argv()[i];
+# endif /* QT_VERSION < 0x050000 */
         }
         /* VMM Options: */
         else if (!::strcmp(arg, "--disable-patm"))
@@ -4192,7 +4238,11 @@ void VBoxGlobal::prepare()
         else if (!::strcmp(arg, "--warp-pct"))
         {
             if (++i < argc)
+#if QT_VERSION >= 0x050000
+                mWarpPct = RTStrToUInt32(arguments.at(i).toLocal8Bit().constData());
+#else /* QT_VERSION < 0x050000 */
                 mWarpPct = RTStrToUInt32(qApp->argv() [i]);
+#endif /* QT_VERSION < 0x050000 */
         }
 #ifdef VBOX_WITH_DEBUGGER_GUI
         /* Debugger/Debugging options: */
@@ -4329,12 +4379,6 @@ void VBoxGlobal::prepare()
     if (agressiveCaching())
         startMediumEnumeration();
 
-    /* Prepare global settings change handler: */
-    connect(&settings(), SIGNAL(propertyChanged(const char*, const char*)),
-            this, SLOT(sltProcessGlobalSettingChange()));
-    /* Handle global settings change for the first time: */
-    sltProcessGlobalSettingChange();
-
     /* Create shortcut pool: */
     UIShortcutPool::create();
 
@@ -4345,6 +4389,11 @@ void VBoxGlobal::prepare()
     /* Schedule update manager: */
     UIUpdateManager::schedule();
 #endif /* VBOX_GUI_WITH_NETWORK_MANAGER */
+
+#ifdef RT_OS_LINUX
+    /* Make sure no wrong USB mounted: */
+    checkForWrongUSBMounted();
+#endif /* RT_OS_LINUX */
 }
 
 void VBoxGlobal::cleanup()
@@ -4370,11 +4419,8 @@ void VBoxGlobal::cleanup()
 
     /* Destroy the GUI root windows _BEFORE_ the media-mess, because there is
        code in the GUI that's using the media code an will be racing us! */
-    if (mSelectorWnd)
-    {
-        delete mSelectorWnd;
-        mSelectorWnd = NULL;
-    }
+    if (gpSelectorWindow)
+        UISelectorWindow::destroy();
     if (gpMachine)
         UIMachine::destroy();
 
@@ -4390,13 +4436,16 @@ void VBoxGlobal::cleanup()
     /* Destroy whatever this converter stuff is: */
     UIConverter::cleanup();
 
+    /* Cleanup thread-pool: */
+    delete m_pThreadPool;
+    m_pThreadPool = 0;
     /* Cleanup general icon-pool: */
     delete m_pIconPool;
     m_pIconPool = 0;
 
     /* ensure CGuestOSType objects are no longer used */
-    mFamilyIDs.clear();
-    mTypes.clear();
+    m_guestOSFamilyIDs.clear();
+    m_guestOSTypes.clear();
 
     /* Starting COM cleanup: */
     m_comCleanupProtectionToken.lockForWrite();
@@ -4434,8 +4483,76 @@ void VBoxGlobal::sltHandleVBoxSVCAvailabilityChange(bool fAvailable)
     /* Cache the new VBoxSVC availability value: */
     m_fVBoxSVCAvailable = fAvailable;
 
+    /* If VBoxSVC is not available: */
+    if (!m_fVBoxSVCAvailable)
+    {
+        /* Mark wrappers invalid: */
+        m_fWrappersValid = false;
+        /* Re-fetch corresponding CVirtualBox to restart VBoxSVC: */
+        // CVirtualBox is still NULL in current Main implementation,
+        // and this call do not restart anything, so we are waiting
+        // for subsequent event about VBoxSVC is available again.
+        m_vbox = virtualBoxClient().GetVirtualBox();
+    }
+    /* If VBoxSVC is available: */
+    else
+    {
+        if (!m_fWrappersValid)
+        {
+            /* Re-init wrappers: */
+            comWrappersReinit();
+
+            /* If that is Selector UI: */
+            if (!isVMConsoleProcess())
+            {
+                /* Recreate/show selector-window: */
+                UISelectorWindow::destroy();
+                UISelectorWindow::create();
+            }
+        }
+    }
+
     /* Notify listeners about the VBoxSVC availability change: */
     emit sigVBoxSVCAvailabilityChange();
+}
+
+void VBoxGlobal::comWrappersReinit()
+{
+    /* Re-fetch corresponding objects/values: */
+    m_vbox = virtualBoxClient().GetVirtualBox();
+    m_host = virtualBox().GetHost();
+    m_strHomeFolder = virtualBox().GetHomeFolder();
+
+    /* Re-initialize guest OS Type list: */
+    m_guestOSFamilyIDs.clear();
+    m_guestOSTypes.clear();
+    const CGuestOSTypeVector guestOSTypes = m_vbox.GetGuestOSTypes();
+    const int cGuestOSTypeCount = guestOSTypes.size();
+    AssertMsg(cGuestOSTypeCount > 0, ("Number of OS types must not be zero"));
+    if (cGuestOSTypeCount > 0)
+    {
+        /* Here we ASSUME the 'Other' types are always the first,
+         * so we remember them and will append them to the list when finished.
+         * We do a two pass, first adding the specific types, then the two 'Other' types. */
+        for (int j = 0; j < 2; ++j)
+        {
+            int cMax = j == 0 ? cGuestOSTypeCount : RT_MIN(2, cGuestOSTypeCount);
+            for (int i = j == 0 ? 2 : 0; i < cMax; ++i)
+            {
+                const CGuestOSType os = guestOSTypes.at(i);
+                const QString strFamilyID = os.GetFamilyId();
+                if (!m_guestOSFamilyIDs.contains(strFamilyID))
+                {
+                    m_guestOSFamilyIDs << strFamilyID;
+                    m_guestOSTypes << QList<CGuestOSType>();
+                }
+                m_guestOSTypes[m_guestOSFamilyIDs.indexOf(strFamilyID)].append(os);
+            }
+        }
+    }
+
+    /* Mark wrappers valid: */
+    m_fWrappersValid = true;
 }
 
 #ifdef VBOX_WITH_DEBUGGER_GUI
@@ -4495,7 +4612,7 @@ void VBoxGlobal::initDebuggerVar(int *piDbgCfgVar, const char *pszEnvVar, const 
             *piDbgCfgVar = VBOXGLOBAL_DBG_CFG_VAR_FALSE;
         else
         {
-            LogFunc(("Ignoring unknown value '%s' for '%s'\n", pStr->toAscii().constData(), pStr == &strEnvValue ? pszEnvVar : pszExtraDataName));
+            LogFunc(("Ignoring unknown value '%s' for '%s'\n", pStr->toUtf8().constData(), pStr == &strEnvValue ? pszEnvVar : pszExtraDataName));
             *piDbgCfgVar = fDefault ? VBOXGLOBAL_DBG_CFG_VAR_TRUE : VBOXGLOBAL_DBG_CFG_VAR_FALSE;
         }
     }
@@ -4551,10 +4668,48 @@ bool VBoxGlobal::isDebuggerWorker(int *piDbgCfgVar, const char *pszExtraDataName
 
 #endif /* VBOX_WITH_DEBUGGER_GUI */
 
-/** @fn vboxGlobal
- *
- *  Shortcut to the static VBoxGlobal::instance() method, for convenience.
- */
+bool VBoxGlobal::showUI()
+{
+    /* Load application settings: */
+    VBoxGlobalSettings appSettings = settings();
+
+    /* Show Selector UI: */
+    if (!isVMConsoleProcess())
+    {
+        /* Make sure Selector UI is permitted: */
+        if (appSettings.isFeatureActive("noSelector"))
+        {
+            msgCenter().cannotStartSelector();
+            return false;
+        }
+
+#ifdef VBOX_BLEEDING_EDGE
+        /* Show EXPERIMENTAL BUILD warning: */
+        msgCenter().showExperimentalBuildWarning();
+#else /* !VBOX_BLEEDING_EDGE */
+# ifndef DEBUG
+        /* Show BETA warning if necessary: */
+        const QString vboxVersion(vboxGlobal().virtualBox().GetVersion());
+        if (   vboxVersion.contains("BETA")
+            && gEDataManager->preventBetaBuildWarningForVersion() != vboxVersion)
+            msgCenter().showBetaBuildWarning();
+# endif /* !DEBUG */
+#endif /* !VBOX_BLEEDING_EDGE */
+
+        /* Create/show selector-window: */
+        UISelectorWindow::create();
+    }
+    /* Show Runtime UI: */
+    else
+    {
+        /* Make sure machine is started: */
+        if (!UIMachine::startMachine(vboxGlobal().managedVMUuid()))
+            return false;
+    }
+
+    /* True by default: */
+    return true;
+}
 
 bool VBoxGlobal::switchToMachine(CMachine &machine)
 {

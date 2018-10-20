@@ -80,6 +80,7 @@ PROGRAMS += \
 	tstIprtMiniString \
 	tstLdr \
 	tstLdrLoad \
+	tstRTLocalIpc \
 	tstRTLdrVerifyPeImage \
 	tstRTList \
 	tstRTLockValidator \
@@ -95,6 +96,7 @@ PROGRAMS += \
 	tstRTNetIPv6 \
 	tstOnce \
 	tstRTPath \
+	tstRTPathGlob \
 	tstRTPipe \
 	tstRTPoll \
 	tstRTPrfIO \
@@ -134,17 +136,18 @@ PROGRAMS += \
 	tstTimer \
 	tstTimerLR \
 	tstRTTimeSpec \
+	tstRTUdp-1 \
 	tstUtf8 \
 	tstRTUuid \
 	tstRTCircBuf \
 	tstRTManifest \
 	tstRTUri \
 	tstVector \
-       tstRTZip
+	tstRTVfs \
+	tstRTZip
 
 PROGRAMS.win += \
 	tstRTCritSectW32 \
-	tstRTLocalIpc \
 	tstRTProcWait \
 	tstFileAppendWin-1 \
 	ntGetTimerResolution
@@ -491,6 +494,9 @@ tstOnce_SOURCES = tstOnce.cpp
 tstRTPath_TEMPLATE = VBOXR3TSTEXE
 tstRTPath_SOURCES = tstRTPath.cpp
 
+tstRTPathGlob_TEMPLATE = VBOXR3TSTEXE
+tstRTPathGlob_SOURCES = tstRTPathGlob.cpp
+
 tstRTPipe_TEMPLATE = VBOXR3TSTEXE
 tstRTPipe_SOURCES = tstRTPipe.cpp
 
@@ -623,6 +629,9 @@ tstTSC_CXXFLAGS.linux += -O3
 tstRTUuid_TEMPLATE = VBOXR3TSTEXE
 tstRTUuid_SOURCES = tstRTUuid.cpp
 
+tstRTUdp-1_TEMPLATE = VBOXR3TSTEXE
+tstRTUdp-1_SOURCES = tstRTUdp-1.cpp
+
 tstUtf8_TEMPLATE = VBOXR3TSTEXE
 tstUtf8_SOURCES = tstUtf8.cpp
 
@@ -634,6 +643,9 @@ tstRTManifest_SOURCES = tstRTManifest.cpp
 
 tstRTUri_TEMPLATE = VBOXR3TSTEXE
 tstRTUri_SOURCES = tstRTUri.cpp
+
+tstRTVfs_TEMPLATE = VBOXR3TSTEXE
+tstRTVfs_SOURCES = tstRTVfs.cpp
 
 tstRTCoreDump_TEMPLACE = VBOXR3TSTEXE
 tstRTCoreDump_SOURCES = tstRTCoreDump.cpp

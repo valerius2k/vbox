@@ -106,9 +106,10 @@
     do \
     { \
         int rc = hmR0SvmCheckExitDueToEventDelivery(pVCpu, pCtx, pSvmTransient); \
-        if (RT_UNLIKELY(rc == VINF_HM_DOUBLE_FAULT)) \
+        if (RT_LIKELY(rc == VINF_SUCCESS)) { /* likely */ } \
+        else if (rc == VINF_HM_DOUBLE_FAULT) \
             return VINF_SUCCESS; \
-        else if (RT_UNLIKELY(rc == VINF_EM_RESET)) \
+        else \
             return rc; \
     } while (0)
 
@@ -190,7 +191,7 @@ PHYSICAL_TABLE and AVIC LOGICAL_TABLE Pointers). */
 /** @name SVM transient.
  *
  * A state structure for holding miscellaneous information across AMD-V
- * VMRUN/#VMEXIT operation, restored after the transition.
+ * VMRUN/\#VMEXIT operation, restored after the transition.
  *
  * @{ */
 typedef struct SVMTRANSIENT
@@ -201,27 +202,27 @@ typedef struct SVMTRANSIENT
     uint32_t        u32Alignment0;
 #endif
 
-    /** The #VMEXIT exit code (the EXITCODE field in the VMCB). */
+    /** The \#VMEXIT exit code (the EXITCODE field in the VMCB). */
     uint64_t        u64ExitCode;
     /** The guest's TPR value used for TPR shadowing. */
     uint8_t         u8GuestTpr;
     /** Alignment. */
     uint8_t         abAlignment0[7];
 
-    /** Whether the guest FPU state was active at the time of #VMEXIT. */
+    /** Whether the guest FPU state was active at the time of \#VMEXIT. */
     bool            fWasGuestFPUStateActive;
-    /** Whether the guest debug state was active at the time of #VMEXIT. */
+    /** Whether the guest debug state was active at the time of \#VMEXIT. */
     bool            fWasGuestDebugStateActive;
-    /** Whether the hyper debug state was active at the time of #VMEXIT. */
+    /** Whether the hyper debug state was active at the time of \#VMEXIT. */
     bool            fWasHyperDebugStateActive;
     /** Whether the TSC offset mode needs to be updated. */
     bool            fUpdateTscOffsetting;
-    /** Whether the TSC_AUX MSR needs restoring on #VMEXIT. */
+    /** Whether the TSC_AUX MSR needs restoring on \#VMEXIT. */
     bool            fRestoreTscAuxMsr;
-    /** Whether the #VMEXIT was caused by a page-fault during delivery of a
+    /** Whether the \#VMEXIT was caused by a page-fault during delivery of a
      *  contributary exception or a page-fault. */
     bool            fVectoringDoublePF;
-    /** Whether the #VMEXIT was caused by a page-fault during delivery of an
+    /** Whether the \#VMEXIT was caused by a page-fault during delivery of an
      *  external interrupt or NMI. */
     bool            fVectoringPF;
 } SVMTRANSIENT, *PSVMTRANSIENT;
@@ -234,9 +235,9 @@ AssertCompileMemberAlignment(SVMTRANSIENT, fWasGuestFPUStateActive, sizeof(uint6
  */
 typedef enum SVMMSREXITREAD
 {
-    /** Reading this MSR causes a #VMEXIT. */
+    /** Reading this MSR causes a \#VMEXIT. */
     SVMMSREXIT_INTERCEPT_READ = 0xb,
-    /** Reading this MSR does not cause a #VMEXIT. */
+    /** Reading this MSR does not cause a \#VMEXIT. */
     SVMMSREXIT_PASSTHRU_READ
 } SVMMSREXITREAD;
 
@@ -245,17 +246,17 @@ typedef enum SVMMSREXITREAD
  */
 typedef enum SVMMSREXITWRITE
 {
-    /** Writing to this MSR causes a #VMEXIT. */
+    /** Writing to this MSR causes a \#VMEXIT. */
     SVMMSREXIT_INTERCEPT_WRITE = 0xd,
-    /** Writing to this MSR does not cause a #VMEXIT. */
+    /** Writing to this MSR does not cause a \#VMEXIT. */
     SVMMSREXIT_PASSTHRU_WRITE
 } SVMMSREXITWRITE;
 
 /**
- * SVM #VMEXIT handler.
+ * SVM \#VMEXIT handler.
  *
  * @returns VBox status code.
- * @param   pVCpu           Pointer to the VMCPU.
+ * @param   pVCpu           The cross context virtual CPU structure.
  * @param   pMixedCtx       Pointer to the guest-CPU context.
  * @param   pSvmTransient   Pointer to the SVM-transient structure.
  */
@@ -269,7 +270,7 @@ static void hmR0SvmSetMsrPermission(PVMCPU pVCpu, unsigned uMsr, SVMMSREXITREAD 
 static void hmR0SvmPendingEventToTrpmTrap(PVMCPU pVCpu);
 static void hmR0SvmLeave(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx);
 
-/** @name #VMEXIT handlers.
+/** @name \#VMEXIT handlers.
  * @{
  */
 static FNSVMEXITHANDLER hmR0SvmExitIntr;
@@ -296,12 +297,14 @@ static FNSVMEXITHANDLER hmR0SvmExitNestedPF;
 static FNSVMEXITHANDLER hmR0SvmExitVIntr;
 static FNSVMEXITHANDLER hmR0SvmExitTaskSwitch;
 static FNSVMEXITHANDLER hmR0SvmExitVmmCall;
+static FNSVMEXITHANDLER hmR0SvmExitPause;
 static FNSVMEXITHANDLER hmR0SvmExitIret;
 static FNSVMEXITHANDLER hmR0SvmExitXcptPF;
 static FNSVMEXITHANDLER hmR0SvmExitXcptNM;
 static FNSVMEXITHANDLER hmR0SvmExitXcptUD;
 static FNSVMEXITHANDLER hmR0SvmExitXcptMF;
 static FNSVMEXITHANDLER hmR0SvmExitXcptDB;
+static FNSVMEXITHANDLER hmR0SvmExitXcptAC;
 /** @} */
 
 DECLINLINE(int) hmR0SvmHandleExit(PVMCPU pVCpu, PCPUMCTX pMixedCtx, PSVMTRANSIENT pSvmTransient);
@@ -323,7 +326,8 @@ R0PTRTYPE(void *)           g_pvIOBitmap      = NULL;
  *
  * @returns VBox status code.
  * @param   pCpu            Pointer to the CPU info struct.
- * @param   pVM             Pointer to the VM (can be NULL after a resume!).
+ * @param   pVM             The cross context VM structure. Can be
+ *                          NULL after a resume!
  * @param   pvCpuPage       Pointer to the global CPU page.
  * @param   HCPhysCpuPage   Physical address of the global CPU page.
  * @param   fEnabledByHost  Whether the host OS has already initialized AMD-V.
@@ -335,7 +339,7 @@ VMMR0DECL(int) SVMR0EnableCpu(PHMGLOBALCPUINFO pCpu, PVM pVM, void *pvCpuPage, R
     Assert(!fEnabledByHost);
     Assert(HCPhysCpuPage && HCPhysCpuPage != NIL_RTHCPHYS);
     Assert(RT_ALIGN_T(HCPhysCpuPage, _4K, RTHCPHYS) == HCPhysCpuPage);
-    Assert(pvCpuPage);
+    Assert(pvCpuPage); NOREF(pvCpuPage);
     Assert(!RTThreadPreemptIsEnabled(NIL_RTTHREAD));
 
     NOREF(pvArg);
@@ -466,7 +470,7 @@ VMMR0DECL(void) SVMR0GlobalTerm(void)
 /**
  * Frees any allocated per-VCPU structures for a VM.
  *
- * @param   pVM     Pointer to the VM.
+ * @param   pVM     The cross context VM structure.
  */
 DECLINLINE(void) hmR0SvmFreeStructs(PVM pVM)
 {
@@ -506,7 +510,7 @@ DECLINLINE(void) hmR0SvmFreeStructs(PVM pVM)
  * Does per-VM AMD-V initialization.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  */
 VMMR0DECL(int) SVMR0InitVM(PVM pVM)
 {
@@ -590,7 +594,7 @@ failure_cleanup:
  * Does per-VM AMD-V termination.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  */
 VMMR0DECL(int) SVMR0TermVM(PVM pVM)
 {
@@ -602,14 +606,14 @@ VMMR0DECL(int) SVMR0TermVM(PVM pVM)
 /**
  * Sets the permission bits for the specified MSR in the MSRPM.
  *
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   uMsr        The MSR for which the access permissions are being set.
  * @param   enmRead     MSR read permissions.
  * @param   enmWrite    MSR write permissions.
  */
 static void hmR0SvmSetMsrPermission(PVMCPU pVCpu, unsigned uMsr, SVMMSREXITREAD enmRead, SVMMSREXITWRITE enmWrite)
 {
-    unsigned ulBit;
+    unsigned uBit;
     uint8_t *pbMsrBitmap = (uint8_t *)pVCpu->hm.s.svm.pvMsrBitmap;
 
     /*
@@ -623,20 +627,20 @@ static void hmR0SvmSetMsrPermission(PVMCPU pVCpu, unsigned uMsr, SVMMSREXITREAD 
     if (uMsr <= 0x00001FFF)
     {
         /* Pentium-compatible MSRs. */
-        ulBit = uMsr * 2;
+        uBit = uMsr * 2;
     }
     else if (   uMsr >= 0xC0000000
              && uMsr <= 0xC0001FFF)
     {
         /* AMD Sixth Generation x86 Processor MSRs. */
-        ulBit = (uMsr - 0xC0000000) * 2;
+        uBit = (uMsr - 0xC0000000) * 2;
         pbMsrBitmap += 0x800;
     }
     else if (   uMsr >= 0xC0010000
              && uMsr <= 0xC0011FFF)
     {
         /* AMD Seventh and Eighth Generation Processor MSRs. */
-        ulBit = (uMsr - 0xC0001000) * 2;
+        uBit = (uMsr - 0xC0001000) * 2;
         pbMsrBitmap += 0x1000;
     }
     else
@@ -645,16 +649,16 @@ static void hmR0SvmSetMsrPermission(PVMCPU pVCpu, unsigned uMsr, SVMMSREXITREAD 
         return;
     }
 
-    Assert(ulBit < 0x3fff /* 16 * 1024 - 1 */);
+    Assert(uBit < 0x3fff /* 16 * 1024 - 1 */);
     if (enmRead == SVMMSREXIT_INTERCEPT_READ)
-        ASMBitSet(pbMsrBitmap, ulBit);
+        ASMBitSet(pbMsrBitmap, uBit);
     else
-        ASMBitClear(pbMsrBitmap, ulBit);
+        ASMBitClear(pbMsrBitmap, uBit);
 
     if (enmWrite == SVMMSREXIT_INTERCEPT_WRITE)
-        ASMBitSet(pbMsrBitmap, ulBit + 1);
+        ASMBitSet(pbMsrBitmap, uBit + 1);
     else
-        ASMBitClear(pbMsrBitmap, ulBit + 1);
+        ASMBitClear(pbMsrBitmap, uBit + 1);
 
     PSVMVMCB pVmcb = (PSVMVMCB)pVCpu->hm.s.svm.pvVmcb;
     pVmcb->ctrl.u64VmcbCleanBits &= ~HMSVM_VMCB_CLEAN_IOPM_MSRPM;
@@ -666,13 +670,17 @@ static void hmR0SvmSetMsrPermission(PVMCPU pVCpu, unsigned uMsr, SVMMSREXITREAD 
  * This function is only called once per-VM during initalization.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
  */
 VMMR0DECL(int) SVMR0SetupVM(PVM pVM)
 {
     Assert(!RTThreadPreemptIsEnabled(NIL_RTTHREAD));
     AssertReturn(pVM, VERR_INVALID_PARAMETER);
     Assert(pVM->hm.s.svm.fSupported);
+
+    bool const fPauseFilter          = RT_BOOL(pVM->hm.s.svm.u32Features & AMD_CPUID_SVM_FEATURE_EDX_PAUSE_FILTER);
+    bool const fPauseFilterThreshold = RT_BOOL(pVM->hm.s.svm.u32Features & AMD_CPUID_SVM_FEATURE_EDX_PAUSE_FILTER_THRESHOLD);
+    bool const fUsePauseFilter       = fPauseFilter && pVM->hm.s.svm.cPauseFilter && pVM->hm.s.svm.cPauseFilterThresholdTicks;
 
     for (VMCPUID i = 0; i < pVM->cCpus; i++)
     {
@@ -685,6 +693,12 @@ VMMR0DECL(int) SVMR0SetupVM(PVM pVM)
         Assert(!pVCpu->hm.s.idxExitHistoryFree);
         HMCPU_EXIT_HISTORY_RESET(pVCpu);
 
+        /* Always trap #AC for reasons of security. */
+        pVmcb->ctrl.u32InterceptException |= RT_BIT_32(X86_XCPT_AC);
+
+        /* Always trap #DB for reasons of security. */
+        pVmcb->ctrl.u32InterceptException |= RT_BIT_32(X86_XCPT_DB);
+
         /* Trap exceptions unconditionally (debug purposes). */
 #ifdef HMSVM_ALWAYS_TRAP_PF
         pVmcb->ctrl.u32InterceptException |=   RT_BIT(X86_XCPT_PF);
@@ -693,7 +707,6 @@ VMMR0DECL(int) SVMR0SetupVM(PVM pVM)
         /* If you add any exceptions here, make sure to update hmR0SvmHandleExit(). */
         pVmcb->ctrl.u32InterceptException |= 0
                                              | RT_BIT(X86_XCPT_BP)
-                                             | RT_BIT(X86_XCPT_DB)
                                              | RT_BIT(X86_XCPT_DE)
                                              | RT_BIT(X86_XCPT_NM)
                                              | RT_BIT(X86_XCPT_UD)
@@ -794,6 +807,14 @@ VMMR0DECL(int) SVMR0SetupVM(PVM pVM)
         if (pVCpu->hm.s.fGIMTrapXcptUD)
             pVmcb->ctrl.u32InterceptException |= RT_BIT(X86_XCPT_UD);
 
+        /* Setup Pause Filter for guest pause-loop (spinlock) exiting. */
+        if (fUsePauseFilter)
+        {
+            pVmcb->ctrl.u16PauseFilterCount = pVM->hm.s.svm.cPauseFilter;
+            if (fPauseFilterThreshold)
+                pVmcb->ctrl.u16PauseFilterThreshold = pVM->hm.s.svm.cPauseFilterThresholdTicks;
+        }
+
         /*
          * The following MSRs are saved/restored automatically during the world-switch.
          * Don't intercept guest read/write accesses to these MSRs.
@@ -818,8 +839,8 @@ VMMR0DECL(int) SVMR0SetupVM(PVM pVM)
  * Invalidates a guest page by guest virtual address.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   GCVirt      Guest virtual address of the page to invalidate.
  */
 VMMR0DECL(int) SVMR0InvalidatePage(PVM pVM, PVMCPU pVCpu, RTGCPTR GCVirt)
@@ -855,8 +876,7 @@ VMMR0DECL(int) SVMR0InvalidatePage(PVM pVM, PVMCPU pVCpu, RTGCPTR GCVirt)
 /**
  * Flushes the appropriate tagged-TLB entries.
  *
- * @param    pVM        Pointer to the VM.
- * @param    pVCpu      Pointer to the VMCPU.
+ * @param    pVCpu      The cross context virtual CPU structure.
  */
 static void hmR0SvmFlushTaggedTlb(PVMCPU pVCpu)
 {
@@ -1007,8 +1027,8 @@ static void hmR0SvmFlushTaggedTlb(PVMCPU pVCpu)
  * @param   HCPhysVmcbHost  Physical address of host VMCB.
  * @param   HCPhysVmcb      Physical address of the VMCB.
  * @param   pCtx            Pointer to the guest-CPU context.
- * @param   pVM             Pointer to the VM.
- * @param   pVCpu           Pointer to the VMCPU.
+ * @param   pVM             The cross context VM structure.
+ * @param   pVCpu           The cross context virtual CPU structure.
  */
 DECLASM(int) SVMR0VMSwitcherRun64(RTHCPHYS HCPhysVmcbHost, RTHCPHYS HCPhysVmcb, PCPUMCTX pCtx, PVM pVM, PVMCPU pVCpu)
 {
@@ -1030,8 +1050,8 @@ DECLASM(int) SVMR0VMSwitcherRun64(RTHCPHYS HCPhysVmcbHost, RTHCPHYS HCPhysVmcb, 
  * Executes the specified VMRUN handler in 64-bit mode.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCtx        Pointer to the guest-CPU context.
  * @param   enmOp       The operation to perform.
  * @param   cParams     Number of parameters.
@@ -1042,6 +1062,8 @@ VMMR0DECL(int) SVMR0Execute64BitsHandler(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx, H
 {
     AssertReturn(pVM->hm.s.pfnHost32ToGuest64R0, VERR_HM_NO_32_TO_64_SWITCHER);
     Assert(enmOp > HM64ON32OP_INVALID && enmOp < HM64ON32OP_END);
+
+    NOREF(pCtx);
 
     /* Disable interrupts. */
     RTHCUINTREG uOldEFlags = ASMIntDisableFlags();
@@ -1096,6 +1118,8 @@ DECLINLINE(void) hmR0SvmAddXcptIntercept(PSVMVMCB pVmcb, uint32_t u32Xcpt)
  */
 DECLINLINE(void) hmR0SvmRemoveXcptIntercept(PSVMVMCB pVmcb, uint32_t u32Xcpt)
 {
+    Assert(u32Xcpt != X86_XCPT_DB);
+    Assert(u32Xcpt != X86_XCPT_AC);
 #ifndef HMSVM_ALWAYS_TRAP_ALL_XCPTS
     if (pVmcb->ctrl.u32InterceptException & RT_BIT(u32Xcpt))
     {
@@ -1112,7 +1136,7 @@ DECLINLINE(void) hmR0SvmRemoveXcptIntercept(PSVMVMCB pVmcb, uint32_t u32Xcpt)
  * the FPU state itself which is shared between the host and the guest.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pVmcb       Pointer to the VM control block.
  * @param   pCtx        Pointer to the guest-CPU context.
  *
@@ -1186,7 +1210,7 @@ static void hmR0SvmLoadSharedCR0(PVMCPU pVCpu, PSVMVMCB pVmcb, PCPUMCTX pCtx)
  * Loads the guest control registers (CR2, CR3, CR4) into the VMCB.
  *
  * @returns VBox status code.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pVmcb       Pointer to the VM control block.
  * @param   pCtx        Pointer to the guest-CPU context.
  *
@@ -1291,7 +1315,7 @@ static int hmR0SvmLoadGuestControlRegs(PVMCPU pVCpu, PSVMVMCB pVmcb, PCPUMCTX pC
  * Loads the guest segment registers into the VMCB.
  *
  * @returns VBox status code.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pVmcb       Pointer to the VM control block.
  * @param   pCtx        Pointer to the guest-CPU context.
  *
@@ -1351,7 +1375,7 @@ static void hmR0SvmLoadGuestSegmentRegs(PVMCPU pVCpu, PSVMVMCB pVmcb, PCPUMCTX p
 /**
  * Loads the guest MSRs into the VMCB.
  *
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pVmcb       Pointer to the VM control block.
  * @param   pCtx        Pointer to the guest-CPU context.
  *
@@ -1407,7 +1431,7 @@ static void hmR0SvmLoadGuestMsrs(PVMCPU pVCpu, PSVMVMCB pVmcb, PCPUMCTX pCtx)
  * Loads the guest state into the VMCB and programs the necessary intercepts
  * accordingly.
  *
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pVmcb       Pointer to the VM control block.
  * @param   pCtx        Pointer to the guest-CPU context.
  *
@@ -1421,7 +1445,6 @@ static void hmR0SvmLoadSharedDebugState(PVMCPU pVCpu, PSVMVMCB pVmcb, PCPUMCTX p
     Assert((pCtx->dr[6] & X86_DR6_RA1_MASK) == X86_DR6_RA1_MASK); Assert((pCtx->dr[6] & X86_DR6_RAZ_MASK) == 0);
     Assert((pCtx->dr[7] & X86_DR7_RA1_MASK) == X86_DR7_RA1_MASK); Assert((pCtx->dr[7] & X86_DR7_RAZ_MASK) == 0);
 
-    bool fInterceptDB     = false;
     bool fInterceptMovDRx = false;
 
     /*
@@ -1429,14 +1452,15 @@ static void hmR0SvmLoadSharedDebugState(PVMCPU pVCpu, PSVMVMCB pVmcb, PCPUMCTX p
      * trap flag in the guest EFLAGS since AMD-V doesn't have a trap flag on
      * the VMM level like the VT-x implementations does.
      */
-    bool const fStepping = pVCpu->hm.s.fSingleInstruction || DBGFIsStepping(pVCpu);
+    bool const fStepping = pVCpu->hm.s.fSingleInstruction;
     if (fStepping)
     {
         pVCpu->hm.s.fClearTrapFlag = true;
         pVmcb->guest.u64RFlags |= X86_EFL_TF;
-        fInterceptDB = true;
         fInterceptMovDRx = true; /* Need clean DR6, no guest mess. */
     }
+    else
+        Assert(!DBGFIsStepping(pVCpu));
 
     if (   fStepping
         || (CPUMGetHyperDR7(pVCpu) & X86_DR7_ENABLED_MASK))
@@ -1477,7 +1501,6 @@ static void hmR0SvmLoadSharedDebugState(PVMCPU pVCpu, PSVMVMCB pVmcb, PCPUMCTX p
 
         /** @todo If we cared, we could optimize to allow the guest to read registers
          *        with the same values. */
-        fInterceptDB = true;
         fInterceptMovDRx = true;
         Log5(("hmR0SvmLoadSharedDebugState: Loaded hyper DRx\n"));
     }
@@ -1524,6 +1547,10 @@ static void hmR0SvmLoadSharedDebugState(PVMCPU pVCpu, PSVMVMCB pVmcb, PCPUMCTX p
         /*
          * If no debugging enabled, we'll lazy load DR0-3. We don't need to
          * intercept #DB as DR6 is updated in the VMCB.
+         *
+         * Note! If we cared and dared, we could skip intercepting \#DB here.
+         *       However, \#DB shouldn't be performance critical, so we'll play safe
+         *       and keep the code similar to the VT-x code and always intercept it.
          */
 #if HC_ARCH_BITS == 32 && defined(VBOX_WITH_64_BITS_GUESTS)
         else if (   !CPUMIsGuestDebugStateActivePending(pVCpu)
@@ -1536,14 +1563,7 @@ static void hmR0SvmLoadSharedDebugState(PVMCPU pVCpu, PSVMVMCB pVmcb, PCPUMCTX p
         }
     }
 
-    /*
-     * Set up the intercepts.
-     */
-    if (fInterceptDB)
-        hmR0SvmAddXcptIntercept(pVmcb, X86_XCPT_DB);
-    else
-        hmR0SvmRemoveXcptIntercept(pVmcb, X86_XCPT_DB);
-
+    Assert(pVmcb->ctrl.u32InterceptException & RT_BIT_32(X86_XCPT_DB));
     if (fInterceptMovDRx)
     {
         if (   pVmcb->ctrl.u16InterceptRdDRx != 0xffff
@@ -1573,7 +1593,7 @@ static void hmR0SvmLoadSharedDebugState(PVMCPU pVCpu, PSVMVMCB pVmcb, PCPUMCTX p
  * Loads the guest APIC state (currently just the TPR).
  *
  * @returns VBox status code.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pVmcb       Pointer to the VM control block.
  * @param   pCtx        Pointer to the guest-CPU context.
  */
@@ -1632,13 +1652,14 @@ static int hmR0SvmLoadGuestApicState(PVMCPU pVCpu, PSVMVMCB pVmcb, PCPUMCTX pCtx
  * Loads the exception interrupts required for guest execution in the VMCB.
  *
  * @returns VBox status code.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pVmcb       Pointer to the VM control block.
  * @param   pCtx        Pointer to the guest-CPU context.
  */
 static int hmR0SvmLoadGuestXcptIntercepts(PVMCPU pVCpu, PSVMVMCB pVmcb, PCPUMCTX pCtx)
 {
     int rc = VINF_SUCCESS;
+    NOREF(pCtx);
     if (HMCPU_CF_IS_PENDING(pVCpu, HM_CHANGED_GUEST_XCPT_INTERCEPTS))
     {
         /* The remaining intercepts are handled elsewhere, e.g. in hmR0SvmLoadSharedCR0(). */
@@ -1656,7 +1677,7 @@ static int hmR0SvmLoadGuestXcptIntercepts(PVMCPU pVCpu, PSVMVMCB pVmcb, PCPUMCTX
  * Sets up the appropriate function to run guest code.
  *
  * @returns VBox status code.
- * @param   pVCpu   Pointer to the VMCPU.
+ * @param   pVCpu   The cross context virtual CPU structure.
  * @param   pCtx    Pointer to the guest-CPU context.
  *
  * @remarks No-long-jump zone!!!
@@ -1690,8 +1711,8 @@ static int hmR0SvmSetupVMRunHandler(PVMCPU pVCpu, PCPUMCTX pCtx)
  * Enters the AMD-V session.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCpu        Pointer to the CPU info struct.
  */
 VMMR0DECL(int) SVMR0Enter(PVM pVM, PVMCPU pVCpu, PHMGLOBALCPUINFO pCpu)
@@ -1714,7 +1735,7 @@ VMMR0DECL(int) SVMR0Enter(PVM pVM, PVMCPU pVCpu, PHMGLOBALCPUINFO pCpu)
  * Thread-context callback for AMD-V.
  *
  * @param   enmEvent        The thread-context event.
- * @param   pVCpu           Pointer to the VMCPU.
+ * @param   pVCpu           The cross context virtual CPU structure.
  * @param   fGlobalInit     Whether global VT-x/AMD-V init. is used.
  * @thread  EMT(pVCpu)
  */
@@ -1786,8 +1807,8 @@ VMMR0DECL(void) SVMR0ThreadCtxCallback(RTTHREADCTXEVENT enmEvent, PVMCPU pVCpu, 
  * Saves the host state.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  *
  * @remarks No-long-jump zone!!!
  */
@@ -1809,8 +1830,8 @@ VMMR0DECL(int) SVMR0SaveHostState(PVM pVM, PVMCPU pVCpu)
  * the guest CPU mode.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCtx        Pointer to the guest-CPU context.
  *
  * @remarks No-long-jump zone!!!
@@ -1870,7 +1891,7 @@ static int hmR0SvmLoadGuestState(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
  * Loads the state shared between the host and guest into the
  * VMCB.
  *
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pVmcb       Pointer to the VM control block.
  * @param   pCtx        Pointer to the guest-CPU context.
  *
@@ -1901,7 +1922,7 @@ static void hmR0SvmLoadSharedState(PVMCPU pVCpu, PSVMVMCB pVmcb, PCPUMCTX pCtx)
  * is not updated in the VMCB.
  *
  * @returns VBox status code.
- * @param   pVCpu           Pointer to the VMCPU.
+ * @param   pVCpu           The cross context virtual CPU structure.
  * @param   pMixedCtx       Pointer to the guest-CPU context. The data may be
  *                          out-of-sync. Make sure to update the required fields
  *                          before using them.
@@ -2051,9 +2072,9 @@ static void hmR0SvmSaveGuestState(PVMCPU pVCpu, PCPUMCTX pMixedCtx)
  * Does the necessary state syncing before returning to ring-3 for any reason
  * (longjmp, preemption, voluntary exits to ring-3) from AMD-V.
  *
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
- * @param   pMixedCtx   Pointer to the guest-CPU context.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
+ * @param   pCtx        Pointer to the guest-CPU context.
  *
  * @remarks No-long-jmp zone!!!
  */
@@ -2107,8 +2128,8 @@ static void hmR0SvmLeave(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
  * Leaves the AMD-V session.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCtx        Pointer to the guest-CPU context.
  */
 static int hmR0SvmLeaveSession(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
@@ -2146,8 +2167,8 @@ static int hmR0SvmLeaveSession(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
  * Does the necessary state syncing before doing a longjmp to ring-3.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCtx        Pointer to the guest-CPU context.
  *
  * @remarks No-long-jmp zone!!!
@@ -2163,7 +2184,7 @@ static int hmR0SvmLongJmpToRing3(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
  * any remaining host state) before we longjump to ring-3 and possibly get
  * preempted.
  *
- * @param   pVCpu           Pointer to the VMCPU.
+ * @param   pVCpu           The cross context virtual CPU structure.
  * @param   enmOperation    The operation causing the ring-3 longjump.
  * @param   pvUser          The user argument (pointer to the possibly
  *                          out-of-date guest-CPU context).
@@ -2223,8 +2244,8 @@ static DECLCALLBACK(int) hmR0SvmCallRing3Callback(PVMCPU pVCpu, VMMCALLRING3 enm
  * steps before we can safely return to ring-3. This is not the same as longjmps
  * to ring-3, this is voluntary.
  *
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCtx        Pointer to the guest-CPU context.
  * @param   rcExit      The reason for exiting to ring-3. Can be
  *                      VINF_VMM_UNKNOWN_RING3_CALL.
@@ -2285,8 +2306,8 @@ static void hmR0SvmExitToRing3(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx, int rcExit)
  * Updates the use of TSC offsetting mode for the CPU and adjusts the necessary
  * intercepts.
  *
- * @param   pVM         The shared VM handle.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  *
  * @remarks No-long-jump zone!!!
  */
@@ -2327,7 +2348,7 @@ static void hmR0SvmUpdateTscOffsetting(PVM pVM, PVMCPU pVCpu)
 /**
  * Sets an event as a pending event to be injected into the guest.
  *
- * @param   pVCpu               Pointer to the VMCPU.
+ * @param   pVCpu               The cross context virtual CPU structure.
  * @param   pEvent              Pointer to the SVM event.
  * @param   GCPtrFaultAddress   The fault-address (CR2) in case it's a
  *                              page-fault.
@@ -2355,7 +2376,7 @@ DECLINLINE(void) hmR0SvmSetPendingEvent(PVMCPU pVCpu, PSVMEVENT pEvent, RTGCUINT
  * Injects an event into the guest upon VMRUN by updating the relevant field
  * in the VMCB.
  *
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pVmcb       Pointer to the guest VM control block.
  * @param   pCtx        Pointer to the guest-CPU context.
  * @param   pEvent      Pointer to the event.
@@ -2380,7 +2401,7 @@ DECLINLINE(void) hmR0SvmInjectEventVmcb(PVMCPU pVCpu, PSVMVMCB pVmcb, PCPUMCTX p
  * Converts any TRPM trap into a pending HM event. This is typically used when
  * entering from ring-3 (not longjmp returns).
  *
- * @param   pVCpu           Pointer to the VMCPU.
+ * @param   pVCpu           The cross context virtual CPU structure.
  */
 static void hmR0SvmTrpmTrapToPendingEvent(PVMCPU pVCpu)
 {
@@ -2449,7 +2470,7 @@ static void hmR0SvmTrpmTrapToPendingEvent(PVMCPU pVCpu)
  * Converts any pending SVM event into a TRPM trap. Typically used when leaving
  * AMD-V to execute any instruction.
  *
- * @param   pvCpu           Pointer to the VMCPU.
+ * @param   pVCpu           The cross context virtual CPU structure.
  */
 static void hmR0SvmPendingEventToTrpmTrap(PVMCPU pVCpu)
 {
@@ -2510,7 +2531,7 @@ static void hmR0SvmPendingEventToTrpmTrap(PVMCPU pVCpu)
  * Gets the guest's interrupt-shadow.
  *
  * @returns The guest's interrupt-shadow.
- * @param   pVCpu   Pointer to the VMCPU.
+ * @param   pVCpu   The cross context virtual CPU structure.
  * @param   pCtx    Pointer to the guest-CPU context.
  *
  * @remarks No-long-jump zone!!!
@@ -2542,10 +2563,10 @@ DECLINLINE(uint32_t) hmR0SvmGetGuestIntrShadow(PVMCPU pVCpu, PCPUMCTX pCtx)
 
 /**
  * Sets the virtual interrupt intercept control in the VMCB which
- * instructs AMD-V to cause a #VMEXIT as soon as the guest is in a state to
+ * instructs AMD-V to cause a \#VMEXIT as soon as the guest is in a state to
  * receive interrupts.
  *
- * @param pVmcb         Pointer to the VM control block.
+ * @param   pVmcb       Pointer to the VM control block.
  */
 DECLINLINE(void) hmR0SvmSetVirtIntrIntercept(PSVMVMCB pVmcb)
 {
@@ -2563,10 +2584,10 @@ DECLINLINE(void) hmR0SvmSetVirtIntrIntercept(PSVMVMCB pVmcb)
 
 /**
  * Sets the IRET intercept control in the VMCB which instructs AMD-V to cause a
- * #VMEXIT as soon as a guest starts executing an IRET. This is used to unblock
+ * \#VMEXIT as soon as a guest starts executing an IRET. This is used to unblock
  * virtual NMIs.
  *
- * @param pVmcb         Pointer to the VM control block.
+ * @param   pVmcb       Pointer to the VM control block.
  */
 DECLINLINE(void) hmR0SvmSetIretIntercept(PSVMVMCB pVmcb)
 {
@@ -2583,7 +2604,7 @@ DECLINLINE(void) hmR0SvmSetIretIntercept(PSVMVMCB pVmcb)
 /**
  * Clears the IRET intercept control in the VMCB.
  *
- * @param pVmcb         Pointer to the VM control block.
+ * @param   pVmcb       Pointer to the VM control block.
  */
 DECLINLINE(void) hmR0SvmClearIretIntercept(PSVMVMCB pVmcb)
 {
@@ -2601,7 +2622,7 @@ DECLINLINE(void) hmR0SvmClearIretIntercept(PSVMVMCB pVmcb)
  * Evaluates the event to be delivered to the guest and sets it as the pending
  * event.
  *
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCtx        Pointer to the guest-CPU context.
  */
 static void hmR0SvmEvaluatePendingEvent(PVMCPU pVCpu, PCPUMCTX pCtx)
@@ -2675,7 +2696,7 @@ static void hmR0SvmEvaluatePendingEvent(PVMCPU pVCpu, PCPUMCTX pCtx)
  * Injects any pending events into the guest if the guest is in a state to
  * receive them.
  *
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCtx        Pointer to the guest-CPU context.
  */
 static void hmR0SvmInjectPendingEvent(PVMCPU pVCpu, PCPUMCTX pCtx)
@@ -2723,8 +2744,8 @@ static void hmR0SvmInjectPendingEvent(PVMCPU pVCpu, PCPUMCTX pCtx)
 /**
  * Reports world-switch error and dumps some useful debug info.
  *
- * @param   pVM             Pointer to the VM.
- * @param   pVCpu           Pointer to the VMCPU.
+ * @param   pVM             The cross context VM structure.
+ * @param   pVCpu           The cross context virtual CPU structure.
  * @param   rcVMRun         The return code from VMRUN (or
  *                          VERR_SVM_INVALID_GUEST_STATE for invalid
  *                          guest-state).
@@ -2854,12 +2875,12 @@ static void hmR0SvmReportWorldSwitchError(PVM pVM, PVMCPU pVCpu, int rcVMRun, PC
         Log4(("guest.u64BR_TO                    %#RX64\n",   pVmcb->guest.u64BR_TO));
         Log4(("guest.u64LASTEXCPFROM             %#RX64\n",   pVmcb->guest.u64LASTEXCPFROM));
         Log4(("guest.u64LASTEXCPTO               %#RX64\n",   pVmcb->guest.u64LASTEXCPTO));
-#else
-        NOREF(pVmcb);
 #endif  /* VBOX_STRICT */
     }
     else
         Log4(("hmR0SvmReportWorldSwitchError: rcVMRun=%d\n", rcVMRun));
+
+    NOREF(pVmcb);
 }
 
 
@@ -2879,8 +2900,8 @@ static void hmR0SvmReportWorldSwitchError(PVM pVM, PVMCPU pVCpu, int rcVMRun, PC
  * @retval VINF_EM_NO_MEMORY PGM is out of memory, we need to return
  *         to the EM loop.
  *
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCtx        Pointer to the guest-CPU context.
  */
 static int hmR0SvmCheckForceFlags(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
@@ -2961,8 +2982,8 @@ static int hmR0SvmCheckForceFlags(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
  * @retval VINF_SUCCESS if we can proceed with running the guest.
  * @retval VINF_* scheduling changes, we have to go back to ring-3.
  *
- * @param   pVM             Pointer to the VM.
- * @param   pVCpu           Pointer to the VMCPU.
+ * @param   pVM             The cross context VM structure.
+ * @param   pVCpu           The cross context virtual CPU structure.
  * @param   pCtx            Pointer to the guest-CPU context.
  * @param   pSvmTransient   Pointer to the SVM transient structure.
  */
@@ -3068,8 +3089,8 @@ static int hmR0SvmPreRunGuest(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIEN
  * means there is no backing out to ring-3 or anywhere else at this
  * point.
  *
- * @param   pVM             Pointer to the VM.
- * @param   pVCpu           Pointer to the VMCPU.
+ * @param   pVM             The cross context VM structure.
+ * @param   pVCpu           The cross context virtual CPU structure.
  * @param   pCtx            Pointer to the guest-CPU context.
  * @param   pSvmTransient   Pointer to the SVM transient structure.
  *
@@ -3171,8 +3192,8 @@ static void hmR0SvmPreRunGuestCommitted(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx, PS
  * Wrapper for running the guest code in AMD-V.
  *
  * @returns VBox strict status code.
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCtx        Pointer to the guest-CPU context.
  *
  * @remarks No-long-jump zone!!!
@@ -3197,8 +3218,8 @@ DECLINLINE(int) hmR0SvmRunGuest(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
  * Performs some essential restoration of state after running guest code in
  * AMD-V.
  *
- * @param   pVM             Pointer to the VM.
- * @param   pVCpu           Pointer to the VMCPU.
+ * @param   pVM             The cross context VM structure.
+ * @param   pVCpu           The cross context virtual CPU structure.
  * @param   pMixedCtx       Pointer to the guest-CPU context. The data maybe
  *                          out-of-sync. Make sure to update the required fields
  *                          before using them.
@@ -3279,8 +3300,9 @@ static void hmR0SvmPostRunGuest(PVM pVM, PVMCPU pVCpu, PCPUMCTX pMixedCtx, PSVMT
  * Runs the guest code using AMD-V.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
+ * @param   pCtx        Pointer to the guest-CPU context.
  */
 static int hmR0SvmRunGuestCodeNormal(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
 {
@@ -3348,8 +3370,8 @@ static int hmR0SvmRunGuestCodeNormal(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
  * Runs the guest code using AMD-V in single step mode.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCtx        Pointer to the guest-CPU context.
  */
 static int hmR0SvmRunGuestCodeStep(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
@@ -3447,8 +3469,8 @@ static int hmR0SvmRunGuestCodeStep(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
  * Runs the guest code using AMD-V.
  *
  * @returns VBox status code.
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCtx        Pointer to the guest-CPU context.
  */
 VMMR0DECL(int) SVMR0RunGuestCode(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
@@ -3458,7 +3480,7 @@ VMMR0DECL(int) SVMR0RunGuestCode(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
     VMMRZCallRing3SetNotification(pVCpu, hmR0SvmCallRing3Callback, pCtx);
 
     int rc;
-    if (!pVCpu->hm.s.fSingleInstruction && !DBGFIsStepping(pVCpu))
+    if (!pVCpu->hm.s.fSingleInstruction)
         rc = hmR0SvmRunGuestCodeNormal(pVM, pVCpu, pCtx);
     else
         rc = hmR0SvmRunGuestCodeStep(pVM, pVCpu, pCtx);
@@ -3476,10 +3498,10 @@ VMMR0DECL(int) SVMR0RunGuestCode(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
 
 
 /**
- * Handles a #VMEXIT (for all EXITCODE values except SVM_EXIT_INVALID).
+ * Handles a \#VMEXIT (for all EXITCODE values except SVM_EXIT_INVALID).
  *
  * @returns VBox status code (informational status codes included).
- * @param   pVCpu           Pointer to the VMCPU.
+ * @param   pVCpu           The cross context virtual CPU structure.
  * @param   pCtx            Pointer to the guest-CPU context.
  * @param   pSvmTransient   Pointer to the SVM transient structure.
  */
@@ -3525,6 +3547,9 @@ DECLINLINE(int) hmR0SvmHandleExit(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSv
         case SVM_EXIT_EXCEPTION_1:   /* X86_XCPT_DB */
             return hmR0SvmExitXcptDB(pVCpu, pCtx, pSvmTransient);
 
+        case SVM_EXIT_EXCEPTION_11:  /* X86_XCPT_AC */
+            return hmR0SvmExitXcptAC(pVCpu, pCtx, pSvmTransient);
+
         case SVM_EXIT_MONITOR:
             return hmR0SvmExitMonitor(pVCpu, pCtx, pSvmTransient);
 
@@ -3544,6 +3569,9 @@ DECLINLINE(int) hmR0SvmHandleExit(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSv
         case SVM_EXIT_WRITE_CR4:
         case SVM_EXIT_WRITE_CR8:
             return hmR0SvmExitWriteCRx(pVCpu, pCtx, pSvmTransient);
+
+        case SVM_EXIT_PAUSE:
+            return hmR0SvmExitPause(pVCpu, pCtx, pSvmTransient);
 
         case SVM_EXIT_VMMCALL:
             return hmR0SvmExitVmmCall(pVCpu, pCtx, pSvmTransient);
@@ -3638,7 +3666,7 @@ DECLINLINE(int) hmR0SvmHandleExit(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSv
                 case SVM_EXIT_EXCEPTION_D:             /* X86_XCPT_GP */
                 /*   SVM_EXIT_EXCEPTION_E: */          /* X86_XCPT_PF - Handled above. */
                 /*   SVM_EXIT_EXCEPTION_10: */         /* X86_XCPT_MF - Handled above. */
-                case SVM_EXIT_EXCEPTION_11:            /* X86_XCPT_AC */
+                /*   SVM_EXIT_EXCEPTION_11: */         /* X86_XCPT_AC - Handled above. */
                 case SVM_EXIT_EXCEPTION_12:            /* X86_XCPT_MC */
                 case SVM_EXIT_EXCEPTION_13:            /* X86_XCPT_XF */
                 case SVM_EXIT_EXCEPTION_F:             /* Reserved */
@@ -3744,7 +3772,7 @@ DECLINLINE(int) hmR0SvmHandleExit(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSv
  * Worker for hmR0SvmInterpretInvlpg().
  *
  * @return VBox status code.
- * @param   pVCpu           Pointer to the VMCPU.
+ * @param   pVCpu           The cross context virtual CPU structure.
  * @param   pCpu            Pointer to the disassembler state.
  * @param   pCtx            The guest CPU context.
  */
@@ -3785,7 +3813,8 @@ static int hmR0SvmInterpretInvlPgEx(PVMCPU pVCpu, PDISCPUSTATE pCpu, PCPUMCTX pC
  * @retval  VERR_EM_INTERPRETER     Something we can't cope with.
  * @retval  VERR_*                  Fatal errors.
  *
- * @param   pVM         Pointer to the VM.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCtx        The guest CPU context.
  *
  * @remarks Updates the RIP if the instruction was executed successfully.
@@ -3813,9 +3842,9 @@ static int hmR0SvmInterpretInvlpg(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
 
 
 /**
- * Sets an invalid-opcode (#UD) exception as pending-for-injection into the VM.
+ * Sets an invalid-opcode (\#UD) exception as pending-for-injection into the VM.
  *
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  */
 DECLINLINE(void) hmR0SvmSetPendingXcptUD(PVMCPU pVCpu)
 {
@@ -3829,9 +3858,9 @@ DECLINLINE(void) hmR0SvmSetPendingXcptUD(PVMCPU pVCpu)
 
 
 /**
- * Sets a debug (#DB) exception as pending-for-injection into the VM.
+ * Sets a debug (\#DB) exception as pending-for-injection into the VM.
  *
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  */
 DECLINLINE(void) hmR0SvmSetPendingXcptDB(PVMCPU pVCpu)
 {
@@ -3845,9 +3874,9 @@ DECLINLINE(void) hmR0SvmSetPendingXcptDB(PVMCPU pVCpu)
 
 
 /**
- * Sets a page fault (#PF) exception as pending-for-injection into the VM.
+ * Sets a page fault (\#PF) exception as pending-for-injection into the VM.
  *
- * @param   pVCpu           Pointer to the VMCPU.
+ * @param   pVCpu           The cross context virtual CPU structure.
  * @param   pCtx            Pointer to the guest-CPU context.
  * @param   u32ErrCode      The error-code for the page-fault.
  * @param   uFaultAddress   The page fault address (CR2).
@@ -3876,10 +3905,10 @@ DECLINLINE(void) hmR0SvmSetPendingXcptPF(PVMCPU pVCpu, PCPUMCTX pCtx, uint32_t u
 
 
 /**
- * Sets a device-not-available (#NM) exception as pending-for-injection into the
- * VM.
+ * Sets a device-not-available (\#NM) exception as pending-for-injection into
+ * the VM.
  *
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  */
 DECLINLINE(void) hmR0SvmSetPendingXcptNM(PVMCPU pVCpu)
 {
@@ -3893,9 +3922,9 @@ DECLINLINE(void) hmR0SvmSetPendingXcptNM(PVMCPU pVCpu)
 
 
 /**
- * Sets a math-fault (#MF) exception as pending-for-injection into the VM.
+ * Sets a math-fault (\#MF) exception as pending-for-injection into the VM.
  *
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  */
 DECLINLINE(void) hmR0SvmSetPendingXcptMF(PVMCPU pVCpu)
 {
@@ -3909,9 +3938,9 @@ DECLINLINE(void) hmR0SvmSetPendingXcptMF(PVMCPU pVCpu)
 
 
 /**
- * Sets a double fault (#DF) exception as pending-for-injection into the VM.
+ * Sets a double fault (\#DF) exception as pending-for-injection into the VM.
  *
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  */
 DECLINLINE(void) hmR0SvmSetPendingXcptDF(PVMCPU pVCpu)
 {
@@ -3939,8 +3968,8 @@ DECLINLINE(void) hmR0SvmSetPendingXcptDF(PVMCPU pVCpu)
  * @retval VERR_NOT_FOUND if no patch record for this RIP could be found.
  * @retval VERR_SVM_UNEXPECTED_PATCH_TYPE if the found patch type is invalid.
  *
- * @param   pVM         Pointer to the VM.
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVM         The cross context VM structure.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCtx        Pointer to the guest-CPU context.
  */
 static int hmR0SvmEmulateMovTpr(PVM pVM, PVMCPU pVCpu, PCPUMCTX pCtx)
@@ -4041,12 +4070,13 @@ DECLINLINE(bool) hmR0SvmIsContributoryXcpt(const uint32_t uVector)
  * IDT.
  *
  * @returns VBox status code (informational error codes included).
- * @retval VINF_SUCCESS if we should continue handling the #VMEXIT.
- * @retval VINF_HM_DOUBLE_FAULT if a #DF condition was detected and we ought to
- *         continue execution of the guest which will delivery the #DF.
+ * @retval VINF_SUCCESS if we should continue handling the \#VMEXIT.
+ * @retval VINF_HM_DOUBLE_FAULT if a \#DF condition was detected and we ought to
+ *         continue execution of the guest which will delivery the \#DF.
  * @retval VINF_EM_RESET if we detected a triple-fault condition.
+ * @retval VERR_EM_GUEST_CPU_HANG if we detected a guest CPU hang.
  *
- * @param   pVCpu           Pointer to the VMCPU.
+ * @param   pVCpu           The cross context virtual CPU structure.
  * @param   pCtx            Pointer to the guest-CPU context.
  * @param   pSvmTransient   Pointer to the SVM transient structure.
  *
@@ -4068,6 +4098,7 @@ static int hmR0SvmCheckExitDueToEventDelivery(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMT
             SVMREFLECTXCPT_XCPT,    /* Reflect the exception to the guest or for further evaluation by VMM. */
             SVMREFLECTXCPT_DF,      /* Reflect the exception as a double-fault to the guest. */
             SVMREFLECTXCPT_TF,      /* Indicate a triple faulted state to the VMM. */
+            SVMREFLECTXCPT_HANG,    /* Indicate bad VM trying to deadlock the CPU. */
             SVMREFLECTXCPT_NONE     /* Nothing to reflect. */
         } SVMREFLECTXCPT;
 
@@ -4091,6 +4122,12 @@ static int hmR0SvmCheckExitDueToEventDelivery(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMT
                 {
                     pSvmTransient->fVectoringDoublePF = true;
                     Log4(("IDT: Vectoring double #PF uCR2=%#RX64\n", pCtx->cr2));
+                }
+                else if (   uExitVector == X86_XCPT_AC
+                         && uIdtVector == X86_XCPT_AC)
+                {
+                    enmReflect = SVMREFLECTXCPT_HANG;
+                    Log4(("IDT: Nested #AC - Bad guest\n"));
                 }
                 else if (   (pVmcb->ctrl.u32InterceptException & HMSVM_CONTRIBUTORY_XCPT_MASK)
                          && hmR0SvmIsContributoryXcpt(uExitVector)
@@ -4167,12 +4204,18 @@ static int hmR0SvmCheckExitDueToEventDelivery(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMT
                 break;
             }
 
+            case SVMREFLECTXCPT_HANG:
+            {
+                rc = VERR_EM_GUEST_CPU_HANG;
+                break;
+            }
+
             default:
                 Assert(rc == VINF_SUCCESS);
                 break;
         }
     }
-    Assert(rc == VINF_SUCCESS || rc == VINF_HM_DOUBLE_FAULT || rc == VINF_EM_RESET);
+    Assert(rc == VINF_SUCCESS || rc == VINF_HM_DOUBLE_FAULT || rc == VINF_EM_RESET || rc == VERR_EM_GUEST_CPU_HANG);
     NOREF(pCtx);
     return rc;
 }
@@ -4182,11 +4225,11 @@ static int hmR0SvmCheckExitDueToEventDelivery(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMT
  * Advances the guest RIP in the if the NRIP_SAVE feature is supported by the
  * CPU, otherwise advances the RIP by @a cb bytes.
  *
- * @param   pVCpu       Pointer to the VMCPU.
+ * @param   pVCpu       The cross context virtual CPU structure.
  * @param   pCtx        Pointer to the guest-CPU context.
  * @param   cb          RIP increment value in bytes.
  *
- * @remarks Use this function only from #VMEXIT's where the NRIP value is valid
+ * @remarks Use this function only from \#VMEXIT's where the NRIP value is valid
  *          when NRIP_SAVE is supported by the CPU!
  */
 DECLINLINE(void) hmR0SvmUpdateRip(PVMCPU pVCpu, PCPUMCTX pCtx, uint32_t cb)
@@ -4206,12 +4249,12 @@ DECLINLINE(void) hmR0SvmUpdateRip(PVMCPU pVCpu, PCPUMCTX pCtx, uint32_t cb)
 /* -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- #VMEXIT handlers -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- */
 /* -=-=-=-=-=-=-=-=--=-=-=-=-=-=-=-=-=-=-=--=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
 
-/** @name #VMEXIT handlers.
+/** @name \#VMEXIT handlers.
  * @{
  */
 
 /**
- * #VMEXIT handler for external interrupts, NMIs, FPU assertion freeze and INIT
+ * \#VMEXIT handler for external interrupts, NMIs, FPU assertion freeze and INIT
  * signals (SVM_EXIT_INTR, SVM_EXIT_NMI, SVM_EXIT_FERR_FREEZE, SVM_EXIT_INIT).
  */
 HMSVM_EXIT_DECL hmR0SvmExitIntr(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
@@ -4236,7 +4279,7 @@ HMSVM_EXIT_DECL hmR0SvmExitIntr(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmT
 
 
 /**
- * #VMEXIT handler for WBINVD (SVM_EXIT_WBINVD). Conditional #VMEXIT.
+ * \#VMEXIT handler for WBINVD (SVM_EXIT_WBINVD). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitWbinvd(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4251,7 +4294,7 @@ HMSVM_EXIT_DECL hmR0SvmExitWbinvd(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSv
 
 
 /**
- * #VMEXIT handler for INVD (SVM_EXIT_INVD). Unconditional #VMEXIT.
+ * \#VMEXIT handler for INVD (SVM_EXIT_INVD). Unconditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitInvd(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4266,7 +4309,7 @@ HMSVM_EXIT_DECL hmR0SvmExitInvd(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmT
 
 
 /**
- * #VMEXIT handler for INVD (SVM_EXIT_CPUID). Conditional #VMEXIT.
+ * \#VMEXIT handler for INVD (SVM_EXIT_CPUID). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitCpuid(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4289,7 +4332,7 @@ HMSVM_EXIT_DECL hmR0SvmExitCpuid(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvm
 
 
 /**
- * #VMEXIT handler for RDTSC (SVM_EXIT_RDTSC). Conditional #VMEXIT.
+ * \#VMEXIT handler for RDTSC (SVM_EXIT_RDTSC). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitRdtsc(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4315,7 +4358,7 @@ HMSVM_EXIT_DECL hmR0SvmExitRdtsc(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvm
 
 
 /**
- * #VMEXIT handler for RDTSCP (SVM_EXIT_RDTSCP). Conditional #VMEXIT.
+ * \#VMEXIT handler for RDTSCP (SVM_EXIT_RDTSCP). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitRdtscp(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4338,7 +4381,7 @@ HMSVM_EXIT_DECL hmR0SvmExitRdtscp(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSv
 
 
 /**
- * #VMEXIT handler for RDPMC (SVM_EXIT_RDPMC). Conditional #VMEXIT.
+ * \#VMEXIT handler for RDPMC (SVM_EXIT_RDPMC). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitRdpmc(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4360,7 +4403,7 @@ HMSVM_EXIT_DECL hmR0SvmExitRdpmc(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvm
 
 
 /**
- * #VMEXIT handler for INVLPG (SVM_EXIT_INVLPG). Conditional #VMEXIT.
+ * \#VMEXIT handler for INVLPG (SVM_EXIT_INVLPG). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitInvlpg(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4378,7 +4421,7 @@ HMSVM_EXIT_DECL hmR0SvmExitInvlpg(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSv
 
 
 /**
- * #VMEXIT handler for HLT (SVM_EXIT_HLT). Conditional #VMEXIT.
+ * \#VMEXIT handler for HLT (SVM_EXIT_HLT). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitHlt(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4395,7 +4438,7 @@ HMSVM_EXIT_DECL hmR0SvmExitHlt(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTr
 
 
 /**
- * #VMEXIT handler for MONITOR (SVM_EXIT_MONITOR). Conditional #VMEXIT.
+ * \#VMEXIT handler for MONITOR (SVM_EXIT_MONITOR). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitMonitor(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4417,7 +4460,7 @@ HMSVM_EXIT_DECL hmR0SvmExitMonitor(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pS
 
 
 /**
- * #VMEXIT handler for MWAIT (SVM_EXIT_MWAIT). Conditional #VMEXIT.
+ * \#VMEXIT handler for MWAIT (SVM_EXIT_MWAIT). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitMwait(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4449,8 +4492,8 @@ HMSVM_EXIT_DECL hmR0SvmExitMwait(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvm
 
 
 /**
- * #VMEXIT handler for shutdown (triple-fault) (SVM_EXIT_SHUTDOWN).
- * Conditional #VMEXIT.
+ * \#VMEXIT handler for shutdown (triple-fault) (SVM_EXIT_SHUTDOWN). Conditional
+ * \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitShutdown(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4460,7 +4503,7 @@ HMSVM_EXIT_DECL hmR0SvmExitShutdown(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT p
 
 
 /**
- * #VMEXIT handler for CRx reads (SVM_EXIT_READ_CR*). Conditional #VMEXIT.
+ * \#VMEXIT handler for CRx reads (SVM_EXIT_READ_CR*). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitReadCRx(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4481,7 +4524,7 @@ HMSVM_EXIT_DECL hmR0SvmExitReadCRx(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pS
 
 
 /**
- * #VMEXIT handler for CRx writes (SVM_EXIT_WRITE_CR*). Conditional #VMEXIT.
+ * \#VMEXIT handler for CRx writes (SVM_EXIT_WRITE_CR*). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitWriteCRx(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4529,8 +4572,8 @@ HMSVM_EXIT_DECL hmR0SvmExitWriteCRx(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT p
 
 
 /**
- * #VMEXIT handler for instructions that result in a #UD exception delivered to
- * the guest.
+ * \#VMEXIT handler for instructions that result in a \#UD exception delivered
+ * to the guest.
  */
 HMSVM_EXIT_DECL hmR0SvmExitSetPendingXcptUD(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4541,7 +4584,8 @@ HMSVM_EXIT_DECL hmR0SvmExitSetPendingXcptUD(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRA
 
 
 /**
- * #VMEXIT handler for MSR read and writes (SVM_EXIT_MSR). Conditional #VMEXIT.
+ * \#VMEXIT handler for MSR read and writes (SVM_EXIT_MSR). Conditional
+ * \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitMsr(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4643,7 +4687,7 @@ HMSVM_EXIT_DECL hmR0SvmExitMsr(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTr
 
 
 /**
- * #VMEXIT handler for DRx read (SVM_EXIT_READ_DRx). Conditional #VMEXIT.
+ * \#VMEXIT handler for DRx read (SVM_EXIT_READ_DRx). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitReadDRx(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4707,7 +4751,7 @@ HMSVM_EXIT_DECL hmR0SvmExitReadDRx(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pS
 
 
 /**
- * #VMEXIT handler for DRx write (SVM_EXIT_WRITE_DRx). Conditional #VMEXIT.
+ * \#VMEXIT handler for DRx write (SVM_EXIT_WRITE_DRx). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitWriteDRx(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4721,7 +4765,7 @@ HMSVM_EXIT_DECL hmR0SvmExitWriteDRx(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT p
 
 
 /**
- * #VMEXIT handler for XCRx write (SVM_EXIT_XSETBV). Conditional #VMEXIT.
+ * \#VMEXIT handler for XCRx write (SVM_EXIT_XSETBV). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitXsetbv(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4742,7 +4786,7 @@ HMSVM_EXIT_DECL hmR0SvmExitXsetbv(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSv
 
 
 /**
- * #VMEXIT handler for I/O instructions (SVM_EXIT_IOIO). Conditional #VMEXIT.
+ * \#VMEXIT handler for I/O instructions (SVM_EXIT_IOIO). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitIOInstr(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -4960,8 +5004,7 @@ HMSVM_EXIT_DECL hmR0SvmExitIOInstr(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pS
 
 
 /**
- * #VMEXIT handler for Nested Page-faults (SVM_EXIT_NPF). Conditional
- * #VMEXIT.
+ * \#VMEXIT handler for Nested Page-faults (SVM_EXIT_NPF). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitNestedPF(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -5064,7 +5107,8 @@ HMSVM_EXIT_DECL hmR0SvmExitNestedPF(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT p
 
 
 /**
- * #VMEXIT handler for virtual interrupt (SVM_EXIT_VINTR). Conditional #VMEXIT.
+ * \#VMEXIT handler for virtual interrupt (SVM_EXIT_VINTR). Conditional
+ * \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitVIntr(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -5085,7 +5129,8 @@ HMSVM_EXIT_DECL hmR0SvmExitVIntr(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvm
 
 
 /**
- * #VMEXIT handler for task switches (SVM_EXIT_TASK_SWITCH). Conditional #VMEXIT.
+ * \#VMEXIT handler for task switches (SVM_EXIT_TASK_SWITCH). Conditional
+ * \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitTaskSwitch(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -5117,7 +5162,7 @@ HMSVM_EXIT_DECL hmR0SvmExitTaskSwitch(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT
 
 
 /**
- * #VMEXIT handler for VMMCALL (SVM_EXIT_VMMCALL). Conditional #VMEXIT.
+ * \#VMEXIT handler for VMMCALL (SVM_EXIT_VMMCALL). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitVmmCall(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -5135,15 +5180,17 @@ HMSVM_EXIT_DECL hmR0SvmExitVmmCall(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pS
     {
         if (pVCpu->hm.s.fHypercallsEnabled)
         {
+            hmR0SvmUpdateRip(pVCpu, pCtx, 3);
+
+            /** @todo pre-increment RIP before hypercall will break when we have to implement
+             *  continuing hypercalls (e.g. Hyper-V). */
             rc = GIMHypercall(pVCpu, pCtx);
-            if (RT_SUCCESS(rc))
-            {
-                /* If the hypercall changes anything other than guest general-purpose registers,
-                   we would need to reload the guest changed bits here before VM-reentry. */
-                hmR0SvmUpdateRip(pVCpu, pCtx, 3);
-                return VINF_SUCCESS;
-            }
+            /* If the hypercall changes anything other than guest general-purpose registers,
+               we would need to reload the guest changed bits here before VM-entry. */
+            return rc;
         }
+        else
+            Log4(("hmR0SvmExitVmmCall: Hypercalls not enabled\n"));
     }
 
     hmR0SvmSetPendingXcptUD(pVCpu);
@@ -5152,7 +5199,18 @@ HMSVM_EXIT_DECL hmR0SvmExitVmmCall(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pS
 
 
 /**
- * #VMEXIT handler for IRET (SVM_EXIT_IRET). Conditional #VMEXIT.
+ * \#VMEXIT handler for VMMCALL (SVM_EXIT_VMMCALL). Conditional \#VMEXIT.
+ */
+HMSVM_EXIT_DECL hmR0SvmExitPause(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
+{
+    HMSVM_VALIDATE_EXIT_HANDLER_PARAMS();
+    STAM_COUNTER_INC(&pVCpu->hm.s.StatExitPause);
+    return VINF_EM_RAW_INTERRUPT;
+}
+
+
+/**
+ * \#VMEXIT handler for IRET (SVM_EXIT_IRET). Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitIret(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -5171,8 +5229,8 @@ HMSVM_EXIT_DECL hmR0SvmExitIret(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmT
 
 
 /**
- * #VMEXIT handler for page-fault exceptions (SVM_EXIT_EXCEPTION_E). Conditional
- * #VMEXIT.
+ * \#VMEXIT handler for page-fault exceptions (SVM_EXIT_EXCEPTION_E).
+ * Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitXcptPF(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -5291,8 +5349,8 @@ HMSVM_EXIT_DECL hmR0SvmExitXcptPF(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSv
 
 
 /**
- * #VMEXIT handler for device-not-available exceptions (SVM_EXIT_EXCEPTION_7).
- * Conditional #VMEXIT.
+ * \#VMEXIT handler for device-not-available exceptions (SVM_EXIT_EXCEPTION_7).
+ * Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitXcptNM(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -5342,8 +5400,8 @@ HMSVM_EXIT_DECL hmR0SvmExitXcptNM(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSv
 
 
 /**
- * #VMEXIT handler for undefined opcode (SVM_EXIT_EXCEPTION_6).
- * Conditional #VMEXIT.
+ * \#VMEXIT handler for undefined opcode (SVM_EXIT_EXCEPTION_6). Conditional
+ * \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitXcptUD(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -5362,8 +5420,8 @@ HMSVM_EXIT_DECL hmR0SvmExitXcptUD(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSv
 
 
 /**
- * #VMEXIT handler for math-fault exceptions (SVM_EXIT_EXCEPTION_10).
- * Conditional #VMEXIT.
+ * \#VMEXIT handler for math-fault exceptions (SVM_EXIT_EXCEPTION_10).
+ * Conditional \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitXcptMF(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -5397,8 +5455,8 @@ HMSVM_EXIT_DECL hmR0SvmExitXcptMF(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSv
 
 
 /**
- * #VMEXIT handler for debug exceptions (SVM_EXIT_EXCEPTION_1). Conditional
- * #VMEXIT.
+ * \#VMEXIT handler for debug exceptions (SVM_EXIT_EXCEPTION_1). Conditional
+ * \#VMEXIT.
  */
 HMSVM_EXIT_DECL hmR0SvmExitXcptDB(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
 {
@@ -5440,6 +5498,26 @@ HMSVM_EXIT_DECL hmR0SvmExitXcptDB(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSv
     }
 
     return rc;
+}
+
+
+/**
+ * \#VMEXIT handler for alignment check exceptions (SVM_EXIT_EXCEPTION_11).
+ * Conditional \#VMEXIT.
+ */
+HMSVM_EXIT_DECL hmR0SvmExitXcptAC(PVMCPU pVCpu, PCPUMCTX pCtx, PSVMTRANSIENT pSvmTransient)
+{
+    HMSVM_VALIDATE_EXIT_HANDLER_PARAMS();
+
+    HMSVM_CHECK_EXIT_DUE_TO_EVENT_DELIVERY();
+
+    SVMEVENT Event;
+    Event.u          = 0;
+    Event.n.u1Valid  = 1;
+    Event.n.u3Type   = SVM_EVENT_EXCEPTION;
+    Event.n.u8Vector = X86_XCPT_AC;
+    hmR0SvmSetPendingEvent(pVCpu, &Event, 0 /* GCPtrFaultAddress */);
+    return VINF_SUCCESS;
 }
 
 /** @} */

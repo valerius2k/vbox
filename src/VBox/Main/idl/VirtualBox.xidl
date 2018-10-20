@@ -446,7 +446,7 @@
 
   <enum
     name="SettingsVersion"
-    uuid="d5b15ca7-3de7-46b2-a63a-ddcce42bfa3f"
+    uuid="b4cc23c2-96f2-419d-830b-bd13c1135dfb"
     >
     <desc>
       Settings version of VirtualBox settings files. This is written to
@@ -564,6 +564,12 @@
       <desc>Settings version "1.15", written by VirtualBox 5.0.x.</desc>
       <!--
           Machine changes: hot-plug flag for storage devices.
+      -->
+    </const>
+    <const name="v1_16" value="18">
+      <desc>Settings version "1.16", written by VirtualBox 5.1.x.</desc>
+      <!--
+          Machine changes: NVMe storage controller.
       -->
     </const>
 
@@ -1045,9 +1051,9 @@
     <const name="HyperV"   value="4">
       <desc>Microsoft Hyper-V.</desc>
     </const>
-	<const name="KVM"      value="5">
-	  <desc>Linux KVM.</desc>
-	</const>
+    <const name="KVM"      value="5">
+      <desc>Linux KVM.</desc>
+    </const>
   </enum>
 
   <enum
@@ -3594,7 +3600,7 @@
 
   <interface
     name="IInternalMachineControl" extends="$unknown"
-    uuid="ec36f437-ad4d-4512-94dd-f4c568143aa7"
+    uuid="cdbc59df-4f4d-4cf2-809c-917601355afc"
     internal="yes"
     wsmap="suppress"
     >
@@ -3918,6 +3924,22 @@
         <desc>Network transmit rate for VM.</desc>
       </param>
     </method>
+
+    <method name="authenticateExternal">
+      <desc>
+        Verify credentials using the external auth library.
+      </desc>
+      <param name="authParams" type="wstring" dir="in" safearray="yes">
+        <desc>
+          The auth parameters, credentials, etc.
+        </desc>
+      </param>
+      <param name="result" type="wstring" dir="out">
+        <desc>
+          The authentification result.
+        </desc>
+      </param>
+    </method>
   </interface>
 
   <interface
@@ -4184,7 +4206,7 @@
     wsmap="managed"
     wrap-hint-server-addinterfaces="IInternalMachineControl"
     wrap-hint-server="manualaddinterfaces"
-    reservedMethods="8" reservedAttributes="16"
+    reservedMethods="8" reservedAttributes="14"
     >
     <desc>
       The IMachine interface represents a virtual machine, or guest, created
@@ -5021,6 +5043,12 @@
         <result name="E_NOTIMPL">
           This attribute is currently not implemented.
         </result>
+      </desc>
+    </attribute>
+
+    <attribute name="paravirtDebug" type="wstring">
+      <desc>
+        Debug parameters for the paravirtualized guest interface provider.
       </desc>
     </attribute>
 
@@ -9523,7 +9551,7 @@ and "VAR" for unsetting. -->
     name="IGuestOSType" extends="$unknown"
     uuid="03cd409d-20f5-43f9-8de1-4a129620990b"
     wsmap="struct"
-    reservedAttributes="16"
+    reservedAttributes="15"
     >
     <desc>
     </desc>
@@ -9638,6 +9666,10 @@ and "VAR" for unsetting. -->
 
     <attribute name="recommendedUSB" type="boolean" readonly="yes">
       <desc>Returns @c true a USB controller is recommended for this OS type.</desc>
+    </attribute>
+
+    <attribute name="recommendedUSB3" type="boolean" readonly="yes">
+      <desc>Returns @c true an xHCI (USB 3) controller is recommended for this OS type.</desc>
     </attribute>
 
     <attribute name="recommendedTFReset" type="boolean" readonly="yes">
@@ -17248,7 +17280,7 @@ Snapshot 1 (B.vdi)            Snapshot 1 (B.vdi)
       <desc>
         Host parallel device name. If this parallel port is enabled, setting a
         @c null or an empty string as this attribute's value will result in
-        an error.
+        the parallel port behaving as if not connected to any device.
       </desc>
     </attribute>
 
@@ -19615,7 +19647,7 @@ Snapshot 1 (B.vdi)            Snapshot 1 (B.vdi)
 
   <enum
     name="StorageBus"
-    uuid="2dab9df1-9683-48fd-8c11-caada236fcb0"
+    uuid="21371490-8542-4b5a-a74d-ee9ac2d45a90"
     >
     <desc>
       The bus type of the storage controller (IDE, SATA, SCSI, SAS or Floppy);
@@ -19630,11 +19662,12 @@ Snapshot 1 (B.vdi)            Snapshot 1 (B.vdi)
     <const name="Floppy"    value="4"/>
     <const name="SAS"       value="5"/>
     <const name="USB"       value="6"/>
+    <const name="PCIe"      value="7"/>
   </enum>
 
   <enum
     name="StorageControllerType"
-    uuid="02e190af-b546-4109-b036-6deaa4ef6e69"
+    uuid="9427f309-82e7-468f-9964-abfefc4d3058"
     >
     <desc>
       The exact variant of storage controller hardware presented
@@ -19670,6 +19703,9 @@ Snapshot 1 (B.vdi)            Snapshot 1 (B.vdi)
     </const>
     <const name="USB"           value="9">
       <desc>Special USB based storage controller.</desc>
+    </const>
+    <const name="NVMe"          value="10">
+      <desc>An NVMe storage controller.</desc>
     </const>
   </enum>
 

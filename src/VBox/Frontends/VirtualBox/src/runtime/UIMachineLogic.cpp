@@ -20,7 +20,6 @@
 #else  /* !VBOX_WITH_PRECOMPILED_HEADERS */
 
 /* Qt includes: */
-# include <QDesktopWidget>
 # include <QDir>
 # include <QFileInfo>
 # include <QPainter>
@@ -944,7 +943,7 @@ void UIMachineLogic::prepareSessionConnections()
             this, SLOT(sltHandleVBoxSVCAvailabilityChange()));
 
     /* We should watch for requested modes: */
-    connect(uisession(), SIGNAL(sigInitialized()), this, SLOT(sltCheckForRequestedVisualStateType()));
+    connect(uisession(), SIGNAL(sigInitialized()), this, SLOT(sltCheckForRequestedVisualStateType()), Qt::QueuedConnection);
     connect(uisession(), SIGNAL(sigAdditionsStateChange()), this, SLOT(sltCheckForRequestedVisualStateType()));
 
     /* We should watch for console events: */
@@ -1210,6 +1209,18 @@ void UIMachineLogic::prepareDock()
     connect(gEDataManager, SIGNAL(sigDockIconAppearanceChange(bool)),
             this, SLOT(sltChangeDockIconUpdate(bool)));
 
+    /* Get dock icon disable overlay action: */
+    QAction *pDockIconDisableOverlay = actionPool()->action(UIActionIndexRT_M_Dock_M_DockSettings_T_DisableOverlay);
+    /* Prepare dock icon disable overlay action with initial data: */
+    pDockIconDisableOverlay->setChecked(gEDataManager->dockIconDisableOverlay(vboxGlobal().managedVMUuid()));
+    /* Connect dock icon disable overlay related signals: */
+    connect(pDockIconDisableOverlay, SIGNAL(triggered(bool)),
+            this, SLOT(sltDockIconDisableOverlayChanged(bool)));
+    connect(gEDataManager, SIGNAL(sigDockIconOverlayAppearanceChange(bool)),
+            this, SLOT(sltChangeDockIconOverlayAppearance(bool)));
+    /* Add dock icon disable overlay action to the dock settings menu: */
+    pDockSettingsMenu->addAction(pDockIconDisableOverlay);
+
     /* Monitor selection if there are more than one monitor */
     int cGuestScreens = machine().GetMonitorCount();
     if (cGuestScreens > 1)
@@ -1238,7 +1249,7 @@ void UIMachineLogic::prepareDock()
 
     /* Now the dock icon preview */
     QString osTypeId = guest().GetOSTypeId();
-    m_pDockIconPreview = new UIDockIconPreview(uisession(), vboxGlobal().vmGuestOSTypeIcon(osTypeId));
+    m_pDockIconPreview = new UIDockIconPreview(uisession(), vboxGlobal().vmGuestOSTypePixmapHiDPI(osTypeId, QSize(42, 42)));
 
     /* Should the dock-icon be updated at runtime? */
     bool fEnabled = gEDataManager->realtimeDockIconUpdateEnabled(vboxGlobal().managedVMUuid());
@@ -1662,10 +1673,24 @@ void UIMachineLogic::sltTakeScreenshot()
     if (!isMachineWindowsCreated())
         return;
 
+    /* Formatting default filename for screenshot. VM folder is the default directory to save: */
+    const QFileInfo fi(machine().GetSettingsFilePath());
+    const QString strCurrentTime = QDateTime::currentDateTime().toString("dd_MM_yyyy_hh_mm_ss");
+    const QString strFormatDefaultFileName = QString("VirtualBox").append("_").append(machine().GetName()).append("_").append(strCurrentTime);
+    const QString strDefaultFileName = QDir(fi.absolutePath()).absoluteFilePath(strFormatDefaultFileName);
+
+    /* Formatting temporary filename for screenshot. It is saved in system temporary directory if available, else in VM folder: */
+    QString strTempFile = QDir(fi.absolutePath()).absoluteFilePath("temp").append("_").append(strCurrentTime).append(".png");
+    if (QDir::temp().exists())
+        strTempFile = QDir::temp().absoluteFilePath("temp").append("_").append(strCurrentTime).append(".png");
+
+    /* Do the screenshot: */
+    takeScreenshot(strTempFile, "png");
+
     /* Which image formats for writing does this Qt version know of? */
     QList<QByteArray> formats = QImageWriter::supportedImageFormats();
     QStringList filters;
-    /* Build a filters list out of it. */
+    /* Build a filters list out of it: */
     for (int i = 0; i < formats.size(); ++i)
     {
         const QString &s = formats.at(i) + " (*." + formats.at(i).toLower() + ")";
@@ -1673,7 +1698,7 @@ void UIMachineLogic::sltTakeScreenshot()
         if (filters.indexOf(QRegExp(QRegExp::escape(s), Qt::CaseInsensitive)) == -1)
             filters << s;
     }
-    /* Try to select some common defaults. */
+    /* Try to select some common defaults: */
     QString strFilter;
     int i = filters.indexOf(QRegExp(".*png.*", Qt::CaseInsensitive));
     if (i == -1)
@@ -1697,18 +1722,14 @@ void UIMachineLogic::sltTakeScreenshot()
         activeMachineWindow()->machineView()->clearFocus();
 #endif /* Q_WS_WIN */
 
-    /* Request the filename from the user. */
-    QFileInfo fi(machine().GetSettingsFilePath());
-    QString strAbsolutePath(fi.absolutePath());
-    QString strCompleteBaseName(fi.completeBaseName());
-    QString strStart = QDir(strAbsolutePath).absoluteFilePath(strCompleteBaseName);
-    QString strFilename = QIFileDialog::getSaveFileName(strStart,
-                                                        filters.join(";;"),
-                                                        activeMachineWindow(),
-                                                        tr("Select a filename for the screenshot ..."),
-                                                        &strFilter,
-                                                        true /* resolve symlinks */,
-                                                        true /* confirm overwrite */);
+    /* Request the filename from the user: */
+    const QString strFilename = QIFileDialog::getSaveFileName(strDefaultFileName,
+                                                              filters.join(";;"),
+                                                              activeMachineWindow(),
+                                                              tr("Select a filename for the screenshot ..."),
+                                                              &strFilter,
+                                                              true /* resolve symlinks */,
+                                                              true /* confirm overwrite */);
 
 #ifdef Q_WS_WIN
     /* Due to Qt bug, modal QFileDialog appeared above the active machine-window
@@ -1720,9 +1741,26 @@ void UIMachineLogic::sltTakeScreenshot()
         activeMachineWindow()->machineView()->setFocus();
 #endif /* Q_WS_WIN */
 
-    /* Do the screenshot. */
     if (!strFilename.isEmpty())
-        takeScreenshot(strFilename, strFilter.split(" ").value(0, "png"));
+    {
+        const QString strFormat = strFilter.split(" ").value(0, "png");
+        const QImage tmpImage(strTempFile);
+
+        /* On X11 Qt Filedialog returns the filepath without the filetype suffix, so adding it ourselves: */
+#ifdef Q_WS_X11
+        /* Add filetype suffix only if user has not added it explicitly: */
+        if (!strFilename.endsWith(QString(".%1").arg(strFormat)))
+            tmpImage.save(QDir::toNativeSeparators(QFile::encodeName(QString("%1.%2").arg(strFilename, strFormat))),
+                          strFormat.toUtf8().constData());
+        else
+            tmpImage.save(QDir::toNativeSeparators(QFile::encodeName(strFilename)),
+                          strFormat.toUtf8().constData());
+#else /* !Q_WS_X11 */
+        tmpImage.save(QDir::toNativeSeparators(QFile::encodeName(strFilename)),
+                      strFormat.toUtf8().constData());
+#endif /* !Q_WS_X11 */
+    }
+    QFile::remove(strTempFile);
 }
 
 void UIMachineLogic::sltOpenVideoCaptureOptions()
@@ -2117,6 +2155,30 @@ void UIMachineLogic::sltChangeDockIconUpdate(bool fEnabled)
         updateDockOverlay();
     }
 }
+
+void UIMachineLogic::sltChangeDockIconOverlayAppearance(bool fDisabled)
+{
+    /* Update dock icon overlay: */
+    if (isMachineWindowsCreated())
+        updateDockOverlay();
+    /* Make sure to update dock icon disable overlay action state when 'GUI_DockIconDisableOverlay' changed from extra-data manager: */
+    QAction *pDockIconDisableOverlay = actionPool()->action(UIActionIndexRT_M_Dock_M_DockSettings_T_DisableOverlay);
+    if (fDisabled != pDockIconDisableOverlay->isChecked())
+    {
+        /* Block signals initially to avoid recursive loop: */
+        pDockIconDisableOverlay->blockSignals(true);
+        /* Update state: */
+        pDockIconDisableOverlay->setChecked(fDisabled);
+        /* Make sure to unblock signals again: */
+        pDockIconDisableOverlay->blockSignals(false);
+    }
+}
+
+void UIMachineLogic::sltDockIconDisableOverlayChanged(bool fDisabled)
+{
+    /* Write dock icon disable overlay flag to extra-data: */
+    gEDataManager->setDockIconDisableOverlay(fDisabled, vboxGlobal().managedVMUuid());
+}
 #endif /* Q_WS_MAC */
 
 void UIMachineLogic::sltSwitchKeyboardLedsToGuestLeds()
@@ -2124,8 +2186,8 @@ void UIMachineLogic::sltSwitchKeyboardLedsToGuestLeds()
 //    /* Log statement (printf): */
 //    QString strDt = QDateTime::currentDateTime().toString("HH:mm:ss:zzz");
 //    printf("%s: UIMachineLogic: sltSwitchKeyboardLedsToGuestLeds called, machine name is {%s}\n",
-//           strDt.toAscii().constData(),
-//           machineName().toAscii().constData());
+//           strDt.toUtf8().constData(),
+//           machineName().toUtf8().constData());
 
     /* Here we have to store host LED lock states. */
 
@@ -2155,8 +2217,8 @@ void UIMachineLogic::sltSwitchKeyboardLedsToPreviousLeds()
 //    /* Log statement (printf): */
 //    QString strDt = QDateTime::currentDateTime().toString("HH:mm:ss:zzz");
 //    printf("%s: UIMachineLogic: sltSwitchKeyboardLedsToPreviousLeds called, machine name is {%s}\n",
-//           strDt.toAscii().constData(),
-//           machineName().toAscii().constData());
+//           strDt.toUtf8().constData(),
+//           machineName().toUtf8().constData());
 
     if (!isHidLedsSyncEnabled())
         return;
@@ -2618,7 +2680,7 @@ void UIMachineLogic::takeScreenshot(const QString &strFile, const QString &strFo
     const QString &strPathWithoutSuffix = QDir(fi.absolutePath()).absoluteFilePath(fi.baseName());
     const QString &strSuffix = fi.suffix().isEmpty() ? strFormat : fi.suffix();
     bigImg.save(QDir::toNativeSeparators(QFile::encodeName(QString("%1.%2").arg(strPathWithoutSuffix, strSuffix))),
-                strFormat.toAscii().constData());
+                strFormat.toUtf8().constData());
 }
 
 #ifdef VBOX_WITH_DEBUGGER_GUI

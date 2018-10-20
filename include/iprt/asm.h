@@ -81,6 +81,16 @@
 # endif
 #endif
 
+/*
+ * Include #pragma aux definitions for Watcom C/C++.
+ */
+#if defined(__WATCOMC__) && ARCH_BITS == 16 && defined(RT_ARCH_X86)
+# include "asm-watcom-x86-16.h"
+#elif defined(__WATCOMC__) && ARCH_BITS == 32 && defined(RT_ARCH_X86)
+# include "asm-watcom-x86-32.h"
+#endif
+
+
 
 /** @defgroup grp_rt_asm    ASM - Assembly Routines
  * @ingroup grp_rt
@@ -132,7 +142,7 @@
 # define RT_INLINE_ASM_GCC_4_3_X_X86 0
 #endif
 
-/** @def RT_INLINE_DONT_USE_CMPXCHG8B
+/** @def RT_INLINE_DONT_MIX_CMPXCHG8B_AND_PIC
  * i686-apple-darwin9-gcc-4.0.1 (GCC) 4.0.1 (Apple Inc. build 5493) screws up
  * RTSemRWRequestWrite semsemrw-lockless-generic.cpp in release builds. PIC
  * mode, x86.
@@ -141,7 +151,7 @@
  * when in PIC mode on x86.
  */
 #ifndef RT_INLINE_DONT_MIX_CMPXCHG8B_AND_PIC
-# ifdef DOXYGEN_RUNNING
+# if defined(DOXYGEN_RUNNING) || defined(__WATCOMC__) /* Watcom has trouble with the expression below */
 #  define RT_INLINE_DONT_MIX_CMPXCHG8B_AND_PIC 1
 # else
 #  define RT_INLINE_DONT_MIX_CMPXCHG8B_AND_PIC \
@@ -165,6 +175,8 @@ void * _ReturnAddress(void);
 # define ASMReturnAddress() _ReturnAddress()
 #elif defined(__GNUC__) || defined(DOXYGEN_RUNNING)
 # define ASMReturnAddress() __builtin_return_address(0)
+#elif defined(__WATCOMC__)
+# define ASMReturnAddress() Watcom_does_not_appear_to_have_intrinsic_return_address_function()
 #else
 # error "Unsupported compiler."
 #endif
@@ -184,6 +196,8 @@ void * _ReturnAddress(void);
 # define ASMCompilerBarrier()   do { __asm__ __volatile__("" : : : "memory"); } while (0)
 #elif RT_INLINE_ASM_USES_INTRIN
 # define ASMCompilerBarrier()   do { _ReadWriteBarrier(); } while (0)
+#elif defined(__WATCOMC__)
+void ASMCompilerBarrier(void);
 #else /* 2003 should have _ReadWriteBarrier() but I guess we're at 2002 level then... */
 DECLINLINE(void) ASMCompilerBarrier(void)
 {
@@ -509,7 +523,7 @@ DECLINLINE(int64_t) ASMAtomicXchgS64(volatile int64_t *pi64, int64_t i64)
  */
 DECLINLINE(void *) ASMAtomicXchgPtr(void * volatile *ppv, const void *pv)
 {
-#if ARCH_BITS == 32
+#if ARCH_BITS == 32 || (ARCH_BITS == 16 && RT_FAR_DATA)
     return (void *)ASMAtomicXchgU32((volatile uint32_t *)(void *)ppv, (uint32_t)pv);
 #elif ARCH_BITS == 64
     return (void *)ASMAtomicXchgU64((volatile uint64_t *)(void *)ppv, (uint64_t)pv);
@@ -564,7 +578,7 @@ DECLINLINE(RTRCPTR) ASMAtomicXchgRCPtr(RTRCPTR volatile *ppvRC, RTRCPTR pvRC)
  */
 DECLINLINE(RTR0PTR) ASMAtomicXchgR0Ptr(RTR0PTR volatile *ppvR0, RTR0PTR pvR0)
 {
-#if R0_ARCH_BITS == 32
+#if R0_ARCH_BITS == 32 || (ARCH_BITS == 16 && RT_FAR_DATA)
     return (RTR0PTR)ASMAtomicXchgU32((volatile uint32_t *)(void *)ppvR0, (uint32_t)pvR0);
 #elif R0_ARCH_BITS == 64
     return (RTR0PTR)ASMAtomicXchgU64((volatile uint64_t *)(void *)ppvR0, (uint64_t)pvR0);
@@ -583,7 +597,7 @@ DECLINLINE(RTR0PTR) ASMAtomicXchgR0Ptr(RTR0PTR volatile *ppvR0, RTR0PTR pvR0)
  */
 DECLINLINE(RTR3PTR) ASMAtomicXchgR3Ptr(RTR3PTR volatile *ppvR3, RTR3PTR pvR3)
 {
-#if R3_ARCH_BITS == 32
+#if R3_ARCH_BITS == 32 || (ARCH_BITS == 16 && RT_FAR_DATA)
     return (RTR3PTR)ASMAtomicXchgU32((volatile uint32_t *)(void *)ppvR3, (uint32_t)pvR3);
 #elif R3_ARCH_BITS == 64
     return (RTR3PTR)ASMAtomicXchgU64((volatile uint64_t *)(void *)ppvR3, (uint64_t)pvR3);
@@ -602,7 +616,7 @@ DECLINLINE(RTR3PTR) ASMAtomicXchgR3Ptr(RTR3PTR volatile *ppvR3, RTR3PTR pvR3)
  *
  * @remarks This doesn't currently work for all handles (like RTFILE).
  */
-#if HC_ARCH_BITS == 32
+#if HC_ARCH_BITS == 32 || (ARCH_BITS == 16 && RT_FAR_DATA)
 # define ASMAtomicXchgHandle(ph, hNew, phRes) \
    do { \
        AssertCompile(sizeof(*(ph))    == sizeof(uint32_t)); \
@@ -921,7 +935,7 @@ DECLINLINE(bool) ASMAtomicCmpXchgS64(volatile int64_t *pi64, const int64_t i64, 
  */
 DECLINLINE(bool) ASMAtomicCmpXchgPtrVoid(void * volatile *ppv, const void *pvNew, const void *pvOld)
 {
-#if ARCH_BITS == 32
+#if ARCH_BITS == 32 || (ARCH_BITS == 16 && RT_FAR_DATA)
     return ASMAtomicCmpXchgU32((volatile uint32_t *)(void *)ppv, (uint32_t)pvNew, (uint32_t)pvOld);
 #elif ARCH_BITS == 64
     return ASMAtomicCmpXchgU64((volatile uint64_t *)(void *)ppv, (uint64_t)pvNew, (uint64_t)pvOld);
@@ -970,7 +984,7 @@ DECLINLINE(bool) ASMAtomicCmpXchgPtrVoid(void * volatile *ppv, const void *pvNew
  *
  * @remarks This doesn't currently work for all handles (like RTFILE).
  */
-#if HC_ARCH_BITS == 32
+#if HC_ARCH_BITS == 32 || (ARCH_BITS == 16 && RT_FAR_DATA)
 # define ASMAtomicCmpXchgHandle(ph, hNew, hOld, fRc) \
    do { \
        AssertCompile(sizeof(*(ph)) == sizeof(uint32_t)); \
@@ -1219,7 +1233,7 @@ DECLINLINE(bool) ASMAtomicCmpXchgExS64(volatile int64_t *pi64, const int64_t i64
  *
  * @remarks This doesn't currently work for all handles (like RTFILE).
  */
-#if HC_ARCH_BITS == 32
+#if HC_ARCH_BITS == 32 || (ARCH_BITS == 16 && RT_FAR_DATA)
 # define ASMAtomicCmpXchgExHandle(ph, hNew, hOld, fRc, phOldVal) \
     do { \
         AssertCompile(sizeof(*ph)       == sizeof(uint32_t)); \
@@ -1277,7 +1291,7 @@ DECLINLINE(bool) ASMAtomicCmpXchgExS64(volatile int64_t *pi64, const int64_t i64
  */
 DECLINLINE(bool) ASMAtomicCmpXchgExPtrVoid(void * volatile *ppv, const void *pvNew, const void *pvOld, void **ppvOld)
 {
-#if ARCH_BITS == 32
+#if ARCH_BITS == 32 || (ARCH_BITS == 16 && RT_FAR_DATA)
     return ASMAtomicCmpXchgExU32((volatile uint32_t *)(void *)ppv, (uint32_t)pvNew, (uint32_t)pvOld, (uint32_t *)ppvOld);
 #elif ARCH_BITS == 64
     return ASMAtomicCmpXchgExU64((volatile uint64_t *)(void *)ppv, (uint64_t)pvNew, (uint64_t)pvOld, (uint64_t *)ppvOld);
@@ -1755,6 +1769,9 @@ DECLINLINE(size_t) ASMAtomicReadZ(size_t volatile *pcb)
     return ASMAtomicReadU64((uint64_t volatile *)pcb);
 #elif ARCH_BITS == 32
     return ASMAtomicReadU32((uint32_t volatile *)pcb);
+#elif ARCH_BITS == 16
+    AssertCompileSize(size_t, 2);
+    return ASMAtomicReadU16((uint16_t volatile *)pcb);
 #else
 # error "Unsupported ARCH_BITS value"
 #endif
@@ -1769,10 +1786,13 @@ DECLINLINE(size_t) ASMAtomicReadZ(size_t volatile *pcb)
  */
 DECLINLINE(size_t) ASMAtomicUoReadZ(size_t volatile *pcb)
 {
-#if ARCH_BITS == 64
+#if ARCH_BITS == 64 || (ARCH_BITS == 16 && RT_FAR_DATA)
     return ASMAtomicUoReadU64((uint64_t volatile *)pcb);
 #elif ARCH_BITS == 32
     return ASMAtomicUoReadU32((uint32_t volatile *)pcb);
+#elif ARCH_BITS == 16
+    AssertCompileSize(size_t, 2);
+    return ASMAtomicUoReadU16((uint16_t volatile *)pcb);
 #else
 # error "Unsupported ARCH_BITS value"
 #endif
@@ -1790,7 +1810,7 @@ DECLINLINE(size_t) ASMAtomicUoReadZ(size_t volatile *pcb)
  */
 DECLINLINE(void *) ASMAtomicReadPtr(void * volatile *ppv)
 {
-#if ARCH_BITS == 32
+#if ARCH_BITS == 32 || (ARCH_BITS == 16 && RT_FAR_DATA)
     return (void *)ASMAtomicReadU32((volatile uint32_t *)(void *)ppv);
 #elif ARCH_BITS == 64
     return (void *)ASMAtomicReadU64((volatile uint64_t *)(void *)ppv);
@@ -1831,7 +1851,7 @@ DECLINLINE(void *) ASMAtomicReadPtr(void * volatile *ppv)
  */
 DECLINLINE(void *) ASMAtomicUoReadPtr(void * volatile *ppv)
 {
-#if ARCH_BITS == 32
+#if ARCH_BITS == 32 || (ARCH_BITS == 16 && RT_FAR_DATA)
     return (void *)ASMAtomicUoReadU32((volatile uint32_t *)(void *)ppv);
 #elif ARCH_BITS == 64
     return (void *)ASMAtomicUoReadU64((volatile uint64_t *)(void *)ppv);
@@ -1895,7 +1915,7 @@ DECLINLINE(bool) ASMAtomicUoReadBool(volatile bool *pf)
  *
  * @remarks This doesn't currently work for all handles (like RTFILE).
  */
-#if HC_ARCH_BITS == 32
+#if HC_ARCH_BITS == 32 || (ARCH_BITS == 16 && RT_FAR_DATA)
 # define ASMAtomicReadHandle(ph, phRes) \
     do { \
         AssertCompile(sizeof(*(ph))    == sizeof(uint32_t)); \
@@ -1922,7 +1942,7 @@ DECLINLINE(bool) ASMAtomicUoReadBool(volatile bool *pf)
  *
  * @remarks This doesn't currently work for all handles (like RTFILE).
  */
-#if HC_ARCH_BITS == 32
+#if HC_ARCH_BITS == 32 || (ARCH_BITS == 16 && RT_FAR_DATA)
 # define ASMAtomicUoReadHandle(ph, phRes) \
     do { \
         AssertCompile(sizeof(*(ph))    == sizeof(uint32_t)); \
@@ -2217,7 +2237,7 @@ DECLINLINE(void) ASMAtomicUoWriteBool(volatile bool *pf, bool f)
  */
 DECLINLINE(void) ASMAtomicWritePtrVoid(void * volatile *ppv, const void *pv)
 {
-#if ARCH_BITS == 32
+#if ARCH_BITS == 32 || (ARCH_BITS == 16 && RT_FAR_DATA)
     ASMAtomicWriteU32((volatile uint32_t *)(void *)ppv, (uint32_t)pv);
 #elif ARCH_BITS == 64
     ASMAtomicWriteU64((volatile uint64_t *)(void *)ppv, (uint64_t)pv);
@@ -2361,7 +2381,7 @@ DECLINLINE(void) ASMAtomicWritePtrVoid(void * volatile *ppv, const void *pv)
  *
  * @remarks This doesn't currently work for all handles (like RTFILE).
  */
-#if HC_ARCH_BITS == 32
+#if HC_ARCH_BITS == 32 || (ARCH_BITS == 16 && RT_FAR_DATA)
 # define ASMAtomicWriteHandle(ph, hNew) \
     do { \
         AssertCompile(sizeof(*(ph)) == sizeof(uint32_t)); \
@@ -2386,7 +2406,7 @@ DECLINLINE(void) ASMAtomicWritePtrVoid(void * volatile *ppv, const void *pv)
  *
  * @remarks This doesn't currently work for all handles (like RTFILE).
  */
-#if HC_ARCH_BITS == 32
+#if HC_ARCH_BITS == 32 || (ARCH_BITS == 16 && RT_FAR_DATA)
 # define ASMAtomicUoWriteHandle(ph, hNew) \
     do { \
         AssertCompile(sizeof(*(ph)) == sizeof(uint32_t)); \
@@ -2439,6 +2459,17 @@ DECLINLINE(void) ASMAtomicWritePtrVoid(void * volatile *ppv, const void *pv)
         } \
     } while (0)
 
+
+
+/**
+ * Atomically exchanges and adds to a 16-bit value, ordered.
+ *
+ * @returns The old value.
+ * @param   pu16        Pointer to the value.
+ * @param   u16         Number to add.
+ * @remarks Currently not implemented, just to make 16-bit code happy.
+ */
+DECLASM(uint16_t) ASMAtomicAddU16(uint16_t volatile *pu16, uint32_t u16);
 
 
 /**
@@ -2561,9 +2592,14 @@ DECLINLINE(int64_t) ASMAtomicAddS64(int64_t volatile *pi64, int64_t i64)
 DECLINLINE(size_t) ASMAtomicAddZ(size_t volatile *pcb, size_t cb)
 {
 #if ARCH_BITS == 64
+    AssertCompileSize(size_t, 8);
     return ASMAtomicAddU64((uint64_t volatile *)pcb, cb);
 #elif ARCH_BITS == 32
+    AssertCompileSize(size_t, 4);
     return ASMAtomicAddU32((uint32_t volatile *)pcb, cb);
+#elif ARCH_BITS == 16
+    AssertCompileSize(size_t, 2);
+    return ASMAtomicAddU16((uint16_t volatile *)pcb, cb);
 #else
 # error "Unsupported ARCH_BITS value"
 #endif
@@ -2586,6 +2622,33 @@ DECLINLINE(size_t) ASMAtomicAddZ(size_t volatile *pcb, size_t cb)
             default: AssertMsgFailed(("ASMAtomicAddSize: size %d is not supported\n", sizeof(*(pu)))); \
         } \
     } while (0)
+
+
+
+/**
+ * Atomically exchanges and subtracts to an unsigned 16-bit value, ordered.
+ *
+ * @returns The old value.
+ * @param   pu16        Pointer to the value.
+ * @param   u16         Number to subtract.
+ */
+DECLINLINE(uint16_t) ASMAtomicSubU16(uint16_t volatile *pu16, uint32_t u16)
+{
+    return ASMAtomicAddU16(pu16, (uint16_t)-(int16_t)u16);
+}
+
+
+/**
+ * Atomically exchanges and subtracts to a signed 16-bit value, ordered.
+ *
+ * @returns The old value.
+ * @param   pi16        Pointer to the value.
+ * @param   i16         Number to subtract.
+ */
+DECLINLINE(int16_t) ASMAtomicSubS16(int16_t volatile *pi16, int16_t i16)
+{
+    return (int16_t)ASMAtomicAddU16((uint16_t volatile *)pi16, (uint16_t)-i16);
+}
 
 
 /**
@@ -2653,6 +2716,9 @@ DECLINLINE(size_t) ASMAtomicSubZ(size_t volatile *pcb, size_t cb)
     return ASMAtomicSubU64((uint64_t volatile *)pcb, cb);
 #elif ARCH_BITS == 32
     return ASMAtomicSubU32((uint32_t volatile *)pcb, cb);
+#elif ARCH_BITS == 16
+    AssertCompileSize(size_t, 2);
+    return ASMAtomicSubU16((uint16_t volatile *)pcb, cb);
 #else
 # error "Unsupported ARCH_BITS value"
 #endif
@@ -2675,6 +2741,17 @@ DECLINLINE(size_t) ASMAtomicSubZ(size_t volatile *pcb, size_t cb)
             default: AssertMsgFailed(("ASMAtomicSubSize: size %d is not supported\n", sizeof(*(pu)))); \
         } \
     } while (0)
+
+
+
+/**
+ * Atomically increment a 16-bit value, ordered.
+ *
+ * @returns The new value.
+ * @param   pu16        Pointer to the value to increment.
+ * @remarks Not implemented. Just to make 16-bit code happy.
+ */
+DECLASM(uint16_t) ASMAtomicIncU16(uint16_t volatile *pu16);
 
 
 /**
@@ -2788,10 +2865,23 @@ DECLINLINE(int64_t) ASMAtomicIncZ(size_t volatile *pcb)
     return ASMAtomicIncU64((uint64_t volatile *)pcb);
 #elif ARCH_BITS == 32
     return ASMAtomicIncU32((uint32_t volatile *)pcb);
+#elif ARCH_BITS == 16
+    return ASMAtomicIncU16((uint16_t volatile *)pcb);
 #else
 # error "Unsupported ARCH_BITS value"
 #endif
 }
+
+
+
+/**
+ * Atomically decrement an unsigned 32-bit value, ordered.
+ *
+ * @returns The new value.
+ * @param   pu16        Pointer to the value to decrement.
+ * @remarks Not implemented. Just to make 16-bit code happy.
+ */
+DECLASM(uint32_t) ASMAtomicDecU16(uint16_t volatile *pu16);
 
 
 /**
@@ -2904,6 +2994,8 @@ DECLINLINE(int64_t) ASMAtomicDecZ(size_t volatile *pcb)
     return ASMAtomicDecU64((uint64_t volatile *)pcb);
 #elif ARCH_BITS == 32
     return ASMAtomicDecU32((uint32_t volatile *)pcb);
+#elif ARCH_BITS == 16
+    return ASMAtomicDecU16((uint16_t volatile *)pcb);
 #else
 # error "Unsupported ARCH_BITS value"
 #endif
@@ -4318,16 +4410,16 @@ DECLINLINE(void) ASMBitClearRange(volatile void *pvBitmap, int32_t iBitStart, in
     if (iBitStart < iBitEnd)
     {
         volatile uint32_t *pu32 = (volatile uint32_t *)pvBitmap + (iBitStart >> 5);
-        int iStart = iBitStart & ~31;
-        int iEnd   = iBitEnd & ~31;
+        int32_t iStart = iBitStart & ~31;
+        int32_t iEnd   = iBitEnd & ~31;
         if (iStart == iEnd)
-            *pu32 &= ((1 << (iBitStart & 31)) - 1) | ~((1 << (iBitEnd & 31)) - 1);
+            *pu32 &= ((UINT32_C(1) << (iBitStart & 31)) - 1) | ~((UINT32_C(1) << (iBitEnd & 31)) - 1);
         else
         {
             /* bits in first dword. */
             if (iBitStart & 31)
             {
-                *pu32 &= (1 << (iBitStart & 31)) - 1;
+                *pu32 &= (UINT32_C(1) << (iBitStart & 31)) - 1;
                 pu32++;
                 iBitStart = iStart + 32;
             }
@@ -4340,7 +4432,7 @@ DECLINLINE(void) ASMBitClearRange(volatile void *pvBitmap, int32_t iBitStart, in
             if (iBitEnd & 31)
             {
                 pu32 = (volatile uint32_t *)pvBitmap + (iBitEnd >> 5);
-                *pu32 &= ~((1 << (iBitEnd & 31)) - 1);
+                *pu32 &= ~((UINT32_C(1) << (iBitEnd & 31)) - 1);
             }
         }
     }
@@ -4359,16 +4451,16 @@ DECLINLINE(void) ASMBitSetRange(volatile void *pvBitmap, int32_t iBitStart, int3
     if (iBitStart < iBitEnd)
     {
         volatile uint32_t *pu32 = (volatile uint32_t *)pvBitmap + (iBitStart >> 5);
-        int iStart = iBitStart & ~31;
-        int iEnd   = iBitEnd & ~31;
+        int32_t iStart = iBitStart & ~31;
+        int32_t iEnd   = iBitEnd & ~31;
         if (iStart == iEnd)
-            *pu32 |= ((1 << (iBitEnd - iBitStart)) - 1) << iBitStart;
+            *pu32 |= ((UINT32_C(1) << (iBitEnd - iBitStart)) - 1) << (iBitStart & 31);
         else
         {
             /* bits in first dword. */
             if (iBitStart & 31)
             {
-                *pu32 |= ~((1 << (iBitStart & 31)) - 1);
+                *pu32 |= ~((UINT32_C(1) << (iBitStart & 31)) - 1);
                 pu32++;
                 iBitStart = iStart + 32;
             }
@@ -4381,7 +4473,7 @@ DECLINLINE(void) ASMBitSetRange(volatile void *pvBitmap, int32_t iBitStart, int3
             if (iBitEnd & 31)
             {
                 pu32 = (volatile uint32_t *)pvBitmap + (iBitEnd >> 5);
-                *pu32 |= (1 << (iBitEnd & 31)) - 1;
+                *pu32 |= (UINT32_C(1) << (iBitEnd & 31)) - 1;
             }
         }
     }
@@ -4397,9 +4489,9 @@ DECLINLINE(void) ASMBitSetRange(volatile void *pvBitmap, int32_t iBitStart, int3
  * @param   cBits       The number of bits in the bitmap. Multiple of 32.
  */
 #if RT_INLINE_ASM_EXTERNAL
-DECLASM(int) ASMBitFirstClear(const volatile void *pvBitmap, uint32_t cBits);
+DECLASM(int32_t) ASMBitFirstClear(const volatile void *pvBitmap, uint32_t cBits);
 #else
-DECLINLINE(int) ASMBitFirstClear(const volatile void *pvBitmap, uint32_t cBits)
+DECLINLINE(int32_t) ASMBitFirstClear(const volatile void *pvBitmap, uint32_t cBits)
 {
     if (cBits)
     {
@@ -4482,7 +4574,7 @@ DECLINLINE(int) ASMBitFirstClear(const volatile void *pvBitmap, uint32_t cBits)
  * @param   iBitPrev    The bit returned from the last search.
  *                      The search will start at iBitPrev + 1.
  */
-#if RT_INLINE_ASM_EXTERNAL && !RT_INLINE_ASM_USES_INTRIN
+#if RT_INLINE_ASM_EXTERNAL
 DECLASM(int) ASMBitNextClear(const volatile void *pvBitmap, uint32_t cBits, uint32_t iBitPrev);
 #else
 DECLINLINE(int) ASMBitNextClear(const volatile void *pvBitmap, uint32_t cBits, uint32_t iBitPrev)
@@ -4552,9 +4644,9 @@ DECLINLINE(int) ASMBitNextClear(const volatile void *pvBitmap, uint32_t cBits, u
  * @param   cBits       The number of bits in the bitmap. Multiple of 32.
  */
 #if RT_INLINE_ASM_EXTERNAL
-DECLASM(int) ASMBitFirstSet(const volatile void *pvBitmap, uint32_t cBits);
+DECLASM(int32_t) ASMBitFirstSet(const volatile void *pvBitmap, uint32_t cBits);
 #else
-DECLINLINE(int) ASMBitFirstSet(const volatile void *pvBitmap, uint32_t cBits)
+DECLINLINE(int32_t) ASMBitFirstSet(const volatile void *pvBitmap, uint32_t cBits)
 {
     if (cBits)
     {
@@ -4636,7 +4728,7 @@ DECLINLINE(int) ASMBitFirstSet(const volatile void *pvBitmap, uint32_t cBits)
  * @param   iBitPrev    The bit returned from the last search.
  *                      The search will start at iBitPrev + 1.
  */
-#if RT_INLINE_ASM_EXTERNAL && !RT_INLINE_ASM_USES_INTRIN
+#if RT_INLINE_ASM_EXTERNAL
 DECLASM(int) ASMBitNextSet(const volatile void *pvBitmap, uint32_t cBits, uint32_t iBitPrev);
 #else
 DECLINLINE(int) ASMBitNextSet(const volatile void *pvBitmap, uint32_t cBits, uint32_t iBitPrev)
@@ -4704,7 +4796,7 @@ DECLINLINE(int) ASMBitNextSet(const volatile void *pvBitmap, uint32_t cBits, uin
  * @returns index [1..32] of the first set bit.
  * @returns 0 if all bits are cleared.
  * @param   u32     Integer to search for set bits.
- * @remark  Similar to ffs() in BSD.
+ * @remarks Similar to ffs() in BSD.
  */
 #if RT_INLINE_ASM_EXTERNAL && !RT_INLINE_ASM_USES_INTRIN
 DECLASM(unsigned) ASMBitFirstSetU32(uint32_t u32);
@@ -4760,6 +4852,81 @@ DECLINLINE(unsigned) ASMBitFirstSetS32(int32_t i32)
 {
     return ASMBitFirstSetU32((uint32_t)i32);
 }
+
+
+/**
+ * Finds the first bit which is set in the given 64-bit integer.
+ *
+ * Bits are numbered from 1 (least significant) to 64.
+ *
+ * @returns index [1..64] of the first set bit.
+ * @returns 0 if all bits are cleared.
+ * @param   u64     Integer to search for set bits.
+ * @remarks Similar to ffs() in BSD.
+ */
+#if RT_INLINE_ASM_EXTERNAL && !RT_INLINE_ASM_USES_INTRIN
+DECLASM(unsigned) ASMBitFirstSetU64(uint64_t u64);
+#else
+DECLINLINE(unsigned) ASMBitFirstSetU64(uint64_t u64)
+{
+# if RT_INLINE_ASM_USES_INTRIN
+    unsigned long iBit;
+#  if ARCH_BITS == 64
+    if (_BitScanForward64(&iBit, u64))
+        iBit++;
+    else
+        iBit = 0;
+#  else
+    if (_BitScanForward(&iBit, (uint32_t)u64))
+        iBit++;
+    else if (_BitScanForward(&iBit, (uint32_t)(u64 >> 32)))
+        iBit += 33;
+    else
+        iBit = 0;
+#  endif
+# elif RT_INLINE_ASM_GNU_STYLE && ARCH_BITS == 64
+    uint64_t iBit;
+    __asm__ __volatile__("bsfq %1, %0\n\t"
+                         "jnz  1f\n\t"
+                         "xorl %0, %0\n\t"
+                         "jmp  2f\n"
+                         "1:\n\t"
+                         "incl %0\n"
+                         "2:\n\t"
+                         : "=r" (iBit)
+                         : "rm" (u64));
+# else
+    unsigned iBit = ASMBitFirstSetU32((uint32_t)u64);
+    if (!iBit)
+    {
+        iBit = ASMBitFirstSetU32((uint32_t)(u64 >> 32));
+        if (iBit)
+            iBit += 32;
+    }
+# endif
+    return (unsigned)iBit;
+}
+#endif
+
+
+/**
+ * Finds the first bit which is set in the given 16-bit integer.
+ *
+ * Bits are numbered from 1 (least significant) to 16.
+ *
+ * @returns index [1..16] of the first set bit.
+ * @returns 0 if all bits are cleared.
+ * @param   u16     Integer to search for set bits.
+ * @remarks For 16-bit bs3kit code.
+ */
+#if RT_INLINE_ASM_EXTERNAL && !RT_INLINE_ASM_USES_INTRIN
+DECLASM(unsigned) ASMBitFirstSetU16(uint32_t u16);
+#else
+DECLINLINE(unsigned) ASMBitFirstSetU16(uint32_t u16)
+{
+    return ASMBitFirstSetU32((uint32_t)u16);
+}
+#endif
 
 
 /**
@@ -4825,6 +4992,80 @@ DECLINLINE(unsigned) ASMBitLastSetS32(int32_t i32)
 {
     return ASMBitLastSetU32((uint32_t)i32);
 }
+
+
+/**
+ * Finds the last bit which is set in the given 64-bit integer.
+ *
+ * Bits are numbered from 1 (least significant) to 64.
+ *
+ * @returns index [1..64] of the last set bit.
+ * @returns 0 if all bits are cleared.
+ * @param   u64     Integer to search for set bits.
+ * @remark  Similar to fls() in BSD.
+ */
+#if RT_INLINE_ASM_EXTERNAL && !RT_INLINE_ASM_USES_INTRIN
+DECLASM(unsigned) ASMBitLastSetU64(uint64_t u64);
+#else
+DECLINLINE(unsigned) ASMBitLastSetU64(uint64_t u64)
+{
+# if RT_INLINE_ASM_USES_INTRIN
+    unsigned long iBit;
+#  if ARCH_BITS == 64
+    if (_BitScanReverse64(&iBit, u64))
+        iBit++;
+    else
+        iBit = 0;
+#  else
+    if (_BitScanReverse(&iBit, (uint32_t)(u64 >> 32)))
+        iBit += 33;
+    else if (_BitScanReverse(&iBit, (uint32_t)u64))
+        iBit++;
+    else
+        iBit = 0;
+#  endif
+# elif RT_INLINE_ASM_GNU_STYLE && ARCH_BITS == 64
+    uint64_t iBit;
+    __asm__ __volatile__("bsrq %1, %0\n\t"
+                         "jnz   1f\n\t"
+                         "xorl %0, %0\n\t"
+                         "jmp  2f\n"
+                         "1:\n\t"
+                         "incl %0\n"
+                         "2:\n\t"
+                         : "=r" (iBit)
+                         : "rm" (u64));
+# else
+    unsigned iBit = ASMBitLastSetU32((uint32_t)(u64 >> 32));
+    if (iBit)
+        iBit += 32;
+    else
+        iBit = ASMBitLastSetU32((uint32_t)u64);
+#endif
+    return (unsigned)iBit;
+}
+#endif
+
+
+/**
+ * Finds the last bit which is set in the given 16-bit integer.
+ *
+ * Bits are numbered from 1 (least significant) to 16.
+ *
+ * @returns index [1..16] of the last set bit.
+ * @returns 0 if all bits are cleared.
+ * @param   u16     Integer to search for set bits.
+ * @remarks For 16-bit bs3kit code.
+ */
+#if RT_INLINE_ASM_EXTERNAL && !RT_INLINE_ASM_USES_INTRIN
+DECLASM(unsigned) ASMBitLastSetU16(uint32_t u16);
+#else
+DECLINLINE(unsigned) ASMBitLastSetU16(uint32_t u16)
+{
+    return ASMBitLastSetU32((uint32_t)u16);
+}
+#endif
+
 
 /**
  * Reverse the byte order of the given 16-bit integer.
@@ -4907,18 +5148,22 @@ DECLINLINE(uint64_t) ASMByteSwapU64(uint64_t u64)
  * @param   u32                 The value to rotate.
  * @param   cShift              How many bits to rotate by.
  */
+#ifdef __WATCOMC__
+DECLASM(uint32_t) ASMRotateLeftU32(uint32_t u32, unsigned cShift);
+#else
 DECLINLINE(uint32_t) ASMRotateLeftU32(uint32_t u32, uint32_t cShift)
 {
-#if RT_INLINE_ASM_USES_INTRIN
+# if RT_INLINE_ASM_USES_INTRIN
     return _rotl(u32, cShift);
-#elif RT_INLINE_ASM_GNU_STYLE && (defined(RT_ARCH_AMD64) || defined(RT_ARCH_X86))
+# elif RT_INLINE_ASM_GNU_STYLE && (defined(RT_ARCH_AMD64) || defined(RT_ARCH_X86))
     __asm__ __volatile__("roll %b1, %0" : "=g" (u32) : "Ic" (cShift), "0" (u32));
     return u32;
-#else
+# else
     cShift &= 31;
     return (u32 << cShift) | (u32 >> (32 - cShift));
-#endif
+# endif
 }
+#endif
 
 
 /**
@@ -4928,18 +5173,22 @@ DECLINLINE(uint32_t) ASMRotateLeftU32(uint32_t u32, uint32_t cShift)
  * @param   u32                 The value to rotate.
  * @param   cShift              How many bits to rotate by.
  */
+#ifdef __WATCOMC__
+DECLASM(uint32_t) ASMRotateRightU32(uint32_t u32, unsigned cShift);
+#else
 DECLINLINE(uint32_t) ASMRotateRightU32(uint32_t u32, uint32_t cShift)
 {
-#if RT_INLINE_ASM_USES_INTRIN
+# if RT_INLINE_ASM_USES_INTRIN
     return _rotr(u32, cShift);
-#elif RT_INLINE_ASM_GNU_STYLE && (defined(RT_ARCH_AMD64) || defined(RT_ARCH_X86))
+# elif RT_INLINE_ASM_GNU_STYLE && (defined(RT_ARCH_AMD64) || defined(RT_ARCH_X86))
     __asm__ __volatile__("rorl %b1, %0" : "=g" (u32) : "Ic" (cShift), "0" (u32));
     return u32;
-#else
+# else
     cShift &= 31;
     return (u32 >> cShift) | (u32 << (32 - cShift));
-#endif
+# endif
 }
+#endif
 
 
 /**

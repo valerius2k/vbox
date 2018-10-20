@@ -314,64 +314,70 @@ RTR3DECL(int) RTTestCreateEx(const char *pszTest, uint32_t fFlags, RTTESTLVL enm
                 /*
                  * Any test driver we are connected or should connect to?
                  */
-                if ((fFlags & RTTEST_C_USE_ENV) && iNativeTestPipe == -1)
+                if (!(fFlags & RTTEST_C_NO_XML_REPORTING_PIPE))
                 {
-                    rc = RTEnvGetEx(RTENV_DEFAULT, "IPRT_TEST_PIPE", szEnvVal, sizeof(szEnvVal), NULL);
-                    if (RT_SUCCESS(rc))
+                    if (   (fFlags & RTTEST_C_USE_ENV)
+                        && iNativeTestPipe == -1)
                     {
-#if ARCH_BITS == 64
-                        rc = RTStrToInt64Full(szEnvVal, 0, &iNativeTestPipe);
-#else
-                        rc = RTStrToInt32Full(szEnvVal, 0, &iNativeTestPipe);
-#endif
-                        if (RT_FAILURE(rc))
+                        rc = RTEnvGetEx(RTENV_DEFAULT, "IPRT_TEST_PIPE", szEnvVal, sizeof(szEnvVal), NULL);
+                        if (RT_SUCCESS(rc))
                         {
-                            RTStrmPrintf(g_pStdErr, "%s: test pipe error: RTStrToInt32Full(\"%s\") -> %Rrc\n",
-                                         pszTest, szEnvVal, rc);
-                            iNativeTestPipe = -1;
+#if ARCH_BITS == 64
+                            rc = RTStrToInt64Full(szEnvVal, 0, &iNativeTestPipe);
+#else
+                            rc = RTStrToInt32Full(szEnvVal, 0, &iNativeTestPipe);
+#endif
+                            if (RT_FAILURE(rc))
+                            {
+                                RTStrmPrintf(g_pStdErr, "%s: test pipe error: RTStrToInt32Full(\"%s\") -> %Rrc\n",
+                                             pszTest, szEnvVal, rc);
+                                iNativeTestPipe = -1;
+                            }
                         }
+                        else if (rc != VERR_ENV_VAR_NOT_FOUND)
+                            RTStrmPrintf(g_pStdErr, "%s: test pipe error: RTEnvGetEx(IPRT_TEST_PIPE) -> %Rrc\n", pszTest, rc);
                     }
-                    else if (rc != VERR_ENV_VAR_NOT_FOUND)
-                        RTStrmPrintf(g_pStdErr, "%s: test pipe error: RTEnvGetEx(IPRT_TEST_PIPE) -> %Rrc\n", pszTest, rc);
-                }
-                if (iNativeTestPipe != -1)
-                {
-                    rc = RTPipeFromNative(&pTest->hXmlPipe, iNativeTestPipe, RTPIPE_N_WRITE);
-                    if (RT_SUCCESS(rc))
-                        pTest->fXmlEnabled = true;
-                    else
+                    if (iNativeTestPipe != -1)
                     {
-                        RTStrmPrintf(g_pStdErr, "%s: test pipe error: RTPipeFromNative(,%p,WRITE) -> %Rrc\n",
-                                     pszTest, iNativeTestPipe, rc);
-                        pTest->hXmlPipe = NIL_RTPIPE;
+                        rc = RTPipeFromNative(&pTest->hXmlPipe, iNativeTestPipe, RTPIPE_N_WRITE);
+                        if (RT_SUCCESS(rc))
+                            pTest->fXmlEnabled = true;
+                        else
+                        {
+                            RTStrmPrintf(g_pStdErr, "%s: test pipe error: RTPipeFromNative(,%p,WRITE) -> %Rrc\n",
+                                         pszTest, iNativeTestPipe, rc);
+                            pTest->hXmlPipe = NIL_RTPIPE;
+                        }
                     }
                 }
 
                 /*
                  * Any test file we should write the test report to?
                  */
-                if ((fFlags & RTTEST_C_USE_ENV) && pszXmlFile == NULL)
+                if (!(fFlags & RTTEST_C_NO_XML_REPORTING_FILE))
                 {
-                    rc = RTEnvGetEx(RTENV_DEFAULT, "IPRT_TEST_FILE", szEnvVal, sizeof(szEnvVal), NULL);
-                    if (RT_SUCCESS(rc))
-                        pszXmlFile = szEnvVal;
-                    else if (rc != VERR_ENV_VAR_NOT_FOUND)
-                        RTStrmPrintf(g_pStdErr, "%s: test pipe error: RTEnvGetEx(IPRT_TEST_MAX_LEVEL) -> %Rrc\n", pszTest, rc);
-                }
-                if (pszXmlFile && *pszXmlFile)
-                {
-                    rc = RTFileOpen(&pTest->hXmlFile, pszXmlFile,
-                                    RTFILE_O_WRITE | RTFILE_O_DENY_WRITE | RTFILE_O_OPEN_CREATE | RTFILE_O_TRUNCATE);
-                    if (RT_SUCCESS(rc))
-                        pTest->fXmlEnabled = true;
-                    else
+                    if ((fFlags & RTTEST_C_USE_ENV) && pszXmlFile == NULL)
                     {
-                        RTStrmPrintf(g_pStdErr, "%s: test file error: RTFileOpen(,\"%s\",) -> %Rrc\n", pszTest, pszXmlFile, rc);
-                        pTest->hXmlFile = NIL_RTFILE;
+                        rc = RTEnvGetEx(RTENV_DEFAULT, "IPRT_TEST_FILE", szEnvVal, sizeof(szEnvVal), NULL);
+                        if (RT_SUCCESS(rc))
+                            pszXmlFile = szEnvVal;
+                        else if (rc != VERR_ENV_VAR_NOT_FOUND)
+                            RTStrmPrintf(g_pStdErr, "%s: test file error: RTEnvGetEx(IPRT_TEST_MAX_LEVEL) -> %Rrc\n", pszTest, rc);
+                    }
+                    if (pszXmlFile && *pszXmlFile)
+                    {
+                        rc = RTFileOpen(&pTest->hXmlFile, pszXmlFile,
+                                        RTFILE_O_WRITE | RTFILE_O_DENY_WRITE | RTFILE_O_OPEN_CREATE | RTFILE_O_TRUNCATE);
+                        if (RT_SUCCESS(rc))
+                            pTest->fXmlEnabled = true;
+                        else
+                        {
+                            RTStrmPrintf(g_pStdErr, "%s: test file error: RTFileOpen(,\"%s\",) -> %Rrc\n",
+                                         pszTest, pszXmlFile, rc);
+                            pTest->hXmlFile = NIL_RTFILE;
+                        }
                     }
                 }
-                else if (rc != VERR_ENV_VAR_NOT_FOUND)
-                    RTStrmPrintf(g_pStdErr, "%s: test file error: RTEnvGetEx(IPRT_TEST_FILE) -> %Rrc\n", pszTest, rc);
 
                 /*
                  * What do we report in the XML stream/file.?
@@ -407,6 +413,13 @@ RTR3DECL(int) RTTestCreate(const char *pszTest, PRTTEST phTest)
 }
 
 
+RTR3DECL(int) RTTestCreateChild(const char *pszTest, PRTTEST phTest)
+{
+    return RTTestCreateEx(pszTest, RTTEST_C_USE_ENV | RTTEST_C_NO_XML_REPORTING,
+                          RTTESTLVL_INVALID, -1 /*iNativeTestPipe*/, NULL /*pszXmlFile*/, phTest);
+}
+
+
 RTR3DECL(RTEXITCODE) RTTestInitAndCreate(const char *pszTest, PRTTEST phTest)
 {
     int rc = RTR3InitExeNoArguments(0);
@@ -426,13 +439,13 @@ RTR3DECL(RTEXITCODE) RTTestInitAndCreate(const char *pszTest, PRTTEST phTest)
 }
 
 
-RTR3DECL(RTEXITCODE) RTTestInitExAndCreate(int cArgs, char ***papszArgs, uint32_t fRtInit, const char *pszTest, PRTTEST phTest)
+RTR3DECL(RTEXITCODE) RTTestInitExAndCreate(int cArgs, char ***ppapszArgs, uint32_t fRtInit, const char *pszTest, PRTTEST phTest)
 {
     int rc;
-    if (cArgs <= 0 && papszArgs == NULL)
+    if (cArgs <= 0 && ppapszArgs == NULL)
         rc = RTR3InitExeNoArguments(fRtInit);
     else
-        rc = RTR3InitExe(cArgs, papszArgs, fRtInit);
+        rc = RTR3InitExe(cArgs, ppapszArgs, fRtInit);
     if (RT_FAILURE(rc))
     {
         RTStrmPrintf(g_pStdErr, "%s: fatal error: RTR3InitExe(,,%#x) failed with rc=%Rrc\n", pszTest, fRtInit, rc);

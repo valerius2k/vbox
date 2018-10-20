@@ -534,21 +534,53 @@ static const char *vmsvgaFIFOCmdToString(uint32_t u32Cmd)
 }
 #endif
 
+#ifdef IN_RING3
 /**
- * @interface_method_impl{PDMIDISPLAYPORT::pfnSetViewport}
+ * @interface_method_impl{PDMIDISPLAYPORT,pfnSetViewport}
  */
 DECLCALLBACK(void) vmsvgaPortSetViewport(PPDMIDISPLAYPORT pInterface, uint32_t uScreenId, uint32_t x, uint32_t y, uint32_t cx, uint32_t cy)
 {
     PVGASTATE pThis = RT_FROM_MEMBER(pInterface, VGASTATE, IPort);
 
     Log(("vmsvgaPortSetViewPort: screen %d (%d,%d)(%d,%d)\n", uScreenId, x, y, cx, cy));
+    VMSVGAVIEWPORT const OldViewport = pThis->svga.viewport;
 
-    pThis->svga.viewport.x  = x;
-    pThis->svga.viewport.y  = y;
-    pThis->svga.viewport.cx = RT_MIN(cx, (uint32_t)pThis->svga.uWidth);
-    pThis->svga.viewport.cy = RT_MIN(cy, (uint32_t)pThis->svga.uHeight);
-    return;
+    if (x < pThis->svga.uWidth)
+    {
+        pThis->svga.viewport.x      = x;
+        pThis->svga.viewport.cx     = RT_MIN(cx, pThis->svga.uWidth - x);
+        pThis->svga.viewport.xRight = x + pThis->svga.viewport.cx;
+    }
+    else
+    {
+        pThis->svga.viewport.x      = pThis->svga.uWidth;
+        pThis->svga.viewport.cx     = 0;
+        pThis->svga.viewport.xRight = pThis->svga.uWidth;
+    }
+    if (y < pThis->svga.uHeight)
+    {
+        pThis->svga.viewport.y       = y;
+        pThis->svga.viewport.cy      = RT_MIN(cy, pThis->svga.uHeight - y);
+        pThis->svga.viewport.yLowWC  = pThis->svga.uHeight - y - pThis->svga.viewport.cy;
+        pThis->svga.viewport.yHighWC = pThis->svga.uHeight - y;
+    }
+    else
+    {
+        pThis->svga.viewport.y       = pThis->svga.uHeight;
+        pThis->svga.viewport.cy      = 0;
+        pThis->svga.viewport.yLowWC  = 0;
+        pThis->svga.viewport.yHighWC = 0;
+    }
+
+# ifdef VBOX_WITH_VMSVGA3D
+    /*
+     * Now inform the 3D backend.
+     */
+    if (pThis->svga.f3DEnabled)
+        vmsvga3dUpdateHostScreenViewport(pThis, uScreenId, &OldViewport);
+# endif
 }
+#endif /* IN_RING3 */
 
 /**
  * Read port register
@@ -1027,8 +1059,11 @@ int vmsvgaChangeMode(PVGASTATE pThis)
     if (    pThis->svga.viewport.cx == 0
         &&  pThis->svga.viewport.cy == 0)
     {
-        pThis->svga.viewport.cx = pThis->svga.uWidth;
-        pThis->svga.viewport.cy = pThis->svga.uHeight;
+        pThis->svga.viewport.cx      = pThis->svga.uWidth;
+        pThis->svga.viewport.xRight  = pThis->svga.uWidth;
+        pThis->svga.viewport.cy      = pThis->svga.uHeight;
+        pThis->svga.viewport.yHighWC = pThis->svga.uHeight;
+        pThis->svga.viewport.yLowWC  = 0;
     }
     return VINF_SUCCESS;
 }
@@ -2509,14 +2544,16 @@ static DECLCALLBACK(int) vmsvgaFIFOLoop(PPDMDEVINS pDevIns, PPDMTHREAD pThread)
             offCurrentCmd = ~UINT32_C(3);
         }
 
-/**
+/** @def VMSVGAFIFO_GET_CMD_BUFFER_BREAK
  * Macro for shortening calls to vmsvgaFIFOGetCmdPayload.
  *
  * Will break out of the switch on failure.
  * Will restart and quit the loop if the thread was requested to stop.
  *
+ * @param   a_PtrVar        Request variable pointer.
+ * @param   a_Type          Request typedef (not pointer) for casting.
  * @param   a_cbPayloadReq  How much payload to fetch.
- * @remarks Access a bunch of variables in the current scope!
+ * @remarks Accesses a bunch of variables in the current scope!
  */
 # define VMSVGAFIFO_GET_CMD_BUFFER_BREAK(a_PtrVar, a_Type, a_cbPayloadReq) \
             if (1) { \
@@ -2524,12 +2561,16 @@ static DECLCALLBACK(int) vmsvgaFIFOLoop(PPDMDEVINS pDevIns, PPDMTHREAD pThread)
                                                                pbBounceBuf, &cbPayload, pThread, pThis, pSVGAState); \
                 if (RT_UNLIKELY((uintptr_t)(a_PtrVar) < 2)) { if ((uintptr_t)(a_PtrVar) == 1) continue; break; } \
             } else do {} while (0)
-/**
+/** @def VMSVGAFIFO_GET_MORE_CMD_BUFFER_BREAK
  * Macro for shortening calls to vmsvgaFIFOGetCmdPayload for refetching the
  * buffer after figuring out the actual command size.
+ *
  * Will break out of the switch on failure.
+ *
+ * @param   a_PtrVar        Request variable pointer.
+ * @param   a_Type          Request typedef (not pointer) for casting.
  * @param   a_cbPayloadReq  How much payload to fetch.
- * @remarks Access a bunch of variables in the current scope!
+ * @remarks Accesses a bunch of variables in the current scope!
  */
 # define VMSVGAFIFO_GET_MORE_CMD_BUFFER_BREAK(a_PtrVar, a_Type, a_cbPayloadReq) \
             if (1) { \
@@ -4403,7 +4444,7 @@ static const char * const g_apszVmSvgaDevCapNames[] =
 /**
  * Power On notification.
  *
- * @returns VBox status.
+ * @returns VBox status code.
  * @param   pDevIns     The device instance data.
  *
  * @remarks Caller enters the device critical section.

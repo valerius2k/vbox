@@ -377,6 +377,9 @@ if1of ($(VBOX_LDR_FMT), pe lx)
  VMMR0Imp_TEMPLATE = VBoxR0
  VMMR0Imp_SOURCES  = $(VMMR0Imp_0_OUTDIR)/VMMR0.def
  VMMR0Imp_CLEAN    = $(VMMR0Imp_0_OUTDIR)/VMMR0.def
+ ifeq ($(KBUILD_TARGET),win) # Experiment: Let's see how blunt the ones messing our NULL_THUNK_DATA entries on W10 are.
+  VMMR0Imp_POST_CMDS = $(KLIBTWEAKER_EXT) --clear-timestamps --fill-null_thunk_data $(out)
+ endif
 
  $$(VMMR0Imp_0_OUTDIR)/VMMR0.def: $(PATH_SUB_CURRENT)/VMMR0/VMMR0.def | $$(dir $$@)
  ifeq ($(VBOX_LDR_FMT),lx)
@@ -552,6 +555,10 @@ ifndef VBOX_ONLY_EXTPACKS
  endif
  VMMR0_DEFS.darwin = VMM_R0_SWITCH_STACK
  VMMR0_DEFS.win.amd64  = VBOX_WITH_KERNEL_USING_XMM
+
+ ifeq ($(VBOX_LDR_FMT),elf)
+  VMMR0_CXXFLAGS += $(filter-out -Wno-unused,$(TEMPLATE_VBoxR0_CXXFLAGS)) -Wunused-variable -Wno-unused-parameter
+ endif
 
  VMMR0_INCS      = \
  	include \
@@ -731,10 +738,11 @@ VMMAll/VMMAll.cpp_DEFS = VBOX_SVN_REV=$(VBOX_SVN_REV)
 # Disable annoying warnings about array subscript above array bounds in aPages[]
 #
 ifneq ($(KBUILD_TARGET),win)
- VMMR3/PGMPool.cpp_CXXFLAGS     = $(VBOX_GCC_Wno-array_bounds)
- VMMAll/PGMAllPool.cpp_CXXFLAGS = $(VBOX_GCC_Wno-array_bounds)
- VMMAll/PGMAll.cpp_CXXFLAGS     = -Wno-unused-function
- VMMAll/IEMAll.cpp_CXXFLAGS     = -Wno-unused-parameter
+ VMMR3/PGMPool.cpp_CXXFLAGS       = $(VBOX_GCC_Wno-array_bounds)
+ VMMAll/PGMAllPool.cpp_CXXFLAGS   = $(VBOX_GCC_Wno-array_bounds)
+ VMMAll/PGMAll.cpp_CXXFLAGS       = -Wno-unused-function
+ VMMAll/IEMAll.cpp_CXXFLAGS       = -Wno-unused-function
+ VMMR0/GMMR0.cpp_CXXFLAGS         = -Wno-unused-value
 endif
 
 #

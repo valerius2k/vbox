@@ -40,7 +40,7 @@
 
         <glossentry>
           <glossterm>Windows 2000 / XP / Server 2003 / Vista / Server 2008 /
-            Windows 7 / Windows 8 / Server 2012</glossterm>
+            Windows 7 / Windows 8 / Windows 8.1 / Windows 10 RTM 10240 / Server 2012</glossterm>
 
           <glossdef>
             <para>All versions, editions and service packs are fully supported
@@ -171,7 +171,7 @@
 
             <para>These license restrictions are also enforced on a technical
             level. Mac OS X verifies whether it is running on Apple hardware,
-            and most DVDs that that come with Apple hardware even check for an
+            and most DVDs that come with Apple hardware even check for an
             exact model. These restrictions are <emphasis>not</emphasis>
             circumvented by VirtualBox and continue to apply.</para>
           </listitem>
@@ -411,18 +411,18 @@
           </glossentry>
 
           <glossentry>
-            <glossterm>Drag'n'Drop</glossterm>
+            <glossterm>Drag and Drop</glossterm>
             <glossdef>
-              <para>This setting allows to enable support for drag'n drop: Select
+              <para>This setting allows to enable support for drag and drop: Select
               an object (e.g. a file) from the host or guest and directly copy
-              or open it on the guest or host. Multiple per-VM drag'n drop modes
+              or open it on the guest or host. Multiple per-VM drag and drop modes
               allow restricting access in either direction.</para>
 
-              <para>For drag'n drop to work the Guest Additions need to be
+              <para>For drag and drop to work the Guest Additions need to be
               installed on the guest.</para>
 
-              <para><note><para>Drag'n drop is disabled by default. This setting can be
-              changed at any time using the "Drag'n'Drop" menu item in the
+              <para><note><para>Drag and drop is disabled by default. This setting can be
+              changed at any time using the "Drag and Drop" menu item in the
               "Devices" menu of the virtual machine.</para></note></para>
 
               <para>See <xref linkend="guestadd-dnd"/> for more information.
@@ -657,7 +657,7 @@
 
       <para>On this tab you can also set the <emphasis role="bold">"CPU execution
       cap"</emphasis>. This setting
-      limits the amount of time a host CPU spents to emulate a virtual CPU.
+      limits the amount of time a host CPU spends to emulate a virtual CPU.
       The default setting is 100% meaning that there is no limitation. A setting
       of 50% implies a single virtual CPU can use up to 50% of a single host
       CPU. Note that limiting the execution time of the virtual CPUs may induce
@@ -709,12 +709,12 @@
       VT-x) features, then you can expect a significant performance increase
       by enabling nested paging in addition to hardware virtualization. For
       technical details, see <xref linkend="nestedpaging" />.</para>
-      
+
       <para>Starting with version 5.0, VirtualBox provides paravirtualization
       interfaces to improve time-keeping accuracy and performance of guest
       operating systems. The options available are documented under the
       <computeroutput>paravirtprovider</computeroutput> option
-      in <xref linkend="vboxmanage-modifyvm" />. For futher details on
+      in <xref linkend="vboxmanage-modifyvm" />. For further details on
       the paravirtualization providers, please refer to
       <xref linkend="gimproviders" />.</para>
     </sect2>

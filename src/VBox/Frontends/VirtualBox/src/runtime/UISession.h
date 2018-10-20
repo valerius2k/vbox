@@ -226,6 +226,10 @@ public:
     bool isScreenVisible(ulong uScreenId) const;
     void setScreenVisible(ulong uScreenId, bool fIsMonitorVisible);
 
+    /* Last screen full-screen size: */
+    QSize lastFullScreenSize(ulong uScreenId) const;
+    void setLastFullScreenSize(ulong uScreenId, QSize size);
+
     /* Returns existing framebuffer for the given screen-number;
      * Returns 0 (asserts) if screen-number attribute is out of bounds: */
     UIFrameBuffer* frameBuffer(ulong uScreenId) const;
@@ -257,6 +261,8 @@ signals:
     void sigAdditionsStateChange();
     void sigAdditionsStateActualChange();
     void sigNetworkAdapterChange(const CNetworkAdapter &networkAdapter);
+    /** Notifies about storage device change for @a attachment, which was @a fRemoved and it was @a fSilent for guest. */
+    void sigStorageDeviceChange(const CMediumAttachment &attachment, bool fRemoved, bool fSilent);
     void sigMediumChange(const CMediumAttachment &mediumAttachment);
     void sigVRDEChange();
     void sigVideoCaptureChange();
@@ -312,6 +318,8 @@ private slots:
     void sltVRDEChange();
     void sltVideoCaptureChange();
     void sltGuestMonitorChange(KGuestMonitorChangedEventType changeType, ulong uScreenId, QRect screenGeo);
+    /** Handles storage device change for @a attachment, which was @a fRemoved and it was @a fSilent for guest. */
+    void sltHandleStorageDeviceChange(const CMediumAttachment &attachment, bool fRemoved, bool fSilent);
 
     /* Handlers: Display reconfiguration stuff: */
 #ifdef RT_OS_DARWIN
@@ -372,6 +380,9 @@ private:
     /** Update host-screen data. */
     void updateHostScreenData();
 
+    /** Updates action restrictions. */
+    void updateActionRestrictions();
+
     /* Private variables: */
     UIMachine *m_pMachine;
 
@@ -405,6 +416,9 @@ private:
 
     /* Screen visibility vector: */
     QVector<bool> m_monitorVisibilityVector;
+
+    /* Screen last full-screen size vector: */
+    QVector<QSize> m_monitorLastFullScreenSizeVector;
 
     /* Frame-buffers vector: */
     QVector<UIFrameBuffer*> m_frameBufferVector;

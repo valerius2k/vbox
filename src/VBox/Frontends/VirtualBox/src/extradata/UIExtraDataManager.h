@@ -91,6 +91,8 @@ signals:
 #ifdef RT_OS_DARWIN
     /** Mac OS X: Notifies about 'dock icon' appearance change. */
     void sigDockIconAppearanceChange(bool fEnabled);
+    /** Mac OS X: Notifies about 'dock icon overlay' appearance change. */
+    void sigDockIconOverlayAppearanceChange(bool fEnabled);
 #endif /* RT_OS_DARWIN */
 
 public:
@@ -459,6 +461,11 @@ public:
         int realtimeDockIconUpdateMonitor(const QString &strID);
         /** Mac OS X: Defines guest-screen @a iIndex which Dock icon should reflect at runtime. */
         void setRealtimeDockIconUpdateMonitor(int iIndex, const QString &strID);
+
+        /** Mac OS X: Returns whether Dock icon overlay is disabled. */
+        bool dockIconDisableOverlay(const QString &strID);
+        /** Mac OS X: Defines whether Dock icon overlay is @a fDisabled. */
+        void setDockIconDisableOverlay(bool fDisabled, const QString &strID);
 #endif /* Q_WS_MAC */
 
         /** Returns whether machine should pass CAD to guest. */
@@ -490,6 +497,11 @@ public:
         bool informationWindowShouldBeMaximized(const QString &strID);
         /** Defines information-window @a geometry and @a fMaximized state. */
         void setInformationWindowGeometry(const QRect &geometry, bool fMaximized, const QString &strID);
+
+        /** Returns information-window elements. */
+        QMap<InformationElementType, bool> informationWindowElements();
+        /** Defines information-window @a elements. */
+        void setInformationWindowElements(const QMap<InformationElementType, bool> &elements);
     /** @} */
 
     /** @name Virtual Machine: Close dialog
@@ -532,6 +544,16 @@ public:
         void setExtraDataManagerSplitterHints(const QList<int> &hints);
     /** @} */
 #endif /* DEBUG */
+
+    /** @name Virtual Machine: Log dialog
+      * @{ */
+        /** Returns log-window geometry using @a pWidget and @a defaultGeometry as hints. */
+        QRect logWindowGeometry(QWidget *pWidget, const QRect &defaultGeometry);
+        /** Returns whether log-window should be maximized or not. */
+        bool logWindowShouldBeMaximized();
+        /** Defines log-window @a geometry and @a fMaximized state. */
+        void setLogWindowGeometry(const QRect &geometry, bool fMaximized);
+    /** @} */
 
 private slots:
 
@@ -606,3 +628,4 @@ private:
 #define gEDataManager UIExtraDataManager::instance()
 
 #endif /* !___UIExtraDataManager_h___ */
+

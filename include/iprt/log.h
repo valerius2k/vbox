@@ -52,11 +52,13 @@ typedef enum RTLOGGROUP
 {
     /** Default logging group. */
     RTLOGGROUP_DEFAULT,
+    RTLOGGROUP_CRYPTO,
     RTLOGGROUP_DBG,
     RTLOGGROUP_DBG_DWARF,
     RTLOGGROUP_DIR,
     RTLOGGROUP_FILE,
     RTLOGGROUP_FS,
+    RTLOGGROUP_HTTP,
     RTLOGGROUP_LDR,
     RTLOGGROUP_PATH,
     RTLOGGROUP_PROCESS,
@@ -64,6 +66,7 @@ typedef enum RTLOGGROUP
     RTLOGGROUP_THREAD,
     RTLOGGROUP_TIME,
     RTLOGGROUP_TIMER,
+    RTLOGGROUP_LOCALIPC,
     RTLOGGROUP_ZIP = 31,
     RTLOGGROUP_FIRST_USER = 32
 } RTLOGGROUP;
@@ -83,11 +86,13 @@ typedef enum RTLOGGROUP
  */
 #define RT_LOGGROUP_NAMES \
     "DEFAULT",      \
+    "RT_CRYPTO",    \
     "RT_DBG",       \
     "RT_DBG_DWARF", \
     "RT_DIR",       \
     "RT_FILE",      \
     "RT_FS",        \
+    "RT_HTTP", \
     "RT_LDR",       \
     "RT_PATH",      \
     "RT_PROCESS",   \
@@ -95,9 +100,7 @@ typedef enum RTLOGGROUP
     "RT_THREAD",    \
     "RT_TIME",      \
     "RT_TIMER",     \
-    "RT_13", \
-    "RT_14", \
-    "RT_15", \
+    "RT_LOCALIPC", \
     "RT_16", \
     "RT_17", \
     "RT_18", \
@@ -1101,7 +1104,7 @@ RTDECL(void) RTLogPrintfEx(void *pvInstance, unsigned fFlags, unsigned iGroup,
 /** @name Misc Logging Macros
  * @{ */
 
-/** @def LogWarning1
+/** @def Log1Warning
  * The same as Log(), but prepents a <tt>"WARNING! "</tt> string to the message.
  *
  * @param   a   Custom log message in format <tt>("string\n" [, args])</tt>.
@@ -1112,7 +1115,7 @@ RTDECL(void) RTLogPrintfEx(void *pvInstance, unsigned fFlags, unsigned iGroup,
 # define Log1Warning(a)     do { Log(("WARNING! ")); Log(a); } while (0)
 #endif
 
-/** @def LogWarningFunc
+/** @def Log1WarningFunc
  * The same as LogWarning(), but prepents the log message with the function name.
  *
  * @param   a   Log message in format <tt>("string\n" [, args])</tt>.
@@ -1125,7 +1128,7 @@ RTDECL(void) RTLogPrintfEx(void *pvInstance, unsigned fFlags, unsigned iGroup,
     do { Log((LOG_FN_FMT ": WARNING! ", __PRETTY_FUNCTION__)); Log(a); } while (0)
 #endif
 
-/** @def LogWarningThisFunc
+/** @def Log1WarningThisFunc
  * The same as LogWarningFunc() but for class functions (methods): the resulting
  * log line is additionally prepended with a hex value of |this| pointer.
  *
@@ -2323,11 +2326,11 @@ RTDECL(void) RTLogPrintf(const char *pszFormat, ...) RT_IPRT_FORMAT_ATTR(1, 2);
  * vprintf like function for writing to the default log.
  *
  * @param   pszFormat   Printf like format string.
- * @param   args        Optional arguments as specified in pszFormat.
+ * @param   va          Optional arguments as specified in pszFormat.
  *
  * @remark The API doesn't support formatting of floating point numbers at the moment.
  */
-RTDECL(void) RTLogPrintfV(const char *pszFormat, va_list args)  RT_IPRT_FORMAT_ATTR(1, 0);
+RTDECL(void) RTLogPrintfV(const char *pszFormat, va_list va)  RT_IPRT_FORMAT_ATTR(1, 0);
 
 /**
  * Dumper vprintf-like function outputting to a logger.

@@ -161,6 +161,8 @@ typedef struct USBPROXYPIPEOSX
     uint8_t                 u8Direction;
     /** The endpoint interval. (interrupt) */
     uint8_t                 u8Interval;
+    /** Full-speed device indicator (isochronous pipes only). */
+    bool                    fIsFullSpeed;
     /** The max packet size. */
     uint16_t                u16MaxPacketSize;
     /** The next frame number (isochronous pipes only). */
@@ -731,6 +733,8 @@ static int usbProxyDarwinGetPipeProperties(PUSBPROXYDEVOSX pDevOsX, PUSBPROXYIFO
      * Get the pipe (endpoint) count (it might have changed - even on open).
      */
     int rc = VINF_SUCCESS;
+    bool fFullSpeed;
+    UInt32 u32UsecInFrame;
     UInt8 cPipes;
     IOReturn irc = (*pIf->ppIfI)->GetNumEndpoints(pIf->ppIfI, &cPipes);
     if (irc != kIOReturnSuccess)
@@ -745,12 +749,26 @@ static int usbProxyDarwinGetPipeProperties(PUSBPROXYDEVOSX pDevOsX, PUSBPROXYIFO
     AssertRelease(cPipes < RT_ELEMENTS(pIf->aPipes));
     pIf->cPipes = cPipes + 1;
 
+    /* Find out if this is a full-speed interface (needed for isochronous support). */
+    irc = (*pIf->ppIfI)->GetFrameListTime(pIf->ppIfI, &u32UsecInFrame);
+    if (irc != kIOReturnSuccess)
+    {
+        pIf->cPipes = 0;
+        if (irc == kIOReturnNoDevice)
+            rc = VERR_VUSB_DEVICE_NOT_ATTACHED;
+        else
+            rc = RTErrConvertFromDarwin(irc);
+        return rc;
+    }
+    fFullSpeed = u32UsecInFrame == kUSBFullSpeedMicrosecondsInFrame;
+
     /*
      * Get the properties of each pipe.
      */
     for (unsigned i = 0; i < pIf->cPipes; i++)
     {
         pIf->aPipes[i].u8PipeRef = i;
+        pIf->aPipes[i].fIsFullSpeed = fFullSpeed;
         pIf->aPipes[i].u64NextFrameNo = 0;
         irc = (*pIf->ppIfI)->GetPipeProperties(pIf->ppIfI, i,
                                                &pIf->aPipes[i].u8Direction,
@@ -1183,7 +1201,6 @@ static DECLCALLBACK(int) usbProxyDarwinOpen(PUSBPROXYDEV pProxyDev, const char *
         return VERR_VUSB_DEVICE_NAME_NOT_FOUND;
     }
 
-#ifdef VBOX_WITH_NEW_USB_CODE_ON_DARWIN
     /*
      * Call the USBLib init to make sure we're a valid VBoxUSB client.
      * For now we'll ignore failures here and just plunge on, it might still work...
@@ -1191,7 +1208,6 @@ static DECLCALLBACK(int) usbProxyDarwinOpen(PUSBPROXYDEV pProxyDev, const char *
     vrc = USBLibInit();
     if (RT_FAILURE(vrc))
         LogRel(("USB: USBLibInit failed - %Rrc\n", vrc));
-#endif
 
     /*
      * Create a plugin interface for the device and query its IOUSBDeviceInterface.
@@ -1329,9 +1345,7 @@ static DECLCALLBACK(int) usbProxyDarwinOpen(PUSBPROXYDEV pProxyDev, const char *
         vrc = RTErrConvertFromDarwin(irc);
     }
 
-#ifdef VBOX_WITH_NEW_USB_CODE_ON_DARWIN
     USBLibTerm();
-#endif
     return vrc;
 }
 
@@ -1378,10 +1392,6 @@ static DECLCALLBACK(void) usbProxyDarwinClose(PUSBPROXYDEV pProxyDev)
     }
 
     IOReturn irc = (*pDevOsX->ppDevI)->ResetDevice(pDevOsX->ppDevI);
-#ifndef VBOX_WITH_NEW_USB_CODE_ON_DARWIN
-    if (irc == kIOReturnSuccess)
-        irc = (*pDevOsX->ppDevI)->USBDeviceReEnumerate(pDevOsX->ppDevI, 0);
-#endif
 
     irc = (*pDevOsX->ppDevI)->USBDeviceClose(pDevOsX->ppDevI);
     if (irc != kIOReturnSuccess && irc != kIOReturnNoDevice)
@@ -1408,9 +1418,7 @@ static DECLCALLBACK(void) usbProxyDarwinClose(PUSBPROXYDEV pProxyDev)
         RTMemFree(pUrbOsX);
     }
 
-#ifdef VBOX_WITH_NEW_USB_CODE_ON_DARWIN
     USBLibTerm();
-#endif
     LogFlow(("usbProxyDarwinClose: returns\n"));
 }
 
@@ -1751,7 +1759,12 @@ static DECLCALLBACK(int) usbProxyDarwinUrbQueue(PUSBPROXYDEV pProxyDev, PVUSBURB
                     Log(("%s: usbProxyDarwinUrbQueue: isoc: u64NextFrameNo=%RX64 FrameNo=%RX64 #Frames=%d j=%d (pipe=%d)\n",
                          pUrb->pszDesc, pPipe->u64NextFrameNo, FrameNo, pUrb->cIsocPkts, j, u8PipeRef));
                     if (irc == kIOReturnSuccess)
-                        pPipe->u64NextFrameNo = FrameNo + pUrb->cIsocPkts;
+                    {
+                        if (pPipe->fIsFullSpeed)
+                            pPipe->u64NextFrameNo = FrameNo + pUrb->cIsocPkts;
+                        else
+                            pPipe->u64NextFrameNo = FrameNo + 1;
+                    }
                     break;
                 }
 

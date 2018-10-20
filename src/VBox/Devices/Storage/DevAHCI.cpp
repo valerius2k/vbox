@@ -232,7 +232,7 @@ typedef struct AHCIREQ *PAHCIREQ;
 /**
  * Data processing callback
  *
- * @returns VBox status.
+ * @returns VBox status code.
  * @param   pAhciReq    The task state.
  * @param   ppvProc     Where to store the pointer to the buffer holding the processed data on success.
  *                      Must be freed with RTMemFree().
@@ -6547,6 +6547,7 @@ static AHCITXDIR ahciProcessCmd(PAHCIPort pAhciPort, PAHCIREQ pAhciReq, uint8_t 
         case ATA_SMART:
         case ATA_NV_CACHE:
         case ATA_IDLE:
+        case ATA_TRUSTED_RECEIVE_DMA: /* Windows 8+ */
             pAhciReq->uATARegError = ABRT_ERR;
             pAhciReq->uATARegStatus = ATA_STAT_READY | ATA_STAT_ERR;
             break;
@@ -7131,7 +7132,7 @@ static bool ahciR3AllAsyncIOIsFinished(PPDMDEVINS pDevIns)
 /* -=-=-=-=- Saved State -=-=-=-=- */
 
 /**
- * @copydoc FNDEVSSMSAVEPREP
+ * @callback_method_impl{FNSSMDEVSAVEPREP}
  */
 static DECLCALLBACK(int) ahciR3SavePrep(PPDMDEVINS pDevIns, PSSMHANDLE pSSM)
 {
@@ -7140,7 +7141,7 @@ static DECLCALLBACK(int) ahciR3SavePrep(PPDMDEVINS pDevIns, PSSMHANDLE pSSM)
 }
 
 /**
- * @copydoc FNDEVSSMLOADPREP
+ * @callback_method_impl{FNSSMDEVLOADPREP}
  */
 static DECLCALLBACK(int) ahciR3LoadPrep(PPDMDEVINS pDevIns, PSSMHANDLE pSSM)
 {
@@ -7149,7 +7150,7 @@ static DECLCALLBACK(int) ahciR3LoadPrep(PPDMDEVINS pDevIns, PSSMHANDLE pSSM)
 }
 
 /**
- * @copydoc FNDEVSSMLIVEEXEC
+ * @callback_method_impl{FNSSMDEVLIVEEXEC}
  */
 static DECLCALLBACK(int) ahciR3LiveExec(PPDMDEVINS pDevIns, PSSMHANDLE pSSM, uint32_t uPass)
 {
@@ -7179,7 +7180,7 @@ static DECLCALLBACK(int) ahciR3LiveExec(PPDMDEVINS pDevIns, PSSMHANDLE pSSM, uin
 }
 
 /**
- * @copydoc FNDEVSSMSAVEEXEC
+ * @callback_method_impl{FNSSMDEVSAVEEXEC}
  */
 static DECLCALLBACK(int) ahciR3SaveExec(PPDMDEVINS pDevIns, PSSMHANDLE pSSM)
 {
@@ -7317,13 +7318,7 @@ static int ahciR3LoadLegacyEmulationState(PSSMHANDLE pSSM)
 }
 
 /**
- * Loads a saved AHCI device state.
- *
- * @returns VBox status code.
- * @param   pDevIns     The device instance.
- * @param   pSSM  The handle to the saved state.
- * @param   uVersion  The data unit version number.
- * @param   uPass           The data pass.
+ * @callback_method_impl{FNSSMDEVLOADEXEC}
  */
 static DECLCALLBACK(int) ahciR3LoadExec(PPDMDEVINS pDevIns, PSSMHANDLE pSSM, uint32_t uVersion, uint32_t uPass)
 {
@@ -7729,7 +7724,8 @@ static int ahciR3ConfigureLUN(PPDMDEVINS pDevIns, PAHCIPort pAhciPort)
         pAhciPort->PCHSGeometry.cCylinders = 0;
         pAhciPort->PCHSGeometry.cHeads     = 0;
         pAhciPort->PCHSGeometry.cSectors   = 0;
-        LogRel(("AHCI LUN#%d: CD/DVD, total number of sectors %Ld, passthrough %s\n", pAhciPort->iLUN, pAhciPort->cTotalSectors, (pAhciPort->fATAPIPassthrough ? "enabled" : "disabled")));
+        LogRel(("AHCI: LUN#%d: CD/DVD, total number of sectors %Ld, passthrough %s\n", pAhciPort->iLUN,
+                pAhciPort->cTotalSectors, (pAhciPort->fATAPIPassthrough ? "enabled" : "disabled")));
     }
     else
     {

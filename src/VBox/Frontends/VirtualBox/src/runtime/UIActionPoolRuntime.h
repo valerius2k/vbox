@@ -121,6 +121,7 @@ enum UIActionIndexRT
     UIActionIndexRT_M_Dock_M_DockSettings,
     UIActionIndexRT_M_Dock_M_DockSettings_T_PreviewMonitor,
     UIActionIndexRT_M_Dock_M_DockSettings_T_DisableMonitor,
+    UIActionIndexRT_M_Dock_M_DockSettings_T_DisableOverlay,
 #endif /* Q_WS_MAC */
 
     /* Maximum index: */
@@ -267,8 +268,8 @@ protected:
     void updateMenuDebug();
 #endif /* VBOX_WITH_DEBUGGER_GUI */
 
-    /** Translation handler. */
-    virtual void retranslateUi();
+    /** Update shortcuts. */
+    virtual void updateShortcuts();
 
     /** Returns extra-data ID to save keyboard shortcuts under. */
     virtual QString shortcutsExtraDataID() const;

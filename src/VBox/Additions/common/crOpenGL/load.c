@@ -985,7 +985,11 @@ stubInitLocked(void)
         if (!ns.conn)
         {
             crWarning("Failed to connect to host. Make sure 3D acceleration is enabled for this VM.");
+# ifdef VBOXOGL_FAKEDRI
             return false;
+# else
+            exit(1);
+# endif
         }
         else
         {
@@ -1122,9 +1126,24 @@ stubInit(void)
 /* Sigh -- we can't do initialization at load time, since Windows forbids
  * the loading of other libraries from DLLMain. */
 
-#ifdef LINUX
-/* GCC crap
- *void (*stub_init_ptr)(void) __attribute__((section(".ctors"))) = __stubInit; */
+/** @note On Linux we make our shared library executable as a quick way of
+ * testing whether a particular guest supports 3D in the current configuration.
+ * If 3D is not enabled, the constructor will exit with status 1.  If the
+ * library cannot be loaded at all (e.g. missing dependencies) executing it will
+ * also fail. */
+#ifdef RT_OS_LINUX
+# ifdef RT_ARCH_AMD64
+const char pszInterpreter[] __attribute__((section(".interp"))) = "/lib64/ld-linux-x86-64.so.2";
+# else
+const char pszInterpreter[] __attribute__((section(".interp"))) = "/lib/ld-linux.so.2";
+# endif
+
+extern void LibMain()
+{
+   if (!stubInit())
+       _exit(1);
+   _exit(0);
+}
 #endif
 
 #ifdef WINDOWS

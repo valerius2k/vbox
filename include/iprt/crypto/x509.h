@@ -164,7 +164,7 @@ RTDECL(bool) RTCrX509Name_ConstraintMatch(PCRTCRX509NAME pConstraint, PCRTCRX509
 RTDECL(int) RTCrX509Name_RecodeAsUtf8(PRTCRX509NAME pThis, PCRTASN1ALLOCATORVTABLE pAllocator);
 
 /**
- * Matches the directory name against a comma separated list of the comonent
+ * Matches the directory name against a comma separated list of the component
  * strings (case sensitive).
  *
  * @returns true if match, false if mismatch.
@@ -945,7 +945,7 @@ RTASN1TYPE_STANDARD_PROTOTYPES(RTCRX509CERTIFICATE, RTDECL, RTCrX509Certificate,
  * Checks if a certificate matches a given issuer name and serial number.
  *
  * @returns True / false.
- * @param   pCertificates   The X.509 certificat.
+ * @param   pCertificate    The X.509 certificat.
  * @param   pIssuer         The issuer name to match against.
  * @param   pSerialNumber   The serial number to match against.
  */

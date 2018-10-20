@@ -67,12 +67,6 @@ typedef struct VBOXNETFLTNOTIFIER {
 typedef struct VBOXNETFLTNOTIFIER *PVBOXNETFLTNOTIFIER;
 
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 20, 0)
-# define vlan_tx_tag_get(skb)       skb_vlan_tag_get(skb)
-# define vlan_tx_tag_present(skb)   skb_vlan_tag_present(skb)
-#endif
-
-
 /*********************************************************************************************************************************
 *   Defined Constants And Macros                                                                                                 *
 *********************************************************************************************************************************/
@@ -128,6 +122,21 @@ typedef struct VBOXNETFLTNOTIFIER *PVBOXNETFLTNOTIFIER;
 # endif
 #endif
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 20, 0)
+# define VBOX_HAVE_SKB_VLAN
+#else
+# ifdef RHEL_RELEASE_CODE
+#  if RHEL_RELEASE_CODE >= RHEL_RELEASE_VERSION(7, 2)
+#   define VBOX_HAVE_SKB_VLAN
+#  endif
+# endif
+#endif
+
+#ifdef VBOX_HAVE_SKB_VLAN
+# define vlan_tx_tag_get(skb)       skb_vlan_tag_get(skb)
+# define vlan_tx_tag_present(skb)   skb_vlan_tag_present(skb)
+#endif
+
 #ifndef NET_IP_ALIGN
 # define NET_IP_ALIGN 2
 #endif
@@ -139,6 +148,7 @@ typedef struct VBOXNETFLTNOTIFIER *PVBOXNETFLTNOTIFIER;
 #endif
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 18)
+
 /** Indicates that the linux kernel may send us GSO frames. */
 # define VBOXNETFLT_WITH_GSO                1
 
@@ -156,12 +166,13 @@ typedef struct VBOXNETFLTNOTIFIER *PVBOXNETFLTNOTIFIER;
  *  to the internal network.  */
 # define VBOXNETFLT_WITH_GSO_RECV           1
 
-#endif
+#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 18) */
 
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 29)
 /** This enables or disables handling of GSO frames coming from the wire (GRO). */
 # define VBOXNETFLT_WITH_GRO                1
 #endif
+
 /*
  * GRO support was backported to RHEL 5.4
  */
@@ -770,11 +781,10 @@ static struct sk_buff *vboxNetFltLinuxSkBufFromSG(PVBOXNETFLTINS pThis, PINTNETS
  * @param   pThis               The instance.
  * @param   pBuf                The sk_buff.
  * @param   pSG                 The SG.
- * @param   pvFrame             The frame pointer, optional.
  * @param   cSegs               The number of segments allocated for the SG.
  *                              This should match the number in the mbuf exactly!
  * @param   fSrc                The source of the frame.
- * @param   pGso                Pointer to the GSO context if it's a GSO
+ * @param   pGsoCtx             Pointer to the GSO context if it's a GSO
  *                              internal network frame.  NULL if regular frame.
  */
 DECLINLINE(void) vboxNetFltLinuxSkBufToSG(PVBOXNETFLTINS pThis, struct sk_buff *pBuf, PINTNETSG pSG,
@@ -845,14 +855,9 @@ DECLINLINE(void) vboxNetFltLinuxSkBufToSG(PVBOXNETFLTINS pThis, struct sk_buff *
 }
 
 /**
- * Packet handler,
+ * Packet handler; not really documented - figure it out yourself.
  *
- * @returns 0 or EJUSTRETURN.
- * @param   pThis           The instance.
- * @param   pMBuf           The mbuf.
- * @param   pvFrame         The start of the frame, optional.
- * @param   fSrc            Where the packet (allegedly) comes from, one INTNETTRUNKDIR_* value.
- * @param   eProtocol       The protocol.
+ * @returns 0 or EJUSTRETURN - this is probably copy & pastry and thus wrong.
  */
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 14)
 static int vboxNetFltLinuxPacketHandler(struct sk_buff *pBuf,
@@ -935,11 +940,7 @@ static int vboxNetFltLinuxPacketHandler(struct sk_buff *pBuf,
         {
             uint8_t *pMac = (uint8_t*)skb_mac_header(pBuf);
             struct vlan_ethhdr *pVHdr = (struct vlan_ethhdr *)(pMac - VLAN_HLEN);
-#  if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 4, 0)
             memmove(pVHdr, pMac, ETH_ALEN * 2);
-#  else
-            memmove(pVHdr, pMac, VLAN_ETH_ALEN * 2);
-#  endif
             pVHdr->h_vlan_proto = RT_H2N_U16(ETH_P_8021Q);
             pVHdr->h_vlan_TCI   = RT_H2N_U16(vlan_tx_tag_get(pBuf));
             pBuf->mac_header   -= VLAN_HLEN;
@@ -1198,7 +1199,7 @@ static bool vboxNetFltLinuxCanForwardAsGso(PVBOXNETFLTINS pThis, struct sk_buff 
             if (uProtocol == RTNETIPV4_PROT_TCP)
                 enmGsoType = PDMNETWORKGSOTYPE_IPV6_TCP;
             else if (uProtocol == RTNETIPV4_PROT_UDP)
-                enmGsoType = PDMNETWORKGSOTYPE_IPV4_UDP;
+                enmGsoType = PDMNETWORKGSOTYPE_IPV6_UDP;
             else
                 enmGsoType = PDMNETWORKGSOTYPE_INVALID;
             break;
@@ -1371,7 +1372,9 @@ static int vboxNetFltLinuxForwardSegment(PVBOXNETFLTINS pThis, struct sk_buff *p
 }
 
 /**
+ * I won't disclose what I do, figure it out yourself, including pThis referencing.
  *
+ * @param   pThis       The net filter instance.
  * @param   pBuf        The socket buffer.  This is consumed by this function.
  */
 static void vboxNetFltLinuxForwardToIntNet(PVBOXNETFLTINS pThis, struct sk_buff *pBuf)
@@ -1553,11 +1556,11 @@ static bool vboxNetFltLinuxPromiscuous(PVBOXNETFLTINS pThis)
     return fRc;
 }
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36)
 /**
- * Helper for detecting TAP devices.
+ * Does this device needs link state change signaled?
+ * Currently we need it for our own VBoxNetAdp and TAP.
  */
-static bool vboxNetFltIsTapDevice(PVBOXNETFLTINS pThis, struct net_device *pDev)
+static bool vboxNetFltNeedsLinkState(PVBOXNETFLTINS pThis, struct net_device *pDev)
 {
     if (pDev->ethtool_ops && pDev->ethtool_ops->get_drvinfo)
     {
@@ -1566,26 +1569,34 @@ static bool vboxNetFltIsTapDevice(PVBOXNETFLTINS pThis, struct net_device *pDev)
         memset(&Info, 0, sizeof(Info));
         Info.cmd = ETHTOOL_GDRVINFO;
         pDev->ethtool_ops->get_drvinfo(pDev, &Info);
-        Log3(("vboxNetFltIsTapDevice: driver=%s version=%s bus_info=%s\n",
-              Info.driver, Info.version, Info.bus_info));
+        Log3(("%s: driver=%.*s version=%.*s bus_info=%.*s\n",
+              __FUNCTION__,
+              sizeof(Info.driver),   Info.driver,
+              sizeof(Info.version),  Info.version,
+              sizeof(Info.bus_info), Info.bus_info));
 
+        if (!strncmp(Info.driver, "vboxnet", sizeof(Info.driver)))
+            return true;
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 36) /* TAP started doing carrier */
         return !strncmp(Info.driver,   "tun", 4)
             && !strncmp(Info.bus_info, "tap", 4);
+#endif
     }
 
     return false;
 }
 
 /**
- * Helper for updating the link state of TAP devices.
- * Only TAP devices are affected.
+ * Some devices need link state change when filter attaches/detaches
+ * since the filter is their link in a sense.
  */
-static void vboxNetFltSetTapLinkState(PVBOXNETFLTINS pThis, struct net_device *pDev, bool fLinkUp)
+static void vboxNetFltSetLinkState(PVBOXNETFLTINS pThis, struct net_device *pDev, bool fLinkUp)
 {
-    if (vboxNetFltIsTapDevice(pThis, pDev))
+    if (vboxNetFltNeedsLinkState(pThis, pDev))
     {
-        Log3(("vboxNetFltSetTapLinkState: bringing %s tap device link state\n",
-              fLinkUp ? "up" : "down"));
+        Log3(("%s: bringing device link %s\n",
+              __FUNCTION__, fLinkUp ? "up" : "down"));
         netif_tx_lock_bh(pDev);
         if (fLinkUp)
             netif_carrier_on(pDev);
@@ -1594,20 +1605,13 @@ static void vboxNetFltSetTapLinkState(PVBOXNETFLTINS pThis, struct net_device *p
         netif_tx_unlock_bh(pDev);
     }
 }
-#else /* LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36) */
-DECLINLINE(void) vboxNetFltSetTapLinkState(PVBOXNETFLTINS pThis, struct net_device *pDev, bool fLinkUp)
-{
-    /* Nothing to do for pre-2.6.36 kernels. */
-}
-#endif /* LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 36) */
 
 /**
  * Internal worker for vboxNetFltLinuxNotifierCallback.
  *
  * @returns VBox status code.
  * @param   pThis           The instance.
- * @param   fRediscovery    If set we're doing a rediscovery attempt, so, don't
- *                          flood the release log.
+ * @param   pDev            The device to attach to.
  */
 static int vboxNetFltLinuxAttachToInterface(PVBOXNETFLTINS pThis, struct net_device *pDev)
 {
@@ -1653,10 +1657,9 @@ static int vboxNetFltLinuxAttachToInterface(PVBOXNETFLTINS pThis, struct net_dev
 #endif
 
     /*
-     * If attaching to TAP interface we need to bring the link state up
-     * starting from 2.6.36 kernel.
+     * Are we the "carrier" for this device (e.g. vboxnet or tap)?
      */
-    vboxNetFltSetTapLinkState(pThis, pDev, true);
+    vboxNetFltSetLinkState(pThis, pDev, true);
 
     /*
      * Set indicators that require the spinlock. Be abit paranoid about racing
@@ -2260,7 +2263,7 @@ void vboxNetFltOsDeleteInstance(PVBOXNETFLTINS pThis)
 
     if (fRegistered)
     {
-        vboxNetFltSetTapLinkState(pThis, pDev, false);
+        vboxNetFltSetLinkState(pThis, pDev, false);
 
 #ifndef VBOXNETFLT_LINUX_NO_XMIT_QUEUE
         skb_queue_purge(&pThis->u.s.XmitQueue);

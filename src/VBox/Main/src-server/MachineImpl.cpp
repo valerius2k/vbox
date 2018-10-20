@@ -361,6 +361,10 @@ HRESULT Machine::init(VirtualBox *aParent,
             for (ULONG slot = 0; slot < RT_ELEMENTS(mSerialPorts); ++slot)
                 mSerialPorts[slot]->i_applyDefaults(aOsType);
 
+            /* Apply parallel port defaults */
+            for (ULONG slot = 0; slot < RT_ELEMENTS(mParallelPorts); ++slot)
+                mParallelPorts[slot]->i_applyDefaults();
+
             /* Let the OS type select 64-bit ness. */
             mHWData->mLongMode = aOsType->i_is64Bit()
                                ? settings::Hardware::LongMode_Enabled : settings::Hardware::LongMode_Disabled;
@@ -1216,6 +1220,32 @@ HRESULT Machine::setChipsetType(ChipsetType_T aChipsetType)
                 mNetworkAdapters[slot]->init(this, (ULONG)slot);
             }
         }
+    }
+
+    return S_OK;
+}
+
+HRESULT Machine::getParavirtDebug(com::Utf8Str &aParavirtDebug)
+{
+    AutoReadLock alock(this COMMA_LOCKVAL_SRC_POS);
+
+    aParavirtDebug = mHWData->mParavirtDebug;
+    return S_OK;
+}
+
+HRESULT Machine::setParavirtDebug(const com::Utf8Str &aParavirtDebug)
+{
+    AutoWriteLock alock(this COMMA_LOCKVAL_SRC_POS);
+
+    HRESULT rc = i_checkStateDependency(MutableStateDep);
+    if (FAILED(rc)) return rc;
+
+    /** @todo Parse/validate options? */
+    if (aParavirtDebug != mHWData->mParavirtDebug)
+    {
+        i_setModified(IsModified_MachineData);
+        mHWData.backup();
+        mHWData->mParavirtDebug = aParavirtDebug;
     }
 
     return S_OK;
@@ -4169,7 +4199,7 @@ HRESULT Machine::attachDevice(const com::Utf8Str &aName,
                 alock.release();
 
                 rc = medium->i_createDiffStorage(diff,
-                                                 MediumVariant_Standard,
+                                                 medium->i_getPreferredDiffVariant(),
                                                  pMediumLockList,
                                                  NULL /* aProgress */,
                                                  true /* aWait */);
@@ -5346,8 +5376,9 @@ void Machine::i_deleteConfigHandler(DeleteConfigTask &task)
                     RTFileDelete(log.c_str());
                 }
 #if defined(RT_OS_WINDOWS)
-                log = Utf8StrFmt("%s%cVBoxStartup.log",
-                                 logFolder.c_str(), RTPATH_DELIMITER);
+                log = Utf8StrFmt("%s%cVBoxStartup.log", logFolder.c_str(), RTPATH_DELIMITER);
+                RTFileDelete(log.c_str());
+                log = Utf8StrFmt("%s%cVBoxHardening.log", logFolder.c_str(), RTPATH_DELIMITER);
                 RTFileDelete(log.c_str());
 #endif
 
@@ -6594,7 +6625,7 @@ HRESULT Machine::queryLogFilename(ULONG aIdx, com::Utf8Str &aFilename)
 {
     AutoReadLock alock(this COMMA_LOCKVAL_SRC_POS);
 
-    Utf8Str log = i_queryLogFilename(aIdx);
+    Utf8Str log = i_getLogFilename(aIdx);
     if (!RTFileExists(log.c_str()))
         log.setNull();
     aFilename = log;
@@ -6610,7 +6641,7 @@ HRESULT Machine::readLog(ULONG aIdx, LONG64 aOffset, LONG64 aSize, std::vector<B
     AutoReadLock alock(this COMMA_LOCKVAL_SRC_POS);
 
     HRESULT rc = S_OK;
-    Utf8Str log = i_queryLogFilename(aIdx);
+    Utf8Str log = i_getLogFilename(aIdx);
 
     /* do not unnecessarily hold the lock while doing something which does
      * not need the lock and potentially takes a long time. */
@@ -7292,31 +7323,36 @@ void Machine::i_getLogFolder(Utf8Str &aLogFolder)
 /**
  *  Returns the full path to the machine's log file for an given index.
  */
-Utf8Str Machine::i_queryLogFilename(ULONG idx) /** @todo r=bird: Misnamed. Should be i_getLogFilename as it cannot fail.
-                                                   See VBox-CodingGuidelines.cpp, Compulsory seciont, line 79. */
+Utf8Str Machine::i_getLogFilename(ULONG idx)
 {
     Utf8Str logFolder;
     getLogFolder(logFolder);
     Assert(logFolder.length());
+
     Utf8Str log;
     if (idx == 0)
-        log = Utf8StrFmt("%s%cVBox.log",
-                         logFolder.c_str(), RTPATH_DELIMITER);
+        log = Utf8StrFmt("%s%cVBox.log", logFolder.c_str(), RTPATH_DELIMITER);
+#if defined(RT_OS_WINDOWS) && defined(VBOX_WITH_HARDENING)
+    else if (idx == 1)
+        log = Utf8StrFmt("%s%cVBoxHardening.log", logFolder.c_str(), RTPATH_DELIMITER);
     else
-        log = Utf8StrFmt("%s%cVBox.log.%d",
-                         logFolder.c_str(), RTPATH_DELIMITER, idx);
+        log = Utf8StrFmt("%s%cVBox.log.%u", logFolder.c_str(), RTPATH_DELIMITER, idx - 1);
+#else
+    else
+        log = Utf8StrFmt("%s%cVBox.log.%u", logFolder.c_str(), RTPATH_DELIMITER, idx);
+#endif
     return log;
 }
 
 /**
- * Returns the full path to the machine's (hardened) startup log file.
+ * Returns the full path to the machine's hardened log file.
  */
-Utf8Str Machine::i_getStartupLogFilename(void)
+Utf8Str Machine::i_getHardeningLogFilename(void)
 {
     Utf8Str strFilename;
     getLogFolder(strFilename);
     Assert(strFilename.length());
-    strFilename.append(RTPATH_SLASH_STR "VBoxStartup.log");
+    strFilename.append(RTPATH_SLASH_STR "VBoxHardening.log");
     return strFilename;
 }
 
@@ -7502,24 +7538,30 @@ HRESULT Machine::i_launchVMProcess(IInternalSessionControl *aControl,
             RTStrFree(newEnvStr);
     }
 
-    /* Hardened startup logging */
+    /* Hardening logging */
 #if defined(RT_OS_WINDOWS) && defined(VBOX_WITH_HARDENING)
-    Utf8Str strSupStartLogArg("--sup-startup-log=");
+    Utf8Str strSupHardeningLogArg("--sup-hardening-log=");
     {
-        Utf8Str strStartupLogFile = i_getStartupLogFilename();
-        int vrc2 = RTFileDelete(strStartupLogFile.c_str());
+        Utf8Str strHardeningLogFile = i_getHardeningLogFilename();
+        int vrc2 = RTFileDelete(strHardeningLogFile.c_str());
         if (vrc2 == VERR_PATH_NOT_FOUND || vrc2 == VERR_FILE_NOT_FOUND)
         {
-            Utf8Str strStartupLogDir = strStartupLogFile;
+            Utf8Str strStartupLogDir = strHardeningLogFile;
             strStartupLogDir.stripFilename();
             RTDirCreateFullPath(strStartupLogDir.c_str(), 0755); /** @todo add a variant for creating the path to a
                                                                      file without stripping the file. */
         }
-        strSupStartLogArg.append(strStartupLogFile);
+        strSupHardeningLogArg.append(strHardeningLogFile);
+
+        /* Remove legacy log filename to avoid confusion. */
+        Utf8Str strOldStartupLogFile;
+        getLogFolder(strOldStartupLogFile);
+        strOldStartupLogFile.append(RTPATH_SLASH_STR "VBoxStartup.log");
+        RTFileDelete(strOldStartupLogFile.c_str());
     }
-    const char *pszSupStartupLogArg = strSupStartLogArg.c_str();
+    const char *pszSupHardeningLogArg = strSupHardeningLogArg.c_str();
 #else
-    const char *pszSupStartupLogArg = NULL;
+    const char *pszSupHardeningLogArg = NULL;
 #endif
 
     Utf8Str strCanonicalName;
@@ -7583,7 +7625,7 @@ HRESULT Machine::i_launchVMProcess(IInternalSessionControl *aControl,
         unsigned iArg = 6;
         if (fSeparate)
             apszArgs[iArg++] = "--separate";
-        apszArgs[iArg++] = pszSupStartupLogArg;
+        apszArgs[iArg++] = pszSupHardeningLogArg;
 
         vrc = RTProcCreate(szPath, apszArgs, env, 0, &pid);
     }
@@ -7618,7 +7660,7 @@ HRESULT Machine::i_launchVMProcess(IInternalSessionControl *aControl,
         unsigned iArg = 5;
         if (fSeparate)
             apszArgs[iArg++] = "--separate";
-        apszArgs[iArg++] = pszSupStartupLogArg;
+        apszArgs[iArg++] = pszSupHardeningLogArg;
 
         vrc = RTProcCreate(szPath, apszArgs, env, 0, &pid);
     }
@@ -7661,7 +7703,7 @@ HRESULT Machine::i_launchVMProcess(IInternalSessionControl *aControl,
         unsigned iArg = 7;
         if (!strFrontend.compare("capture", Utf8Str::CaseInsensitive))
             apszArgs[iArg++] = "--capture";
-        apszArgs[iArg++] = pszSupStartupLogArg;
+        apszArgs[iArg++] = pszSupHardeningLogArg;
 
 # ifdef RT_OS_WINDOWS
         vrc = RTProcCreate(szPath, apszArgs, env, RTPROC_FLAGS_NO_WINDOW, &pid);
@@ -7864,11 +7906,11 @@ bool Machine::i_checkForSpawnFailure()
         /* If the startup logfile exists and is of non-zero length, tell the
            user to look there for more details to encourage them to attach it
            when reporting startup issues. */
-        Utf8Str strStartupLogFile = i_getStartupLogFilename();
+        Utf8Str strHardeningLogFile = i_getHardeningLogFilename();
         uint64_t cbStartupLogFile = 0;
-        int vrc2 = RTFileQuerySize(strStartupLogFile.c_str(), &cbStartupLogFile);
+        int vrc2 = RTFileQuerySize(strHardeningLogFile.c_str(), &cbStartupLogFile);
         if (RT_SUCCESS(vrc2) && cbStartupLogFile > 0)
-            strExtraInfo.append(Utf8StrFmt(tr(".  More details may be available in '%s'"), strStartupLogFile.c_str()));
+            strExtraInfo.append(Utf8StrFmt(tr(".  More details may be available in '%s'"), strHardeningLogFile.c_str()));
 #endif
 
         if (RT_SUCCESS(vrc) && status.enmReason == RTPROCEXITREASON_NORMAL)
@@ -8904,6 +8946,7 @@ HRESULT Machine::i_loadHardware(const settings::Hardware &data, const settings::
         mHWData->mKeyboardHIDType = data.keyboardHIDType;
         mHWData->mChipsetType = data.chipsetType;
         mHWData->mParavirtProvider = data.paravirtProvider;
+        mHWData->mParavirtDebug = data.strParavirtDebug;
         mHWData->mEmulatedUSBCardReaderEnabled = data.fEmulatedUSBCardReader;
         mHWData->mHPETEnabled = data.fHPETEnabled;
 
@@ -10186,8 +10229,9 @@ HRESULT Machine::i_saveHardware(settings::Hardware &data, settings::Debugging *p
 
         // paravirt
         data.paravirtProvider = mHWData->mParavirtProvider;
+        data.strParavirtDebug = mHWData->mParavirtDebug;
 
-
+        // emulated USB card reader
         data.fEmulatedUSBCardReader = !!mHWData->mEmulatedUSBCardReaderEnabled;
 
         // HPET
@@ -10328,6 +10372,7 @@ HRESULT Machine::i_saveHardware(settings::Hardware &data, settings::Debugging *p
         if (FAILED(rc)) throw rc;
 
         /* Host PCI devices */
+        data.pciAttachments.clear();
         for (HWData::PCIDeviceAssignmentList::const_iterator it = mHWData->mPCIDeviceAssignments.begin();
              it != mHWData->mPCIDeviceAssignments.end();
              ++it)
@@ -10785,7 +10830,8 @@ HRESULT Machine::i_createImplicitDiffs(IProgress *aProgress,
 
             /* release the locks before the potentially lengthy operation */
             alock.release();
-            rc = pMedium->i_createDiffStorage(diff, MediumVariant_Standard,
+            rc = pMedium->i_createDiffStorage(diff,
+                                              pMedium->i_getPreferredDiffVariant(),
                                               pMediumLockList,
                                               NULL /* aProgress */,
                                               true /* aWait */);
@@ -10836,7 +10882,7 @@ HRESULT Machine::i_createImplicitDiffs(IProgress *aProgress,
 
 /**
  * Deletes implicit differencing hard disks created either by
- * #createImplicitDiffs() or by #AttachDevice() and rolls back mMediaData.
+ * #i_createImplicitDiffs() or by #AttachDevice() and rolls back mMediaData.
  *
  * Note that to delete hard disks created by #AttachDevice() this method is
  * called from #fixupMedia() when the changes are rolled back.
@@ -12323,6 +12369,8 @@ HRESULT SessionMachine::init(Machine *aMachine)
 
     HRESULT rc = S_OK;
 
+    RT_ZERO(mAuthLibCtx);
+
     /* create the machine client token */
     try
     {
@@ -12640,6 +12688,16 @@ void SessionMachine::uninit(Uninit::Reason aReason)
         mData->mSession.mProgress.setNull();
     }
 
+    if (mConsoleTaskData.mProgress)
+    {
+        Assert(aReason == Uninit::Abnormal);
+        mConsoleTaskData.mProgress->i_notifyComplete(E_FAIL,
+                                                     COM_IIDOF(ISession),
+                                                     getComponentName(),
+                                                     tr("The VM session was aborted"));
+        mConsoleTaskData.mProgress.setNull();
+    }
+
     /* remove the association between the peer machine and this session machine */
     Assert(   (SessionMachine*)mData->mSession.mMachine == this
             || aReason == Uninit::Unexpected);
@@ -12670,6 +12728,8 @@ void SessionMachine::uninit(Uninit::Reason aReason)
 
     unconst(mParent) = NULL;
     unconst(mPeer) = NULL;
+
+    AuthLibUnload(&mAuthLibCtx);
 
     LogFlowThisFuncLeave();
 }
@@ -13538,6 +13598,94 @@ HRESULT SessionMachine::ejectMedium(const ComPtr<IMediumAttachment> &aAttachment
     pAttach.queryInterfaceTo(aNewAttachment.asOutParam());
 
     return S_OK;
+}
+
+HRESULT SessionMachine::authenticateExternal(const std::vector<com::Utf8Str> &aAuthParams,
+                                             com::Utf8Str &aResult)
+{
+    AutoWriteLock alock(this COMMA_LOCKVAL_SRC_POS);
+
+    HRESULT hr = S_OK;
+
+    if (aAuthParams[0] == "VRDEAUTH" && aAuthParams.size() == 7)
+    {
+        enum VRDEAuthParams
+        {
+           parmUuid = 1,
+           parmGuestJudgement,
+           parmUser,
+           parmPassword,
+           parmDomain,
+           parmClientId
+        };
+
+        AuthResult result = AuthResultAccessDenied;
+
+        if (!mAuthLibCtx.hAuthLibrary)
+        {
+            /* Load the external authentication library. */
+            Bstr authLibrary;
+            mVRDEServer->COMGETTER(AuthLibrary)(authLibrary.asOutParam());
+
+            Utf8Str filename = authLibrary;
+
+            int rc = AuthLibLoad(&mAuthLibCtx, filename.c_str());
+            if (RT_FAILURE(rc))
+            {
+                hr = setError(E_FAIL,
+                              tr("Could not load the external authentication library '%s' (%Rrc)"),
+                              filename.c_str(), rc);
+            }
+        }
+
+        if (SUCCEEDED(hr))
+        {
+            Guid uuid(aAuthParams[parmUuid]);
+            AuthGuestJudgement guestJudgement = (AuthGuestJudgement)aAuthParams[parmGuestJudgement].toUInt32();
+            uint32_t u32ClientId = aAuthParams[parmClientId].toUInt32();
+
+            result = AuthLibAuthenticate(&mAuthLibCtx,
+                                         uuid.raw(), guestJudgement,
+                                         aAuthParams[parmUser].c_str(),
+                                         aAuthParams[parmPassword].c_str(),
+                                         aAuthParams[parmDomain].c_str(),
+                                         u32ClientId);
+        }
+
+        /* Hack: aAuthParams[parmPassword] is const but the code believes in writable memory. */
+        size_t cbPassword = aAuthParams[parmPassword].length();
+        if (cbPassword)
+        {
+            RTMemWipeThoroughly((void *)aAuthParams[parmPassword].c_str(), cbPassword, 10 /* cPasses */);
+            memset((void *)aAuthParams[parmPassword].c_str(), 'x', cbPassword);
+        }
+
+        if (result == AuthResultAccessGranted)
+            aResult = "granted";
+        else
+            aResult = "denied";
+
+        LogRel(("AUTH: VRDE authentification for user '%s' result '%s'\n",
+                aAuthParams[parmUser].c_str(), aResult.c_str()));
+    }
+    else if (aAuthParams[0] == "VRDEAUTHDISCONNECT" && aAuthParams.size() == 3)
+    {
+        enum VRDEAuthDisconnectParams
+        {
+           parmUuid = 1,
+           parmClientId
+        };
+
+        Guid uuid(aAuthParams[parmUuid]);
+        uint32_t u32ClientId = 0;
+        AuthLibDisconnect(&mAuthLibCtx, uuid.raw(), u32ClientId);
+    }
+    else
+    {
+        hr = E_INVALIDARG;
+    }
+
+    return hr;
 }
 
 // public methods only for internal purposes
@@ -14767,6 +14915,14 @@ HRESULT Machine::reportVmStatistics(ULONG aValidStats,
     NOREF(aMemSharedTotal);
     NOREF(aVmNetRx);
     NOREF(aVmNetTx);
+    ReturnComNotImplemented();
+}
+
+HRESULT Machine::authenticateExternal(const std::vector<com::Utf8Str> &aAuthParams,
+                                             com::Utf8Str &aResult)
+{
+    NOREF(aAuthParams);
+    NOREF(aResult);
     ReturnComNotImplemented();
 }
 

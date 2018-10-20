@@ -230,11 +230,18 @@
 # undef SUPDRV_WITH_MSR_PROBER
 #endif
 
-#ifndef RT_OS_OS2
-/**  Use a dedicated kernel thread to service TSC-delta measurement requests.
- *   @todo Test on servers with many CPUs and sockets. */
-#define SUPDRV_USE_TSC_DELTA_THREAD
+#ifdef DOXYGEN_RUNNING
+# define SUPDRV_WITH_MSR_PROBER
+# define SUPDRV_WITHOUT_MSR_PROBER
 #endif
+
+#ifndef RT_OS_OS2
+/** @def SUPDRV_USE_TSC_DELTA_THREAD
+ * Use a dedicated kernel thread to service TSC-delta measurement requests.
+ * @todo Test on servers with many CPUs and sockets. */
+# define SUPDRV_USE_TSC_DELTA_THREAD
+#endif
+
 
 /*******************************************************************************
 *   Structures and Typedefs                                                    *
@@ -383,6 +390,10 @@ typedef struct SUPDRVLDRIMAGE
     int                             idSolMod;
     /** Pointer to the module control structure. */
     struct modctl                  *pSolModCtl;
+#endif
+#ifdef RT_OS_LINUX
+    /** Hack for seeing the module in perf, dtrace and other stack crawlers. */
+    struct module                  *pLnxModHack;
 #endif
     /** Whether it's loaded by the native loader or not. */
     bool                            fNative;
@@ -840,12 +851,16 @@ int  VBOXCALL   supdrvOSLdrOpen(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage, c
 /**
  * Notification call indicating that a image is being opened for the first time.
  *
- * Can be used to log the load address of the image.
+ * Called for both native and non-native images (after supdrvOSLdrOpen).  Can be
+ * used to log the load address of the image or inform the kernel about the
+ * alien image.
  *
  * @param   pDevExt             The device globals.
  * @param   pImage              The image handle.
+ * @param   pszFilename         The file name - UTF-8, may containing UNIX
+ *                              slashes on non-UNIX systems.
  */
-void VBOXCALL   supdrvOSLdrNotifyOpened(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage);
+void VBOXCALL   supdrvOSLdrNotifyOpened(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage, const char *pszFilename);
 
 /**
  * Validates an entry point address.
@@ -876,12 +891,23 @@ int  VBOXCALL   supdrvOSLdrLoad(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage, c
 
 
 /**
- * Unload the image.
+ * Unload the image (only called if supdrvOSLdrOpen returned success).
  *
  * @param   pDevExt             The device globals.
  * @param   pImage              The image data (mostly still valid).
  */
 void VBOXCALL   supdrvOSLdrUnload(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage);
+
+/**
+ * Notification call indicating that a image is being unloaded.
+ *
+ * Called for both native and non-native images.  In the former case, it's
+ * called after supdrvOSLdrUnload.
+ *
+ * @param   pDevExt             The device globals.
+ * @param   pImage              The image handle.
+ */
+void VBOXCALL   supdrvOSLdrNotifyUnloaded(PSUPDRVDEVEXT pDevExt, PSUPDRVLDRIMAGE pImage);
 
 
 #ifdef SUPDRV_WITH_MSR_PROBER

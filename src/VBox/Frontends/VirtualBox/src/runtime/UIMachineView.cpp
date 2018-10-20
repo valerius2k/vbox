@@ -109,7 +109,7 @@ const int XKeyRelease = KeyRelease;
 #ifdef DEBUG_andy
 /* Macro for debugging drag and drop actions which usually would
  * go to Main's logging group. */
-# define DNDDEBUG(x) LogRel(x)
+# define DNDDEBUG(x) LogFlowFunc(x)
 #else
 # define DNDDEBUG(x)
 #endif
@@ -223,13 +223,18 @@ void UIMachineView::applyMachineViewScaleFactor()
     /* Perform frame-buffer rescaling: */
     frameBuffer()->performRescale();
 
-    // TODO: How to make it work?
-    display().ViewportChanged(screenId(), contentsX(), contentsY(), visibleWidth(), visibleHeight());
+    /* Update console's display viewport and 3D overlay: */
+    updateViewport();
 }
 
 double UIMachineView::aspectRatio() const
 {
     return frameBuffer() ? (double)(frameBuffer()->width()) / frameBuffer()->height() : 0;
+}
+
+void UIMachineView::updateViewport()
+{
+    display().ViewportChanged(screenId(), contentsX(), contentsY(), visibleWidth(), visibleHeight());
 }
 
 void UIMachineView::sltPerformGuestResize(const QSize &toSize)
@@ -285,6 +290,9 @@ void UIMachineView::sltHandleNotifyChange(int iWidth, int iHeight)
         {
             /* Assign new frame-buffer logical-size: */
             frameBuffer()->setScaledSize(size());
+
+            /* Forget the last full-screen size: */
+            uisession()->setLastFullScreenSize(screenId(), QSize(-1, -1));
         }
         /* For other than 'scale' mode: */
         else
@@ -292,8 +300,10 @@ void UIMachineView::sltHandleNotifyChange(int iWidth, int iHeight)
             /* Adjust maximum-size restriction for machine-view: */
             setMaximumSize(sizeHint());
 
-            /* Disable the resize hint override hack: */
+            /* Disable the resize hint override hack and forget the last full-screen size: */
             m_sizeHintOverride = QSize(-1, -1);
+            if (visualStateType() == UIVisualStateType_Normal)
+                uisession()->setLastFullScreenSize(screenId(), QSize(-1, -1));
 
             /* Force machine-window update own layout: */
             QCoreApplication::sendPostedEvents(0, QEvent::LayoutRequest);
@@ -426,8 +436,8 @@ void UIMachineView::sltHandleScaleFactorChange(const QString &strMachineID)
     updateScaledPausePixmap();
     viewport()->update();
 
-    // TODO: How to make it work?
-    display().ViewportChanged(screenId(), contentsX(), contentsY(), visibleWidth(), visibleHeight());
+    /* Update console's display viewport and 3D overlay: */
+    updateViewport();
 }
 
 void UIMachineView::sltHandleScalingOptimizationChange(const QString &strMachineID)
@@ -480,8 +490,8 @@ void UIMachineView::sltHandleUnscaledHiDPIOutputModeChange(const QString &strMac
     updateScaledPausePixmap();
     viewport()->update();
 
-    // TODO: How to make it work?
-    display().ViewportChanged(screenId(), contentsX(), contentsY(), visibleWidth(), visibleHeight());
+    /* Update console's display viewport and 3D overlay: */
+    updateViewport();
 }
 
 void UIMachineView::sltMachineStateChanged()
@@ -554,6 +564,9 @@ UIMachineView::UIMachineView(  UIMachineWindow *pMachineWindow
     , m_uScreenId(uScreenId)
     , m_pFrameBuffer(0)
     , m_previousState(KMachineState_Null)
+#ifdef Q_WS_MAC
+    , m_iHostScreenNumber(0)
+#endif /* Q_WS_MAC */
     , m_maxGuestSizePolicy(MaxGuestSizePolicy_Invalid)
     , m_u64MaxGuestSize(0)
 #ifdef VBOX_WITH_VIDEOHWACCEL
@@ -848,7 +861,17 @@ UIMachineLogic* UIMachineView::machineLogic() const
 
 QSize UIMachineView::sizeHint() const
 {
-    if (m_sizeHintOverride.isValid() && uisession()->isGuestSupportsGraphics())
+    /* Temporarily restrict the size to prevent a brief resize to the
+     * frame-buffer dimensions when we exit full-screen.  This is only
+     * applied if the frame-buffer is at full-screen dimensions and
+     * until the first machine view resize. */
+
+    /* Get the frame-buffer dimensions: */
+    QSize frameBufferSize(frameBuffer()->width(), frameBuffer()->height());
+    /* Take the scale-factor(s) into account: */
+    frameBufferSize = scaledForward(frameBufferSize);
+    /* Check against the last full-screen size. */
+    if (frameBufferSize == uisession()->lastFullScreenSize(screenId()) && m_sizeHintOverride.isValid())
         return m_sizeHintOverride;
 
     /* Get frame-buffer size-hint: */
@@ -982,9 +1005,6 @@ void UIMachineView::handleScaleChange()
         {
             /* Adjust maximum-size restriction for machine-view: */
             setMaximumSize(sizeHint());
-
-            /* Disable the resize hint override hack: */
-            m_sizeHintOverride = QSize(-1, -1);
 
             /* Force machine-window update own layout: */
             QCoreApplication::sendPostedEvents(0, QEvent::LayoutRequest);
@@ -1234,9 +1254,8 @@ void UIMachineView::scrollContentsBy(int dx, int dy)
 #endif /* VBOX_WITH_VIDEOHWACCEL */
     QAbstractScrollArea::scrollContentsBy(dx, dy);
 
-    display().ViewportChanged(screenId(),
-                              contentsX(), contentsY(),
-                              visibleWidth(), visibleHeight());
+    /* Update console's display viewport and 3D overlay: */
+    updateViewport();
 }
 
 
@@ -1335,9 +1354,8 @@ bool UIMachineView::eventFilter(QObject *pWatched, QEvent *pEvent)
                 if (m_pFrameBuffer)
                     m_pFrameBuffer->viewportResized(pResizeEvent);
 #endif /* VBOX_WITH_VIDEOHWACCEL */
-                display().ViewportChanged(screenId(),
-                                          contentsX(), contentsY(),
-                                          visibleWidth(), visibleHeight());
+                /* Update console's display viewport and 3D overlay: */
+                updateViewport();
                 break;
             }
             default:
@@ -1351,12 +1369,8 @@ bool UIMachineView::eventFilter(QObject *pWatched, QEvent *pEvent)
         {
             case QEvent::Move:
             {
-                /* In some cases viewport resize-events can provoke the
-                 * machine-view position changes inside the machine-window.
-                 * We have to notify interested listeners like 3D service. */
-                display().ViewportChanged(screenId(),
-                                          contentsX(), contentsY(),
-                                          visibleWidth(), visibleHeight());
+                /* Update console's display viewport and 3D overlay: */
+                updateViewport();
                 break;
             }
             default:
@@ -1387,12 +1401,24 @@ bool UIMachineView::eventFilter(QObject *pWatched, QEvent *pEvent)
 #ifdef Q_WS_MAC
             case QEvent::Move:
             {
-                if (m_pFrameBuffer)
+                /* Get current host-screen number: */
+                const int iCurrentHostScreenNumber = vboxGlobal().screenNumber(this);
+                if (m_iHostScreenNumber != iCurrentHostScreenNumber)
                 {
-                    /* Update backing-scale-factor for underlying frame-buffer: */
-                    m_pFrameBuffer->setBackingScaleFactor(darwinBackingScaleFactor(machineWindow()));
-                    /* Perform frame-buffer rescaling: */
-                    m_pFrameBuffer->performRescale();
+                    /* Recache current host screen: */
+                    m_iHostScreenNumber = iCurrentHostScreenNumber;
+
+                    /* Update frame-buffer arguments: */
+                    if (m_pFrameBuffer)
+                    {
+                        /* Update backing-scale-factor for underlying frame-buffer: */
+                        m_pFrameBuffer->setBackingScaleFactor(darwinBackingScaleFactor(machineWindow()));
+                        /* Perform frame-buffer rescaling: */
+                        m_pFrameBuffer->performRescale();
+                    }
+
+                    /* Update console's display viewport and 3D overlay: */
+                    updateViewport();
                 }
                 break;
             }
@@ -1422,7 +1448,11 @@ void UIMachineView::paintEvent(QPaintEvent *pPaintEvent)
     if (!pausePixmap().isNull())
     {
         /* We have a snapshot for the paused state: */
+#if QT_VERSION >= 0x050000
+        QRect rect = pPaintEvent->rect().intersected(viewport()->rect());
+#else /* QT_VERSION < 0x050000 */
         QRect rect = pPaintEvent->rect().intersect(viewport()->rect());
+#endif /* QT_VERSION < 0x050000 */
         QPainter painter(viewport());
         /* Take the scale-factor into account: */
         if (frameBuffer()->scaleFactor() == 1.0 && !frameBuffer()->scaledSize().isValid())

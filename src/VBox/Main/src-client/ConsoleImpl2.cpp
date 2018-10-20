@@ -945,6 +945,9 @@ int Console::i_configConstructorInner(PUVM pUVM, PVM pVM, AutoWriteLock *pAlock)
     ParavirtProvider_T paravirtProvider;
     hrc = pMachine->GetEffectiveParavirtProvider(&paravirtProvider);                        H();
 
+    Bstr strParavirtDebug;
+    hrc = pMachine->COMGETTER(ParavirtDebug)(strParavirtDebug.asOutParam());                H();
+
     ChipsetType_T chipsetType;
     hrc = pMachine->COMGETTER(ChipsetType)(&chipsetType);                                   H();
     if (chipsetType == ChipsetType_ICH9)
@@ -1289,6 +1292,65 @@ int Console::i_configConstructorInner(PUVM pUVM, PVM pVM, AutoWriteLock *pAlock)
         InsertConfigString(pParavirtNode, "Provider", pcszParavirtProvider);
 
         /*
+         * Parse paravirt. debug options.
+         */
+        bool         fGimDebug          = false;
+        com::Utf8Str strGimDebugAddress = "127.0.0.1";
+        uint32_t     uGimDebugPort      = 50000;
+        if (strParavirtDebug.isNotEmpty())
+        {
+            /* Hyper-V debug options. */
+            if (paravirtProvider == ParavirtProvider_HyperV)
+            {
+                bool         fGimHvDebug = false;
+                com::Utf8Str strGimHvVendor;
+                bool         fGimHvVsIf;
+                bool         fGimHvHypercallIf;
+
+                size_t       uPos = 0;
+                com::Utf8Str strDebugOptions = strParavirtDebug;
+                do
+                {
+                    com::Utf8Str strKey;
+                    com::Utf8Str strVal;
+                    uPos = strDebugOptions.parseKeyValue(strKey, strVal, uPos);
+                    if (   strKey == "enabled"
+                        && strVal.toUInt32() == 1)
+                    {
+                        /* Apply defaults.
+                           The defaults are documented in the user manual,
+                           changes need to be reflected accordingly. */
+                        fGimHvDebug       = true;
+                        strGimHvVendor    = "Microsoft Hv";
+                        fGimHvVsIf        = true;
+                        fGimHvHypercallIf = false;
+                    }
+                    else if (strKey == "address")
+                        strGimDebugAddress = strVal;
+                    else if (strKey == "port")
+                        uGimDebugPort = strVal.toUInt32();
+                    else if (strKey == "vendor")
+                        strGimHvVendor = strVal;
+                    else if (strKey == "vsinterface")
+                        fGimHvVsIf = RT_BOOL(strVal.toUInt32());
+                    else if (strKey == "hypercallinterface")
+                        fGimHvHypercallIf = RT_BOOL(strVal.toUInt32());
+                } while (uPos != com::Utf8Str::npos);
+
+                /* Update HyperV CFGM node with active debug options. */
+                if (fGimHvDebug)
+                {
+                    PCFGMNODE pHvNode;
+                    InsertConfigNode(pParavirtNode, "HyperV", &pHvNode);
+                    InsertConfigString(pHvNode,  "VendorID", strGimHvVendor);
+                    InsertConfigInteger(pHvNode, "VSInterface", fGimHvVsIf ? 1 : 0);
+                    InsertConfigInteger(pHvNode, "HypercallDebugInterface", fGimHvHypercallIf ? 1 : 0);
+                    fGimDebug = true;
+                }
+            }
+        }
+
+        /*
          * MM values.
          */
         PCFGMNODE pMM;
@@ -1409,6 +1471,15 @@ int Console::i_configConstructorInner(PUVM pUVM, PVM pVM, AutoWriteLock *pAlock)
             InsertConfigNode(pDev,     "0", &pInst);
             InsertConfigInteger(pInst, "Trusted",              1); /* boolean */
             //InsertConfigNode(pInst,    "Config", &pCfg);
+
+            if (fGimDebug)
+            {
+                InsertConfigNode(pInst,     "LUN#998", &pLunL0);
+                InsertConfigString(pLunL0,  "Driver", "UDP");
+                InsertConfigNode(pLunL0,    "Config", &pLunL1);
+                InsertConfigString(pLunL1,  "ServerAddress", strGimDebugAddress);
+                InsertConfigInteger(pLunL1, "ServerPort", uGimDebugPort);
+            }
         }
 
         /*
@@ -2063,7 +2134,7 @@ int Console::i_configConstructorInner(PUVM pUVM, PVM pVM, AutoWriteLock *pAlock)
          * Storage controllers.
          */
         com::SafeIfaceArray<IStorageController> ctrls;
-        PCFGMNODE aCtrlNodes[StorageControllerType_LsiLogicSas + 1] = {};
+        PCFGMNODE aCtrlNodes[StorageControllerType_NVMe + 1] = {};
         hrc = pMachine->COMGETTER(StorageControllers)(ComSafeArrayAsOutParam(ctrls));       H();
 
         bool fFdcEnabled = false;
@@ -2279,6 +2350,22 @@ int Console::i_configConstructorInner(PUVM pUVM, PVM pVM, AutoWriteLock *pAlock)
                                    "is at least one USB storage device configured for this VM.\n"
                                    "To fix this problem either enable the USB controller or remove\n"
                                    "the storage device from the VM"));
+                    break;
+                }
+
+                case StorageControllerType_NVMe:
+                {
+                    hrc = pBusMgr->assignPCIDevice("nvme", pCtlInst);                       H();
+
+                    ULONG cPorts = 0;
+                    hrc = ctrls[i]->COMGETTER(PortCount)(&cPorts);                          H();
+                    InsertConfigInteger(pCfg, "NamespacesMax", cPorts);
+
+                    /* Attach the status driver */
+                    AssertRelease(cPorts <= cLedSata);
+                    i_attachStatusDriver(pCtlInst, &mapStorageLeds[iLedNvme], 0, cPorts - 1,
+                                       &mapMediumAttachments, pszCtrlDev, ulInstance);
+                    paLedDevType = &maStorageDevType[iLedNvme];
                     break;
                 }
 
@@ -2624,6 +2711,9 @@ int Console::i_configConstructorInner(PUVM pUVM, PVM pVM, AutoWriteLock *pAlock)
         /*
          * Parallel (LPT) Ports
          */
+        /* parallel enabled mask to be passed to dev ACPI */
+        uint16_t auParallelIoPortBase[SchemaDefs::ParallelPortCount] = {0};
+        uint8_t auParallelIrq[SchemaDefs::ParallelPortCount] = {0};
         InsertConfigNode(pDevices, "parallel", &pDev);
         for (ULONG ulInstance = 0; ulInstance < SchemaDefs::ParallelPortCount; ++ulInstance)
         {
@@ -2643,14 +2733,20 @@ int Console::i_configConstructorInner(PUVM pUVM, PVM pVM, AutoWriteLock *pAlock)
             ULONG ulIRQ;
             hrc = parallelPort->COMGETTER(IRQ)(&ulIRQ);                                     H();
             InsertConfigInteger(pCfg, "IRQ", ulIRQ);
+            auParallelIrq[ulInstance] = (uint8_t)ulIRQ;
             ULONG ulIOBase;
             hrc = parallelPort->COMGETTER(IOBase)(&ulIOBase);                               H();
             InsertConfigInteger(pCfg,   "IOBase", ulIOBase);
-            InsertConfigNode(pInst,     "LUN#0", &pLunL0);
-            InsertConfigString(pLunL0,  "Driver", "HostParallel");
-            InsertConfigNode(pLunL0,    "Config", &pLunL1);
+            auParallelIoPortBase[ulInstance] = (uint16_t)ulIOBase;
+
             hrc = parallelPort->COMGETTER(Path)(bstr.asOutParam());                         H();
-            InsertConfigString(pLunL1,  "DevicePath", bstr);
+            if (!bstr.isEmpty())
+            {
+                InsertConfigNode(pInst,     "LUN#0", &pLunL0);
+                InsertConfigString(pLunL0,  "Driver", "HostParallel");
+                InsertConfigNode(pLunL0,    "Config", &pLunL1);
+                InsertConfigString(pLunL1,  "DevicePath", bstr);
+            }
         }
 
         /*
@@ -2972,7 +3068,7 @@ int Console::i_configConstructorInner(PUVM pUVM, PVM pVM, AutoWriteLock *pAlock)
                 }
                 else
                 {
-                    LogRel(("Shared crOpenGL service loaded\n"));
+                    LogRel(("Shared OpenGL service loaded -- 3D enabled\n"));
 
                     /* Setup the service. */
                     VBOXHGCMSVCPARM parm;
@@ -3074,6 +3170,12 @@ int Console::i_configConstructorInner(PUVM pUVM, PVM pVM, AutoWriteLock *pAlock)
 
             InsertConfigInteger(pCfg,  "Serial1IoPortBase", auSerialIoPortBase[1]);
             InsertConfigInteger(pCfg,  "Serial1Irq", auSerialIrq[1]);
+
+            InsertConfigInteger(pCfg,  "Parallel0IoPortBase", auParallelIoPortBase[0]);
+            InsertConfigInteger(pCfg,  "Parallel0Irq", auParallelIrq[0]);
+
+            InsertConfigInteger(pCfg,  "Parallel1IoPortBase", auParallelIoPortBase[1]);
+            InsertConfigInteger(pCfg,  "Parallel1Irq", auParallelIrq[1]);
 
             InsertConfigNode(pInst,    "LUN#0", &pLunL0);
             InsertConfigString(pLunL0, "Driver",               "ACPIHost");

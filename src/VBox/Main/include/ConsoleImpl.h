@@ -563,6 +563,9 @@ public:
     typedef std::map<Utf8Str, ComPtr<IMediumAttachment> > MediumAttachmentMap;
     typedef std::list <USBStorageDevice> USBStorageDeviceList;
 
+    static DECLCALLBACK(int)    i_powerUpThread(RTTHREAD Thread, void *pvUser);
+    static DECLCALLBACK(int)    i_powerDownThread(RTTHREAD Thread, void *pvUser);
+
 private:
 
     typedef std::list <ComObjPtr<OUSBDevice> > USBDeviceList;
@@ -738,8 +741,6 @@ private:
     HRESULT                     i_captureUSBDevices(PUVM pUVM);
     void                        i_detachAllUSBDevices(bool aDone);
 
-    static DECLCALLBACK(int)    i_powerUpThread(RTTHREAD Thread, void *pvUser);
-    static DECLCALLBACK(int)    i_powerDownThread(RTTHREAD Thread, void *pvUser);
 
     static DECLCALLBACK(int)    i_vmm2User_SaveState(PCVMM2USERMETHODS pThis, PUVM pUVM);
     static DECLCALLBACK(void)   i_vmm2User_NotifyEmtInit(PCVMM2USERMETHODS pThis, PUVM pUVM, PUVMCPU pUVCpu);
@@ -914,7 +915,9 @@ private:
         cLedSas     = 8,
         iLedUsb     = iLedSas + cLedSas,
         cLedUsb     = 8,
-        cLedStorage = cLedFloppy + cLedIde + cLedSata + cLedScsi + cLedSas + cLedUsb
+        iLedNvme    = iLedUsb + cLedUsb,
+        cLedNvme    = 30,
+        cLedStorage = cLedFloppy + cLedIde + cLedSata + cLedScsi + cLedSas + cLedUsb + cLedNvme
     };
     DeviceType_T maStorageDevType[cLedStorage];
     PPDMLED      mapStorageLeds[cLedStorage];
@@ -975,6 +978,7 @@ private:
     ComPtr<IEventListener> mVmListener;
 
     friend struct VMTask;
+    friend class ConsoleVRDPServer;
 };
 
 #endif // !____H_CONSOLEIMPL

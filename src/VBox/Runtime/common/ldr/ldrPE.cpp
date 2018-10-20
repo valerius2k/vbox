@@ -48,7 +48,7 @@
 # include <iprt/crypto/x509.h>
 #endif
 #include <iprt/formats/codeview.h>
-#include "internal/ldrPE.h"
+#include <iprt/formats/pecoff.h>
 #include "internal/ldr.h"
 
 
@@ -471,7 +471,7 @@ static void rtldrPEFreePart(PRTLDRMODPE pThis, const void *pvBits, void const *p
 }
 
 
-/** @copydoc RTLDROPS::pfnGetImageSize */
+/** @interface_method_impl{RTLDROPS,pfnGetImageSize} */
 static DECLCALLBACK(size_t) rtldrPEGetImageSize(PRTLDRMODINTERNAL pMod)
 {
     PRTLDRMODPE pModPe = (PRTLDRMODPE)pMod;
@@ -568,7 +568,7 @@ static int rtldrPEReadBits(PRTLDRMODPE pModPe)
 }
 
 
-/** @copydoc RTLDROPS::pfnGetBits */
+/** @interface_method_impl{RTLDROPS,pfnGetBits} */
 static DECLCALLBACK(int) rtldrPEGetBits(PRTLDRMODINTERNAL pMod, void *pvBits, RTUINTPTR BaseAddress, PFNRTLDRIMPORT pfnGetImport, void *pvUser)
 {
     PRTLDRMODPE pModPe = (PRTLDRMODPE)pMod;
@@ -599,6 +599,20 @@ static DECLCALLBACK(int) rtldrPEGetBits(PRTLDRMODINTERNAL pMod, void *pvBits, RT
     }
     return rc;
 }
+
+
+/* The image_thunk_data32/64 structures are not very helpful except for getting RSI. keep them around till all the code has been converted. */
+typedef struct _IMAGE_THUNK_DATA32
+{
+    union
+    {
+        uint32_t  ForwarderString;
+        uint32_t  Function;
+        uint32_t  Ordinal;
+        uint32_t  AddressOfData;
+    } u1;
+} IMAGE_THUNK_DATA32;
+typedef IMAGE_THUNK_DATA32 *PIMAGE_THUNK_DATA32;
 
 
 /** @copydoc RTLDROPSPE::pfnResolveImports */
@@ -676,6 +690,20 @@ static DECLCALLBACK(int) rtldrPEResolveImports32(PRTLDRMODPE pModPe, const void 
 
     return rc;
 }
+
+
+/* The image_thunk_data32/64 structures are not very helpful except for getting RSI. keep them around till all the code has been converted. */
+typedef struct _IMAGE_THUNK_DATA64
+{
+    union
+    {
+        uint64_t  ForwarderString;
+        uint64_t  Function;
+        uint64_t  Ordinal;
+        uint64_t  AddressOfData;
+    } u1;
+} IMAGE_THUNK_DATA64;
+typedef IMAGE_THUNK_DATA64 *PIMAGE_THUNK_DATA64;
 
 
 /** @copydoc RTLDROPSPE::pfnResolveImports */
@@ -876,7 +904,7 @@ static int rtldrPEApplyFixups(PRTLDRMODPE pModPe, const void *pvBitsR, void *pvB
 }
 
 
-/** @copydoc RTLDROPS::pfnRelocate. */
+/** @interface_method_impl{RTLDROPS,pfnRelocate} */
 static DECLCALLBACK(int) rtldrPERelocate(PRTLDRMODINTERNAL pMod, void *pvBits, RTUINTPTR NewBaseAddress, RTUINTPTR OldBaseAddress,
                                          PFNRTLDRIMPORT pfnGetImport, void *pvUser)
 {
@@ -1010,7 +1038,7 @@ static int rtLdrPE_ExportToRva(PRTLDRMODPE pModPe, uint32_t iOrdinal, const char
 }
 
 
-/** @copydoc RTLDROPS::pfnGetSymbolEx. */
+/** @interface_method_impl{RTLDROPS,pfnGetSymbolEx} */
 static DECLCALLBACK(int) rtldrPEGetSymbolEx(PRTLDRMODINTERNAL pMod, const void *pvBits, RTUINTPTR BaseAddress,
                                             uint32_t iOrdinal, const char *pszSymbol, RTUINTPTR *pValue)
 {
@@ -1036,7 +1064,7 @@ static DECLCALLBACK(int) rtldrPEGetSymbolEx(PRTLDRMODINTERNAL pMod, const void *
 }
 
 
-/** @copydoc RTLDROPS::pfnQueryForwarderInfo. */
+/** @interface_method_impl{RTLDROPS,pfnQueryForwarderInfo} */
 static DECLCALLBACK(int) rtldrPE_QueryForwarderInfo(PRTLDRMODINTERNAL pMod, const void *pvBits,  uint32_t iOrdinal,
                                                     const char *pszSymbol, PRTLDRIMPORTINFO pInfo, size_t cbInfo)
 {
@@ -1263,7 +1291,7 @@ static int rtldrPEEnumSymbolsSlow(PRTLDRMODPE pThis, unsigned fFlags, RTUINTPTR 
 }
 
 
-/** @copydoc RTLDROPS::pfnEnumSymbols */
+/** @interface_method_impl{RTLDROPS,pfnEnumSymbols} */
 static DECLCALLBACK(int) rtldrPEEnumSymbols(PRTLDRMODINTERNAL pMod, unsigned fFlags, const void *pvBits, RTUINTPTR BaseAddress,
                                             PFNRTLDRENUMSYMS pfnCallback, void *pvUser)
 {
@@ -1368,7 +1396,7 @@ static DECLCALLBACK(int) rtldrPEEnumSymbols(PRTLDRMODINTERNAL pMod, unsigned fFl
 }
 
 
-/** @copydoc RTLDROPS::pfnEnumDbgInfo. */
+/** @interface_method_impl{RTLDROPS,pfnEnumDbgInfo} */
 static DECLCALLBACK(int) rtldrPE_EnumDbgInfo(PRTLDRMODINTERNAL pMod, const void *pvBits,
                                              PFNRTLDRENUMDBG pfnCallback, void *pvUser)
 {
@@ -1557,7 +1585,7 @@ static DECLCALLBACK(int) rtldrPE_EnumDbgInfo(PRTLDRMODINTERNAL pMod, const void 
 }
 
 
-/** @copydoc RTLDROPS::pfnEnumSegments. */
+/** @interface_method_impl{RTLDROPS,pfnEnumSegments} */
 static DECLCALLBACK(int) rtldrPE_EnumSegments(PRTLDRMODINTERNAL pMod, PFNRTLDRENUMSEGS pfnCallback, void *pvUser)
 {
     PRTLDRMODPE pModPe = (PRTLDRMODPE)pMod;
@@ -1649,7 +1677,7 @@ static DECLCALLBACK(int) rtldrPE_EnumSegments(PRTLDRMODINTERNAL pMod, PFNRTLDREN
 }
 
 
-/** @copydoc RTLDROPS::pfnLinkAddressToSegOffset. */
+/** @interface_method_impl{RTLDROPS,pfnLinkAddressToSegOffset} */
 static DECLCALLBACK(int) rtldrPE_LinkAddressToSegOffset(PRTLDRMODINTERNAL pMod, RTLDRADDR LinkAddress,
                                                         uint32_t *piSeg, PRTLDRADDR poffSeg)
 {
@@ -1689,7 +1717,7 @@ static DECLCALLBACK(int) rtldrPE_LinkAddressToSegOffset(PRTLDRMODINTERNAL pMod, 
 }
 
 
-/** @copydoc RTLDROPS::pfnLinkAddressToRva. */
+/** @interface_method_impl{RTLDROPS,pfnLinkAddressToRva} */
 static DECLCALLBACK(int) rtldrPE_LinkAddressToRva(PRTLDRMODINTERNAL pMod, RTLDRADDR LinkAddress, PRTLDRADDR pRva)
 {
     PRTLDRMODPE pModPe = (PRTLDRMODPE)pMod;
@@ -1703,7 +1731,7 @@ static DECLCALLBACK(int) rtldrPE_LinkAddressToRva(PRTLDRMODINTERNAL pMod, RTLDRA
 }
 
 
-/** @copydoc RTLDROPS::pfnSegOffsetToRva. */
+/** @interface_method_impl{RTLDROPS,pfnSegOffsetToRva} */
 static DECLCALLBACK(int) rtldrPE_SegOffsetToRva(PRTLDRMODINTERNAL pMod, uint32_t iSeg, RTLDRADDR offSeg,
                                                 PRTLDRADDR pRva)
 {
@@ -1723,7 +1751,7 @@ static DECLCALLBACK(int) rtldrPE_SegOffsetToRva(PRTLDRMODINTERNAL pMod, uint32_t
 }
 
 
-/** @copydoc RTLDROPS::pfnRvaToSegOffset. */
+/** @interface_method_impl{RTLDROPS,pfnRvaToSegOffset} */
 static DECLCALLBACK(int) rtldrPE_RvaToSegOffset(PRTLDRMODINTERNAL pMod, RTLDRADDR Rva,
                                                 uint32_t *piSeg, PRTLDRADDR poffSeg)
 {
@@ -2775,7 +2803,7 @@ static DECLCALLBACK(int) rtldrPE_HashImage(PRTLDRMODINTERNAL pMod, RTDIGESTTYPE 
 }
 
 
-/** @copydoc RTLDROPS::pfnDone */
+/** @interface_method_impl{RTLDROPS,pfnDone}   */
 static DECLCALLBACK(int) rtldrPEDone(PRTLDRMODINTERNAL pMod)
 {
     PRTLDRMODPE pModPe = (PRTLDRMODPE)pMod;
@@ -2788,7 +2816,7 @@ static DECLCALLBACK(int) rtldrPEDone(PRTLDRMODINTERNAL pMod)
 }
 
 
-/** @copydoc RTLDROPS::pfnClose */
+/** @interface_method_impl{RTLDROPS,pfnClose}  */
 static DECLCALLBACK(int) rtldrPEClose(PRTLDRMODINTERNAL pMod)
 {
     PRTLDRMODPE pModPe = (PRTLDRMODPE)pMod;
@@ -2959,6 +2987,44 @@ static void rtldrPEConvert32BitLoadConfigTo64Bit(PIMAGE_LOAD_CONFIG_DIRECTORY64 
     /* the rest is equal. */
     Assert(     RT_OFFSETOF(IMAGE_LOAD_CONFIG_DIRECTORY32, DeCommitFreeBlockThreshold)
            ==   RT_OFFSETOF(IMAGE_LOAD_CONFIG_DIRECTORY64, DeCommitFreeBlockThreshold));
+}
+
+
+/**
+ * Translate the PE/COFF machine name to a string.
+ *
+ * @returns Name string (read-only).
+ * @param   uMachine            The PE/COFF machine.
+ */
+static const char *rtldrPEGetArchName(uint16_t uMachine)
+{
+    switch (uMachine)
+    {
+        case IMAGE_FILE_MACHINE_I386:           return "X86_32";
+        case IMAGE_FILE_MACHINE_AMD64:          return "AMD64";
+
+        case IMAGE_FILE_MACHINE_UNKNOWN:        return "UNKNOWN";
+        case IMAGE_FILE_MACHINE_AM33:           return "AM33";
+        case IMAGE_FILE_MACHINE_ARM:            return "ARM";
+        case IMAGE_FILE_MACHINE_THUMB:          return "THUMB";
+        case IMAGE_FILE_MACHINE_ARMNT:          return "ARMNT";
+        case IMAGE_FILE_MACHINE_ARM64:          return "ARM64";
+        case IMAGE_FILE_MACHINE_EBC:            return "EBC";
+        case IMAGE_FILE_MACHINE_IA64:           return "IA64";
+        case IMAGE_FILE_MACHINE_M32R:           return "M32R";
+        case IMAGE_FILE_MACHINE_MIPS16:         return "MIPS16";
+        case IMAGE_FILE_MACHINE_MIPSFPU:        return "MIPSFPU";
+        case IMAGE_FILE_MACHINE_MIPSFPU16:      return "MIPSFPU16";
+        case IMAGE_FILE_MACHINE_WCEMIPSV2:      return "WCEMIPSV2";
+        case IMAGE_FILE_MACHINE_POWERPC:        return "POWERPC";
+        case IMAGE_FILE_MACHINE_POWERPCFP:      return "POWERPCFP";
+        case IMAGE_FILE_MACHINE_R4000:          return "R4000";
+        case IMAGE_FILE_MACHINE_SH3:            return "SH3";
+        case IMAGE_FILE_MACHINE_SH3DSP:         return "SH3DSP";
+        case IMAGE_FILE_MACHINE_SH4:            return "SH4";
+        case IMAGE_FILE_MACHINE_SH5:            return "SH5";
+        default:                                return "UnknownMachine";
+    }
 }
 
 
@@ -3658,7 +3724,8 @@ int rtldrPEOpen(PRTLDRREADER pReader, uint32_t fFlags, RTLDRARCH enmArch, RTFOFF
              && !(fFlags & RTLDR_O_WHATEVER_ARCH)) )
     {
         if (!(fFlags & RTLDR_O_IGNORE_ARCH_IF_NO_CODE))
-            return VERR_LDR_ARCH_MISMATCH;
+            return RTErrInfoSetF(pErrInfo, VERR_LDR_ARCH_MISMATCH, "Image is for '%s', only accepting images for '%s'.",
+                                 rtldrPEGetArchName(FileHdr.Machine), rtLdrArchName(enmArch));
         fArchNoCodeCheckPending = true;
     }
 
@@ -3675,7 +3742,9 @@ int rtldrPEOpen(PRTLDRREADER pReader, uint32_t fFlags, RTLDRARCH enmArch, RTFOFF
     if (RT_FAILURE(rc))
         return rc;
     if (fArchNoCodeCheckPending && OptHdr.SizeOfCode != 0)
-        return VERR_LDR_ARCH_MISMATCH;
+        return RTErrInfoSetF(pErrInfo, VERR_LDR_ARCH_MISMATCH,
+                             "Image is for '%s' and contains code (%#x), only accepting images for '%s' with code.",
+                             rtldrPEGetArchName(FileHdr.Machine), OptHdr.SizeOfCode, rtLdrArchName(enmArch));
 
     /*
      * Read and validate section headers.

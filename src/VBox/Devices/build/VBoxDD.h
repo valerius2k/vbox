@@ -75,6 +75,9 @@ extern const PDMDEVREG g_DevicePciIch9Bridge;
 extern const PDMDEVREG g_DeviceLsiLogicSCSI;
 extern const PDMDEVREG g_DeviceLsiLogicSAS;
 #endif
+#ifdef VBOX_WITH_NVME_IMPL
+extern const PDMDEVREG g_DeviceNVMe;
+#endif
 #ifdef VBOX_WITH_EFI
 extern const PDMDEVREG g_DeviceEFI;
 #endif
@@ -142,6 +145,7 @@ extern const PDMDRVREG g_DrvHostWebcam;
 extern const PDMDRVREG g_DrvChar;
 extern const PDMDRVREG g_DrvNamedPipe;
 extern const PDMDRVREG g_DrvTCP;
+extern const PDMDRVREG g_DrvUDP;
 extern const PDMDRVREG g_DrvRawFile;
 extern const PDMDRVREG g_DrvHostParallel;
 extern const PDMDRVREG g_DrvHostSerial;

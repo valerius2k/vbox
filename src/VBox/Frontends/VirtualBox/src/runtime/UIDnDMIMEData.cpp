@@ -48,7 +48,7 @@ UIDnDMIMEData::UIDnDMIMEData(UIDnDHandler *pDnDHandler,
 #ifdef DEBUG
     LogFlowFunc(("Number of formats: %d\n", m_lstFormats.size()));
     for (int i = 0; i < m_lstFormats.size(); i++)
-        LogFlowFunc(("\tFormat %d: %s\n", i, m_lstFormats.at(i).toAscii().constData()));
+        LogFlowFunc(("\tFormat %d: %s\n", i, m_lstFormats.at(i).toUtf8().constData()));
 #endif
 }
 
@@ -57,7 +57,7 @@ QStringList UIDnDMIMEData::formats(void) const
     LogFlowFuncEnter();
 #ifdef DEBUG
     for (int i = 0; i < m_lstFormats.size(); i++)
-        LogFlowFunc(("\tFormat %d: %s\n", i, m_lstFormats.at(i).toAscii().constData()));
+        LogFlowFunc(("\tFormat %d: %s\n", i, m_lstFormats.at(i).toUtf8().constData()));
 #endif
     return m_lstFormats;
 }
@@ -108,7 +108,7 @@ QVariant UIDnDMIMEData::retrieveData(const QString &strMIMEType, QVariant::Type 
     rc = VERR_NOT_IMPLEMENTED;
 
     /* Let the user know. */
-    LogRel(("Drag and drop support for OS X is disabled in this version."));
+    LogRel(("DnD: Drag and drop support for OS X is not available in this version\n"));
 # endif /* VBOX_WITH_DRAG_AND_DROP_PROMISES */
 #else /* !RT_OS_DARWIN */
     /*
@@ -119,7 +119,7 @@ QVariant UIDnDMIMEData::retrieveData(const QString &strMIMEType, QVariant::Type 
     if (m_curAction == Qt::IgnoreAction)
     {
         LogFlowFunc(("Current drop action is 0x%x, so can't drop yet\n", m_curAction));
-        rc = VERR_WRONG_ORDER;
+        rc = VERR_NOT_FOUND;
     }
 #endif
 
@@ -171,7 +171,7 @@ QVariant UIDnDMIMEData::retrieveData(const QString &strMIMEType, QVariant::Type 
         rc = VINF_SUCCESS;
 
     if (RT_FAILURE(rc))
-        LogRel(("DnD: Retrieving data failed with %Rrc\n", rc));
+        LogRel2(("DnD: Retrieving data failed with %Rrc\n", rc));
 
     return QVariant(QVariant::Invalid);
 }

@@ -63,6 +63,9 @@
 /* X11 includes: */
 # include <QX11Info>
 # include <X11/Xlib.h>
+# if QT_VERSION >= 0x050000
+#  undef Bool // Qt5 vs Xlib gift..
+# endif /* QT_VERSION >= 0x050000 */
 #endif /* Q_WS_X11 */
 
 
@@ -557,6 +560,11 @@ HRESULT UIFrameBufferPrivate::init(UIMachineView *pMachineView)
 
     /* Cache window ID: */
     m_iWinId = (m_pMachineView && m_pMachineView->viewport()) ? (LONG64)m_pMachineView->viewport()->winId() : 0;
+
+#ifdef Q_WS_X11
+    /* Sync Qt and X11 Server (see xTracker #7547). */
+    XSync(QX11Info::display(), false);
+#endif
 
     /* Assign display: */
     m_display = m_pMachineView->uisession()->display();

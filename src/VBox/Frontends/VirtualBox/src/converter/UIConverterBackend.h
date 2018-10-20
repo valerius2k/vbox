@@ -86,6 +86,7 @@ template<> bool canConvert<UIExtraDataMetaDefs::MenuWindowActionType>();
 #endif /* Q_WS_MAC */
 template<> bool canConvert<UIVisualStateType>();
 template<> bool canConvert<DetailsElementType>();
+template<> bool canConvert<InformationElementType>();
 template<> bool canConvert<PreviewUpdateIntervalType>();
 template<> bool canConvert<GlobalSettingsPageType>();
 template<> bool canConvert<MachineSettingsPageType>();
@@ -158,6 +159,7 @@ template<> QString toString(const DetailsElementType &detailsElementType);
 template<> DetailsElementType fromString<DetailsElementType>(const QString &strDetailsElementType);
 template<> QString toInternalString(const DetailsElementType &detailsElementType);
 template<> DetailsElementType fromInternalString<DetailsElementType>(const QString &strDetailsElementType);
+template<> QIcon toIcon(const DetailsElementType &detailsElementType);
 template<> QString toInternalString(const PreviewUpdateIntervalType &previewUpdateIntervalType);
 template<> PreviewUpdateIntervalType fromInternalString<PreviewUpdateIntervalType>(const QString &strPreviewUpdateIntervalType);
 template<> int toInternalInteger(const PreviewUpdateIntervalType &previewUpdateIntervalType);
@@ -187,6 +189,11 @@ template<> HiDPIOptimizationType fromInternalString<HiDPIOptimizationType>(const
 template<> QString toInternalString(const MiniToolbarAlignment &miniToolbarAlignment);
 template<> MiniToolbarAlignment fromInternalString<MiniToolbarAlignment>(const QString &strMiniToolbarAlignment);
 #endif /* !Q_WS_MAC */
+template<> QString toString(const InformationElementType &informationElementType);
+template<> InformationElementType fromString<InformationElementType>(const QString &strInformationElementType);
+template<> QString toInternalString(const InformationElementType &informationElementType);
+template<> InformationElementType fromInternalString<InformationElementType>(const QString &strInformationElementType);
+template<> QIcon toIcon(const InformationElementType &informationElementType);
 
 /* Declare COM conversion specializations: */
 template<> QColor toColor(const KMachineState &state);

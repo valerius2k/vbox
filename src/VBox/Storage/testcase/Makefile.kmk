@@ -19,21 +19,10 @@ SUB_DEPTH = ../../../..
 include $(KBUILD_PATH)/subheader.kmk
 
 #
-# vditool - useful too for manipulating VDIs, but now pretty obsolete and
-# probably will go away soon. Testcase only now.
-#
-if defined(VBOX_WITH_TESTCASES) || defined(VBOX_WITH_VDITOOL)
- PROGRAMS += vditool
-  vditool_TEMPLATE = VBOXR3TSTEXE
-  vditool_LIBS     = $(LIB_DDU)
-  vditool_SOURCES  = vditool.cpp
-endif
-
-#
 # Basic testcases for the VD code.
 #
 ifdef VBOX_WITH_TESTCASES
- PROGRAMS += tstVD tstVD-2 tstVDCopy tstVDSnap tstVDShareable
+ PROGRAMS += tstVD tstVD-2 tstVDSnap
 
  tstVD_TEMPLATE = VBOXR3TSTEXE
  tstVD_SOURCES = tstVD.cpp
@@ -42,10 +31,6 @@ ifdef VBOX_WITH_TESTCASES
  tstVD-2_TEMPLATE = VBOXR3TSTEXE
  tstVD-2_SOURCES  = tstVD-2.cpp
  tstVD-2_LIBS = $(LIB_DDU)
-
- tstVDCopy_TEMPLATE = VBOXR3TSTEXE
- tstVDCopy_SOURCES  = tstVDCopy.cpp
- tstVDCopy_LIBS = $(LIB_DDU)
 
  PROGRAMS += tstVDIo
 
@@ -114,13 +99,6 @@ ifdef VBOX_WITH_TESTCASES
   tstVDIo_LIBS += \
   	$(PATH_STAGE_LIB)/StorageDbgLib$(VBOX_SUFF_LIB)
  endif
-
- tstVDSetUuid_TEMPLATE = VBOXR3TSTEXE
- tstVDSetUuid_LIBS = $(LIB_DDU)
-
- tstVDShareable_TEMPLATE = VBOXR3TSTEXE
- tstVDShareable_LIBS = $(LIB_DDU)
- tstVDShareable_SOURCES = tstVDShareable.cpp
 
  tstVDSnap_TEMPLATE = VBOXR3TSTEXE
  tstVDSnap_LIBS = $(LIB_DDU)

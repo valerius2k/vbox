@@ -519,19 +519,6 @@ class TestResultLogic(ModelLogicBase): # pylint: disable=R0903
     ksResultsGroupingTypeTestCase   = 'ResultsGroupingTypeTestCase';
     ksResultsGroupingTypeSchedGroup = 'ResultsGroupingTypeSchedGroup';
 
-    #kdResultGroupingMapOld = {
-    #    ksResultsGroupingTypeNone:       ('TestSets',            None,                      None),
-    #    ksResultsGroupingTypeTestGroup:  ('TestSets',            'TestSets.idTestGroup',    None),
-    #    ksResultsGroupingTypeTestBox:    ('TestSets',            'TestSets.idTestBox',      None),
-    #    ksResultsGroupingTypeTestCase:   ('TestSets',            'TestSets.idTestCase',     None),
-    #    ksResultsGroupingTypeBuildRev:   ('TestSets, Builds',    'Builds.iRevision',
-    #                                      ' AND Builds.idBuild      = TestSets.idBuild'
-    #                                      ' AND Builds.tsExpire     > TestSets.tsCreated'
-    #                                      ' AND Builds.tsEffective <= TestSets.tsCreated' ),
-    #    ksResultsGroupingTypeSchedGroup: ('TestSets, TestBoxes', 'TestBoxes.idSchedGroup',
-    #                                      ' AND TestSets.idGenTestBox = TestBoxes.idGenTestBox'),
-    #};
-
     ## @name Result sorting options.
     ## @{
     ksResultsSortByRunningAndStart      = 'ResultsSortByRunningAndStart'; ##< Default
@@ -1490,7 +1477,7 @@ class TestResultLogic(ModelLogicBase): # pylint: disable=R0903
                     return 'Element %s has an invalid %s attribute value: %s.' % (sName, sAttr, dAttribs[sAttr],);
 
         # Validate string attributes.
-        for sAttr in [ 'name', 'unit', 'text' ]:
+        for sAttr in [ 'name', 'text' ]: # 'unit' can be zero length.
             if sAttr in dAttribs and len(dAttribs[sAttr]) == 0:
                 return 'Element %s has an empty %s attribute value.' % (sName, sAttr,);
 

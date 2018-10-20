@@ -99,6 +99,10 @@
 # undef LOG_GROUP
 # include "../Storage/DevLsiLogicSCSI.cpp"
 #endif
+#ifdef VBOX_WITH_NVME_IMPL
+# undef LOG_GROUP
+# include "../Storage/DevNVMe.cpp"
+#endif
 
 #ifdef VBOX_WITH_PCI_PASSTHROUGH_IMPL
 # undef LOG_GROUP
@@ -305,6 +309,7 @@ int main()
 #  endif
 # endif
 # ifdef VBOX_WITH_XHCI_IMPL
+    CHECK_MEMBER_ALIGNMENT(XHCI, MMIOBase, 8);
     CHECK_MEMBER_ALIGNMENT(XHCI, RootHub2, 8);
     CHECK_MEMBER_ALIGNMENT(XHCI, RootHub3, 8);
     CHECK_MEMBER_ALIGNMENT(XHCI, cmdr_dqp, 8);

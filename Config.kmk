@@ -478,8 +478,6 @@ endif
 VBOX_WITH_AHCI = 1
 # Enable the new async completion manager
 VBOX_WITH_PDM_ASYNC_COMPLETION = 1
-# Temporary switch for enabling / disabling the new USB code on Darwin.
-VBOX_WITH_NEW_USB_CODE_ON_DARWIN = 1
 ifdef VBOX_WITH_USB
  VBOX_WITH_VUSB = 1
  VBOX_WITH_XHCI_IMPL=1
@@ -551,7 +549,7 @@ if1of ($(KBUILD_TARGET).$(KBUILD_TARGET_ARCH), solaris.amd64 win.amd64)
  endif
 endif
 # Whether to generate a database of USB vendor IDs and device IDs into VBoxSVC.
-#VBOX_WITH_MAIN_USB_ID_DATABASE = 1
+VBOX_WITH_MAIN_USB_ID_DATABASE = 1
 # The recompiler.
 VBOX_WITH_REM = 1
 # Set this to prefix all C symbols in XPCOM, to avoid dynamic linking problems
@@ -659,6 +657,10 @@ if1of ($(KBUILD_TARGET), darwin linux solaris win os2)
   endif
  endif
 endif
+# Use the VRDE external authentication library from VBoxSVC
+if1of ($(KBUILD_TARGET), win)
+ VBOX_WITH_VRDEAUTH_IN_VBOXSVC = 1
+endif
 # Enables use of merge modules in the windows installer. This will increase
 # the overall installer size significantly because merge modules are not able
 # to use a common .cab file to reduce their size.
@@ -741,6 +743,9 @@ endif
 if1of ($(KBUILD_TARGET), darwin solaris)
  VBOX_WITH_NATIVE_DTRACE = 1
 endif
+# Makes it possible to run some of the testcases and tools on older
+# windows versions (only define when buildling win.x86).
+#VBOX_WITH_MORE_NT4_COMPAT_BINARIES = 1
 ## @}
 
 
@@ -1441,23 +1446,24 @@ ASTOOL = $(VBOX_ASTOOL)
 #
 INCS += $(PATH_ROOT)/include $(PATH_OUT)
 DEFS += VBOX
-DEFS.debug := DEBUG DEBUG_$(subst $(subst _, ,_),_,$(USERNAME)) DEBUG_USERNAME=$(subst $(subst _, ,_),_,$(USERNAME))
-DEFS.dbgopt  = $(DEFS.debug)
-DEFS.profile = VBOX_WITH_STATISTICS
-DEFS.strict  = RT_STRICT VBOX_STRICT
-DEFS.x86     = RT_ARCH_X86 __X86__
-DEFS.amd64   = RT_ARCH_AMD64 __AMD64__
-DEFS.darwin  = RT_OS_DARWIN __DARWIN__
-DEFS.freebsd = RT_OS_FREEBSD __FREEBSD__
-DEFS.haiku   = RT_OS_HAIKU
-DEFS.linux   = RT_OS_LINUX _FILE_OFFSET_BITS=64
-DEFS.netbsd  = RT_OS_NETBSD
-DEFS.openbsd = RT_OS_OPENBSD
-DEFS.os2     = RT_OS_OS2 __OS2__
-DEFS.solaris = RT_OS_SOLARIS _FILE_OFFSET_BITS=64
-DEFS.win     = RT_OS_WINDOWS __WIN__
-DEFS.win.x86 = __WIN32__
-DEFS.win.amd64 = __WIN64__
+DEFS.debug      := DEBUG DEBUG_$(subst $(subst _, ,_),_,$(USERNAME)) DEBUG_USERNAME=$(subst $(subst _, ,_),_,$(USERNAME))
+DEFS.dbgopt      = $(DEFS.debug)
+DEFS.profile     = VBOX_WITH_STATISTICS
+DEFS.strict      = RT_STRICT VBOX_STRICT
+DEFS.x86         = RT_ARCH_X86 __X86__
+DEFS.amd64       = RT_ARCH_AMD64 __AMD64__
+DEFS.darwin      = RT_OS_DARWIN __DARWIN__
+DEFS.freebsd     = RT_OS_FREEBSD __FREEBSD__
+DEFS.haiku       = RT_OS_HAIKU
+DEFS.linux       = RT_OS_LINUX _FILE_OFFSET_BITS=64
+DEFS.netbsd      = RT_OS_NETBSD
+DEFS.openbsd     = RT_OS_OPENBSD
+DEFS.os2         = RT_OS_OS2 __OS2__
+DEFS.os-agnostic = RT_OS_AGNOSTIC
+DEFS.solaris     = RT_OS_SOLARIS _FILE_OFFSET_BITS=64
+DEFS.win         = RT_OS_WINDOWS __WIN__
+DEFS.win.x86     = __WIN32__
+DEFS.win.amd64   = __WIN64__
 # optional defines (use environment or make commandline)
 ifdef VBOX_WITH_STATISTICS
  DEFS += VBOX_WITH_STATISTICS
@@ -1567,6 +1573,9 @@ endif
 #
 # Select the CRT type we're using with Microsoft Visual C++.
 #
+if1of ($(KBUILD_TYPE), debug dbgopt strict)
+#not yet# VBOX_WITH_DEBUG_VCC_CRT = 1
+endif
 ifdef VBOX_WITH_DEBUG_VCC_CRT
  VBOX_VCC_CRT_TYPE   = d
  VBOX_VCC_CRT_TYPE_N =
@@ -2233,9 +2242,9 @@ ifdef VBOX_WITH_CROGL
   VBOX_WITH_CRHGSMI = 1
  endif
 
- #if1of ($(KBUILD_TARGET),darwin)
- # VBOX_WITH_CR_DISPLAY_LISTS = 1
- #endif
+ if1of ($(KBUILD_TARGET),darwin)
+  VBOX_WITH_CR_DISPLAY_LISTS = 1
+ endif
 
  VBOX_PATH_CROGL_GLAPI       = $(PATH_ROOT)/src/VBox/GuestHost/OpenGL/glapi_parser
  VBOX_PATH_CROGL_GENFILES    = $(PATH_OBJ)/VBoxOGLgen
@@ -3173,19 +3182,19 @@ VBOXLNX32GUEST_SUFF_LIB = .a
 # SDKs for external libraries.
 #
 SDK_VBOX_LIBXML2          = .
-SDK_VBOX_LIBXML2_INCS   ?= $(PATH_ROOT)/src/libs/libxml2-2.6.31/include
+SDK_VBOX_LIBXML2_INCS   ?= $(PATH_ROOT)/src/libs/libxml2-2.9.2/include
 SDK_VBOX_LIBXML2_DEFS  ?= _REENTRANT
 SDK_VBOX_LIBXML2_DEFS.win += WIN32 _WINDOWS _MBCS
 # note: no linking to LIB here, we do that explicitly in src/VBox/Runtime/Makefile.kmk to link
 # libxml against VBoxRT
 
 SDK_VBOX_LIBPNG       = .
-SDK_VBOX_LIBPNG_INCS ?= $(PATH_ROOT)/src/libs/libpng-1.2.8
+SDK_VBOX_LIBPNG_INCS ?= $(PATH_ROOT)/src/libs/libpng-1.2.54
 SDK_VBOX_LIBPNG_LIBS ?= $(PATH_STAGE_LIB)/VBox-libpng$(VBOX_SUFF_LIB)
 
 SDK_VBOX_ZLIB         = .
 if1of ($(KBUILD_TARGET), os2 solaris win)
- SDK_VBOX_ZLIB_INCS  ?= $(PATH_ROOT)/src/libs/zlib-1.2.6
+ SDK_VBOX_ZLIB_INCS  ?= $(PATH_ROOT)/src/libs/zlib-1.2.8
  SDK_VBOX_ZLIB_LIBS  ?= $(PATH_STAGE_LIB)/VBox-zlib$(VBOX_SUFF_LIB)
 else
  SDK_VBOX_ZLIB_INCS  ?=
@@ -3237,12 +3246,12 @@ SDK_VBoxOpenSslExtPack_LIBS    = \
 ifdef VBOX_WITH_S3
 VBOX_WITH_LIBCURL = 1
 SDK_VBOX_LIBCURL       = .
-SDK_VBOX_LIBCURL_INCS ?= $(PATH_ROOT)/src/libs/curl-7.42.1/include
+SDK_VBOX_LIBCURL_INCS ?= $(PATH_ROOT)/src/libs/curl-7.45.0/include
 SDK_VBOX_LIBCURL_LIBS ?= $(PATH_STAGE_LIB)/VBox-libcurl$(VBOX_SUFF_LIB)
 SDK_VBOX_LIBCURL_DEFS ?= BUILDING_LIBCURL
 
 SDK_VBOX_LIBCURL-x86           = .
-SDK_VBOX_LIBCURL-x86_INCS     ?= $(PATH_ROOT)/src/libs/curl-7.42.1/include
+SDK_VBOX_LIBCURL-x86_INCS     ?= $(PATH_ROOT)/src/libs/curl-7.45.0/include
 SDK_VBOX_LIBCURL-x86_LIBS.x86 ?= $(PATH_STAGE_LIB)/VBox-libcurl-x86$(VBOX_SUFF_LIB)
 SDK_VBOX_LIBCURL-x86_DEFS     ?= BUILDING_LIBCURL
 endif
@@ -3696,9 +3705,8 @@ TEMPLATE_VBOXR0DRV_CFLAGS              = -nostdinc -iwithprefix include $(VBOX_L
 	-fno-strict-aliasing -fno-common -Werror-implicit-function-declaration
 TEMPLATE_VBOXR0DRV_CFLAGS.x86          = -mpreferred-stack-boundary=2 -msoft-float
 TEMPLATE_VBOXR0DRV_CFLAGS.amd64        = -m64 -mno-red-zone -mcmodel=kernel -mno-sse -mno-mmx -mno-sse2 -mno-3dnow \
-	-fno-reorder-blocks -ffreestanding -fno-asynchronous-unwind-tables -funit-at-a-time \
-	-Wno-sign-compare -Wdeclaration-after-statement
-TEMPLATE_VBOXR0DRV_CXXFLAGS            = $(filter-out -Wstrict-prototypes -Wno-pointer-sign -ffreestanding -Wdeclaration-after-statement -Werror-implicit-function-declaration,$(TEMPLATE_VBOXR0DRV_CFLAGS) $(TEMPLATE_VBOXR0DRV_CFLAGS.$(KBUILD_TARGET_ARCH))) -fno-exceptions -fno-rtti
+	-fno-reorder-blocks -ffreestanding -fno-asynchronous-unwind-tables -funit-at-a-time -Wno-sign-compare
+TEMPLATE_VBOXR0DRV_CXXFLAGS            = $(filter-out -Wstrict-prototypes -Wno-pointer-sign -ffreestanding -Werror-implicit-function-declaration,$(TEMPLATE_VBOXR0DRV_CFLAGS) $(TEMPLATE_VBOXR0DRV_CFLAGS.$(KBUILD_TARGET_ARCH))) -fno-exceptions -fno-rtti
   ifndef VBOX_LINUX_VERSION_2_4
 # 2.6
 TEMPLATE_VBOXR0DRV_SYSSUFF             = .ko
@@ -3723,6 +3731,7 @@ endif
 ifeq ($(KBUILD_TARGET),darwin)
 TEMPLATE_VBOXR0DRV_TOOL                = GXX4MACHO
 TEMPLATE_VBOXR0DRV_DEFS               += $(VBOX_DARWIN_DEF_SDK_DEFS) KERNEL KERNEL_PRIVATE DRIVER_PRIVATE APPLE NeXT
+TEMPLATE_VBOXR0DRV_DEFS               += RTMEM_WRAP_SOME_NEW_AND_DELETE_TO_EF # RTMEM_WRAP_TO_EF_APIS - temporary...
 TEMPLATE_VBOXR0DRV_INCS               += $(VBOX_PATH_MACOSX_SDK)/System/Library/Frameworks/Kernel.framework/Headers
 ## @todo try use VBOX_GCC_PEDANTIC_CXX
 TEMPLATE_VBOXR0DRV_CXXFLAGS            = $(VBOX_DARWIN_DEF_SDK_CXXFLAGS) \
@@ -3893,7 +3902,7 @@ TEMPLATE_VBOXR0DRV_CFLAGS.x86          = -mno-sse -mno-mmx -mno-sse2 -mno-3dnow
 TEMPLATE_VBOXR0DRV_CFLAGS.x86          = -m32 -mno-sse -mno-mmx -mno-sse2 -mno-3dnow
 TEMPLATE_VBOXR0DRV_CFLAGS.amd64        = -m64 -mno-sse -mno-mmx -mno-sse2 -mno-3dnow \
 	-fno-reorder-blocks -ffreestanding -fno-asynchronous-unwind-tables -funit-at-a-time \
-	-Wno-sign-compare -Wdeclaration-after-statement
+	-Wno-sign-compare
 TEMPLATE_VBOXR0DRV_CXXFLAGS           = -fno-PIC -Wpointer-arith \
 	-Wshadow -Wuninitialized -Wunused-function -Wunused-label -Wunused-value -Wunused-variable \
 	-Wformat \
@@ -3991,6 +4000,19 @@ ifeq ($(KBUILD_TARGET),win)
  	$(PATH_TOOL_$(TEMPLATE_VBOXR3EXE_TOOL.win.amd64)_LIB)/msvcprt$(VBOX_VCC_CRT_TYPE).lib \
  	$(PATH_TOOL_$(TEMPLATE_VBOXR3EXE_TOOL.win.amd64)_LIB)/oldnames.lib
  TEMPLATE_VBOXR3EXE_POST_CMDS          = $(VBOX_SIGN_IMAGE_CMDS)
+ if defined(VBOX_WITH_MORE_NT4_COMPAT_BINARIES) && "$(KBUILD_TARGET).$(KBUILD_TARGET_ARCH)" == "win.x86"
+  TEMPLATE_VBOXR3EXE_POST_CMDS.win.x86 = $(if $(eq $(tool_do),LINK_LIBRARY),,$(VBOX_PE_SET_VERSION) $(out)$$(NLTAB)$(TEMPLATE_VBOXR3EXE_POST_CMDS))
+  TEMPLATE_VBOXR3EXE_LNK_DEPS.win.x86  = $(if $(eq $(tool_do),LINK_LIBRARY),,$(VBOX_PE_SET_VERSION))
+  TEMPLATE_VBOXR3EXE_LDFLAGS.win.x86   = \
+  	-Include:_vcc100_kernel32_fakes_cpp \
+	-Include:_vcc100_kernel32_fakes_asm
+  TEMPLATE_VBOXR3EXE_LIBS.win.x86      = \
+  	$(PATH_STAGE_LIB)/RuntimeR3VccTricks2$(VBOX_SUFF_LIB)
+  TEMPLATE_VBOXR3EXE_LIBS.x86          = \
+  	$(PATH_TOOL_$(TEMPLATE_VBOXR3EXE_TOOL.win.x86)_LIB)/oldnames.lib \
+  	$(PATH_TOOL_$(TEMPLATE_VBOXR3EXE_TOOL.win.x86)_LIB)/libcmt$(VBOX_VCC_CRT_TYPE).lib \
+  	$(PATH_TOOL_$(TEMPLATE_VBOXR3EXE_TOOL.win.x86)_LIB)/libcpmt$(VBOX_VCC_CRT_TYPE).lib
+ endif
 
 else # the gcc guys
 TEMPLATE_VBOXR3EXE_TOOL                = $(VBOX_GCC_TOOL)
@@ -4396,6 +4418,11 @@ else
  endif
 endif
 TEMPLATE_VBoxR3Tool_LIBS       = $(LIB_RUNTIME) $(TEMPLATE_VBOXR3EXE_LIBS)
+if defined(VBOX_WITH_MORE_NT4_COMPAT_BINARIES) && "$(KBUILD_TARGET).$(KBUILD_TARGET_ARCH)" == "win.x86"
+ TEMPLATE_VBoxR3Tool_LIBS.x86  = \
+ 	$(PATH_STAGE_LIB)/RuntimeR3VccTricks2$(VBOX_SUFF_LIB) \
+ 	$(PATH_TOOL_$(TEMPLATE_VBOXR3EXE_TOOL.win.x86)_LIB)/oldnames.lib
+endif
 
 #
 # Template for building R3 shared objects / DLLs with the 10.5 Mac OS X SDK.
@@ -4463,6 +4490,12 @@ endif
 if "$(KBUILD_TARGET)" == "win" && defined(VBOX_SIGNING_MODE)
  TEMPLATE_VBOXR3TSTEXE_POST_CMDS =
  TEMPLATE_VBOXR3TSTEXE_LDFLAGS = $(filter-out -IntegrityCheck, $(TEMPLATE_VBOXR3EXE_LDFLAGS))
+endif
+if defined(VBOX_WITH_MORE_NT4_COMPAT_BINARIES) && "$(KBUILD_TARGET).$(KBUILD_TARGET_ARCH)" == "win.x86"
+ TEMPLATE_VBOXR3TSTEXE_POST_CMDS.win.x86 = $(if $(eq $(tool_do),LINK_LIBRARY),,$(VBOX_PE_SET_VERSION) $(out))
+ TEMPLATE_VBOXR3TSTEXE_LIBS.x86 = \
+ 	$(PATH_STAGE_LIB)/RuntimeR3VccTricks2$(VBOX_SUFF_LIB) \
+ 	$(PATH_TOOL_$(TEMPLATE_VBOXR3EXE_TOOL.win.x86)_LIB)/oldnames.lib
 endif
 
 #
@@ -4552,6 +4585,33 @@ TEMPLATE_VBoxR3DllNonPedantic-x86_BLD_TRG_ARCH = x86
 TEMPLATE_VBoxR3DllNonPedantic-x86_DEFS      = $(filter-out HC_ARCH_BITS%,$(TEMPLATE_VBoxR3Dll_DEFS)) \
 	HC_ARCH_BITS=32 ARCH_BITS=32
 
+
+
+#
+# Template for building libraries that are linked into VBoxRT.dll
+# and it's variations, pedantic variation.
+#
+TEMPLATE_VBoxR3RuntimeDll = For libraries that are linked into VBoxRT.
+TEMPLATE_VBoxR3RuntimeDll_EXTENDS = VBoxR3Dll
+if defined(VBOX_WITH_MORE_NT4_COMPAT_BINARIES) && "$(KBUILD_TARGET).$(KBUILD_TARGET_ARCH)" == "win.x86"
+ TEMPLATE_VBoxR3RuntimeDll_CFLAGS   = $(filter-out -MD$(VBOX_VCC_CRT_TYPE), $(TEMPLATE_VBoxR3Dll_CFLAGS)) -MT$(VBOX_VCC_CRT_TYPE)
+ TEMPLATE_VBoxR3RuntimeDll_CXXFLAGS = $(filter-out -MD$(VBOX_VCC_CRT_TYPE), $(TEMPLATE_VBoxR3Dll_CXXFLAGS)) -MT$(VBOX_VCC_CRT_TYPE)
+ TEMPLATE_VBoxR3RuntimeDll_LIBS.x86 = $(filter-out $(PATH_TOOL_$(TEMPLATE_VBOXR3EXE_TOOL.win.x86)_LIB)/%, $(TEMPLATE_VBoxR3Dll_LIBS.x86)) \
+ 	$(PATH_TOOL_$(TEMPLATE_VBoxR3RuntimeDll_TOOL.win.x86)_LIB)/oldnames.lib \
+ 	$(PATH_TOOL_$(TEMPLATE_VBoxR3RuntimeDll_TOOL.win.x86)_LIB)/libcmt$(VBOX_VCC_CRT_TYPE).lib \
+ 	$(PATH_TOOL_$(TEMPLATE_VBoxR3RuntimeDll_TOOL.win.x86)_LIB)/libcpmt$(VBOX_VCC_CRT_TYPE).lib
+endif
+
+#
+# Template for building libraries that are linked into VBoxRT.dll
+# and it's variations, non-pedantic variation.
+#
+TEMPLATE_VBoxR3RuntimeDllNonPedantic = For libraries that are linked into VBoxRT, but must be excluded from -pedantic warnings.
+TEMPLATE_VBoxR3RuntimeDllNonPedantic_EXTENDS = VBoxR3DllNonPedantic
+if defined(VBOX_WITH_MORE_NT4_COMPAT_BINARIES) && $(KBUILD_TARGET_ARCH) == "x86"
+ TEMPLATE_VBoxR3RuntimeDllNonPedantic_CFLAGS   = $(filter-out -MD$(VBOX_VCC_CRT_TYPE), $(TEMPLATE_VBoxR3DllNonPedantic_CFLAGS)) -MT$(VBOX_VCC_CRT_TYPE)
+ TEMPLATE_VBoxR3RuntimeDllNonPedantic_CXXFLAGS = $(filter-out -MD$(VBOX_VCC_CRT_TYPE), $(TEMPLATE_VBoxR3DllNonPedantic_CXXFLAGS)) -MT$(VBOX_VCC_CRT_TYPE)
+endif
 
 
 #
@@ -5110,7 +5170,7 @@ ifdef VBOX_WITH_QTGUI
   VBOX_QT4_INFIX=VBox
  endif
 
- VBOX_QT4_MOD = QtCore QtGui QtNetwork $(if $(VBOX_GUI_USE_QGL),QtOpenGL,)
+ VBOX_QT4_MOD = QtCore QtGui $(if $(VBOX_GUI_USE_QGL),QtOpenGL,)
  VBOX_QT4_MOD_NAMES = $(foreach qtmod,$(VBOX_QT4_MOD),$(qtmod)$(VBOX_QT4_INFIX))
 
  # Hack LD_LIBRARY_PATH for stuff in tools.
@@ -5165,11 +5225,6 @@ ifdef VBOX_WITH_QTGUI
 	$(PATH_TOOL_$(VBOX_VCC_TOOL)_LIB)/oldnames.lib \
 	$(PATH_TOOL_$(VBOX_VCC_TOOL)_LIB)/delayimp.lib \
 	$(PATH_TOOL_$(VBOX_VCC_TOOL)_ATLMFC_LIB)/atls.lib
-  ifdef VBOX_WITH_DEBUG_VCC_CRT # VBoxCOM (static) is causing trouble of course.
-   TEMPLATE_VBOXQT4GUIEXE_LIBS += \
-	$(PATH_TOOL_$(VBOX_VCC_TOOL)_LIB)/msvcrt$(VBOX_VCC_CRT_TYPE).lib \
-	$(PATH_TOOL_$(VBOX_VCC_TOOL)_LIB)/msvcprt$(VBOX_VCC_CRT_TYPE).lib
-  endif
   TEMPLATE_VBOXQT4GUIEXE_POST_CMDS = $(VBOX_SIGN_IMAGE_CMDS)
 
  else # the gcc guys:
@@ -5263,7 +5318,7 @@ ifdef VBOX_WITH_QTGUI
 
  # Add COM/XPCOM stuff
  TEMPLATE_VBOXQT4GUIEXE_LIBS += \
-	$(PATH_STAGE_LIB)/VBoxCOM$(VBOX_SUFF_LIB)
+	$(PATH_STAGE_LIB)/VBoxCOM$(if-expr defined(VBOX_WITH_DEBUG_VCC_CRT) && $(KBUILD_TARGET) == win,-GUI,)$(VBOX_SUFF_LIB)
  ifdef VBOX_WITH_XPCOM
   ## @todo may be worth creating the VBOX_XPCOM SDK def, or just a SDK_VBOXXPCOM.
   TEMPLATE_VBOXQT4GUIEXE_DEFS += VBOX_WITH_XPCOM
@@ -5558,6 +5613,9 @@ ifeq ($(KBUILD_TARGET),win)
  # HACK ALERT! Double expansion of $$(NLTAB).
  TEMPLATE_VBOXGUESTR3EXE_POST_CMDS.win.x86  = $(if $(eq $(tool_do),LINK_LIBRARY),,$(VBOX_PE_SET_VERSION) $(out)$$(NLTAB)$(TEMPLATE_VBOXR3EXE_POST_CMDS))
  TEMPLATE_VBOXGUESTR3EXE_LNK_DEPS.win.x86   = $(if $(eq $(tool_do),LINK_LIBRARY),,$(VBOX_PE_SET_VERSION))
+ if defined(VBOX_WITH_MORE_NT4_COMPAT_BINARIES) && "$(KBUILD_TARGET).$(KBUILD_TARGET_ARCH)" == "win.x86"
+  TEMPLATE_VBOXGUESTR3EXE_LIBS.win.x86 = $(NO_SUCH_VARIABLE)# Ditch RuntimeR3VccTricks2
+ endif
 else # the gcc guys
  ifneq ($(VBOX_WITH_COMPATIBLE_LINUX_GUEST_PACKAGE),)
   ifneq ($(KBUILD_TARGET),linux)

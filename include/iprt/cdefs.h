@@ -58,6 +58,8 @@
 # define __X86__
 # define RT_ARCH_AMD64
 # define RT_ARCH_X86
+# define RT_ARCH_SPARC
+# define RT_ARCH_SPARC64
 # define IN_RING0
 # define IN_RING3
 # define IN_RC
@@ -72,7 +74,7 @@
 # define RT_LOCK_NO_STRICT
 # define RT_LOCK_STRICT_ORDER
 # define RT_LOCK_NO_STRICT_ORDER
-# define Breakpoint
+# define RT_BREAKPOINT
 # define RT_NO_DEPRECATED_MACROS
 # define RT_EXCEPTIONS_ENABLED
 # define RT_BIG_ENDIAN
@@ -80,6 +82,8 @@
 # define RT_COMPILER_GROKS_64BIT_BITFIELDS
 # define RT_COMPILER_WITH_80BIT_LONG_DOUBLE
 # define RT_NO_VISIBILITY_HIDDEN
+# define RT_GCC_SUPPORTS_VISIBILITY_HIDDEN
+# define RT_COMPILER_SUPPORTS_LAMBDA
 #endif /* DOXYGEN_RUNNING */
 
 /** @def RT_ARCH_X86
@@ -210,8 +214,10 @@
 #if !defined(ARCH_BITS) || defined(DOXYGEN_RUNNING)
 # if defined(RT_ARCH_AMD64) || defined(RT_ARCH_SPARC64)
 #  define ARCH_BITS 64
-# else
+# elif !defined(__I86__) || !defined(__WATCOMC__)
 #  define ARCH_BITS 32
+# else
+#  define ARCH_BITS 16
 # endif
 #endif
 
@@ -338,7 +344,7 @@
  * Replace: # elif defined(RT_OS_\1)\n#  define RT_OPSYS RT_OPSYS_\1
  */
 #ifndef RT_OPSYS
-# if defined(RT_OS_UNKNOWN)
+# if defined(RT_OS_UNKNOWN) || defined(DOXYGEN_RUNNING)
 #  define RT_OPSYS RT_OPSYS_UNKNOWN
 # elif defined(RT_OS_AGNOSTIC)
 #  define RT_OPSYS RT_OPSYS_AGNOSTIC
@@ -855,7 +861,9 @@
 /** @def RT_COMPILER_GROKS_64BIT_BITFIELDS
  * Macro that is defined if the compiler understands 64-bit bitfields. */
 #if !defined(RT_OS_OS2) || (!defined(__IBMC__) && !defined(__IBMCPP__))
-# define RT_COMPILER_GROKS_64BIT_BITFIELDS
+# if !defined(__WATCOMC__) /* watcom compiler doesn't grok it either. */
+#  define RT_COMPILER_GROKS_64BIT_BITFIELDS
+# endif
 #endif
 
 /** @def RT_COMPILER_WITH_80BIT_LONG_DOUBLE
@@ -974,7 +982,7 @@
  * @remarks The regparm(0) in the X86/GNUC variant deals with -mregparm=x use in
  *          the linux kernel and potentially elsewhere (3rd party).
  */
-#ifdef _MSC_VER
+#if defined(_MSC_VER) || defined(__WATCOMC__)
 # define RTCALL                 __cdecl
 #elif defined(RT_OS_OS2)
 /* GCC 4 has a bug WRT cdecl, see https://github.com/psmedley/gcc/issues/18 */
@@ -1426,8 +1434,21 @@
 #define RT_STR(str)             #str
 /** @def RT_XSTR
  * Returns the expanded argument as a string.
- * @param   str     Argument to expand and stringy. */
+ * @param   str     Argument to expand and stringify. */
 #define RT_XSTR(str)            RT_STR(str)
+
+/** @def RT_LSTR_2
+ * Helper for RT_WSTR that gets the expanded @a str.
+ * @param   str     String litteral to prefix with 'L'.  */
+#define RT_LSTR_2(str)          L##str
+/** @def RT_LSTR
+ * Returns the expanded argument with a L string prefix.
+ *
+ * Intended for converting ASCII string \#defines into wide char string
+ * litterals on Windows.
+ *
+ * @param   str     String litteral to . */
+#define RT_LSTR(str)            RT_LSTR_2(str)
 
 /** @def RT_CONCAT
  * Concatenate the expanded arguments without any extra spaces in between.
@@ -1439,7 +1460,7 @@
 /** RT_CONCAT helper, don't use.  */
 #define RT_CONCAT_HLP(a,b)          a##b
 
-/** @def RT_CONCAT
+/** @def RT_CONCAT3
  * Concatenate the expanded arguments without any extra spaces in between.
  *
  * @param   a       The 1st part.
@@ -1450,12 +1471,13 @@
 /** RT_CONCAT3 helper, don't use.  */
 #define RT_CONCAT3_HLP(a,b,c)       a##b##c
 
-/** @def RT_CONCAT
+/** @def RT_CONCAT4
  * Concatenate the expanded arguments without any extra spaces in between.
  *
  * @param   a       The 1st part.
  * @param   b       The 2nd part.
  * @param   c       The 3rd part.
+ * @param   d       The 4th part.
  */
 #define RT_CONCAT4(a,b,c,d)         RT_CONCAT4_HLP(a,b,c,d)
 /** RT_CONCAT4 helper, don't use.  */
@@ -1465,6 +1487,7 @@
  * String constant tuple - string constant, strlen(string constant).
  *
  * @param   a_szConst   String constant.
+ * @sa      RTSTRTUPLE
  */
 #define RT_STR_TUPLE(a_szConst)  a_szConst, (sizeof(a_szConst) - 1)
 
@@ -2255,6 +2278,9 @@
 #if defined(__IBMC__) || defined(__IBMCPP__)
 # define RT_BREAKPOINT()        __interrupt(3)
 #endif
+#if defined(__WATCOMC__)
+# define RT_BREAKPOINT()        _asm { int 3 }
+#endif
 #ifndef RT_BREAKPOINT
 # error "This compiler/arch is not supported!"
 #endif
@@ -2277,37 +2303,111 @@
 /** 32 K (Kilo)                   (32 678). */
 #define _32K                    0x00008000
 /** 64 K (Kilo)                   (65 536). */
-#define _64K                    0x00010000
+#if ARCH_BITS != 16
+# define _64K                   0x00010000
+#else
+# define _64K           UINT32_C(0x00010000)
+#endif
 /** 128 K (Kilo)                 (131 072). */
-#define _128K                   0x00020000
+#if ARCH_BITS != 16
+# define _128K                   0x00020000
+#else
+# define _128K          UINT32_C(0x00020000)
+#endif
 /** 256 K (Kilo)                 (262 144). */
-#define _256K                   0x00040000
+#if ARCH_BITS != 16
+# define _256K                   0x00040000
+#else
+# define _256K          UINT32_C(0x00040000)
+#endif
 /** 512 K (Kilo)                 (524 288). */
-#define _512K                   0x00080000
+#if ARCH_BITS != 16
+# define _512K                   0x00080000
+#else
+# define _512K          UINT32_C(0x00080000)
+#endif
 /** 1 M (Mega)                 (1 048 576). */
-#define _1M                     0x00100000
+#if ARCH_BITS != 16
+# define _1M                     0x00100000
+#else
+# define _1M            UINT32_C(0x00100000)
+#endif
 /** 2 M (Mega)                 (2 097 152). */
-#define _2M                     0x00200000
+#if ARCH_BITS != 16
+# define _2M                     0x00200000
+#else
+# define _2M            UINT32_C(0x00200000)
+#endif
 /** 4 M (Mega)                 (4 194 304). */
-#define _4M                     0x00400000
+#if ARCH_BITS != 16
+# define _4M                     0x00400000
+#else
+# define _4M            UINT32_C(0x00400000)
+#endif
+/** 8 M (Mega)                 (8 388 608). */
+#define _8M             UINT32_C(0x00800000)
+/** 16 M (Mega)               (16 777 216). */
+#define _16M            UINT32_C(0x01000000)
+/** 32 M (Mega)               (33 554 432). */
+#define _32M            UINT32_C(0x02000000)
+/** 64 M (Mega)               (67 108 864). */
+#define _64M            UINT32_C(0x04000000)
+/** 128 M (Mega)             (134 217 728). */
+#define _128M           UINT32_C(0x08000000)
+/** 256 M (Mega)             (268 435 456). */
+#define _256M           UINT32_C(0x10000000)
+/** 512 M (Mega)             (536 870 912). */
+#define _512M           UINT32_C(0x20000000)
 /** 1 G (Giga)             (1 073 741 824). (32-bit) */
-#define _1G                     0x40000000
+#if ARCH_BITS != 16
+# define _1G                     0x40000000
+#else
+# define _1G            UINT32_C(0x40000000)
+#endif
 /** 1 G (Giga)             (1 073 741 824). (64-bit) */
-#define _1G64                   0x40000000LL
+#if ARCH_BITS != 16
+# define _1G64                   0x40000000LL
+#else
+# define _1G64          UINT64_C(0x40000000)
+#endif
 /** 2 G (Giga)             (2 147 483 648). (32-bit) */
-#define _2G32                   0x80000000U
+#define _2G32           UINT32_C(0x80000000)
 /** 2 G (Giga)             (2 147 483 648). (64-bit) */
-#define _2G             0x0000000080000000LL
+#if ARCH_BITS != 16
+# define _2G             0x0000000080000000LL
+#else
+# define _2G    UINT64_C(0x0000000080000000)
+#endif
 /** 4 G (Giga)             (4 294 967 296). */
-#define _4G             0x0000000100000000LL
+#if ARCH_BITS != 16
+# define _4G             0x0000000100000000LL
+#else
+# define _4G    UINT64_C(0x0000000100000000)
+#endif
 /** 1 T (Tera)         (1 099 511 627 776). */
-#define _1T             0x0000010000000000LL
+#if ARCH_BITS != 16
+# define _1T             0x0000010000000000LL
+#else
+# define _1T    UINT64_C(0x0000010000000000)
+#endif
 /** 1 P (Peta)     (1 125 899 906 842 624). */
-#define _1P             0x0004000000000000LL
+#if ARCH_BITS != 16
+# define _1P             0x0004000000000000LL
+#else
+# define _1P    UINT64_C(0x0004000000000000)
+#endif
 /** 1 E (Exa)  (1 152 921 504 606 846 976). */
-#define _1E             0x1000000000000000LL
+#if ARCH_BITS != 16
+# define _1E             0x1000000000000000LL
+#else
+# define _1E    UINT64_C(0x1000000000000000)
+#endif
 /** 2 E (Exa)  (2 305 843 009 213 693 952). */
-#define _2E             0x2000000000000000ULL
+#if ARCH_BITS != 16
+# define _2E             0x2000000000000000ULL
+#else
+# define _2E    UINT64_C(0x2000000000000000)
+#endif
 /** @} */
 
 /** @defgroup grp_rt_cdefs_decimal_grouping   Decimal Constant Grouping Macros
@@ -2708,7 +2808,8 @@
  * The ASM* functions will then be implemented in external .asm files.
  */
 #if (defined(_MSC_VER) && defined(RT_ARCH_AMD64)) \
- || (!defined(RT_ARCH_AMD64) && !defined(RT_ARCH_X86))
+ || (!defined(RT_ARCH_AMD64) && !defined(RT_ARCH_X86)) \
+ || defined(__WATCOMC__)
 # define RT_INLINE_ASM_EXTERNAL 1
 #else
 # define RT_INLINE_ASM_EXTERNAL 0
@@ -2717,7 +2818,7 @@
 /** @def RT_INLINE_ASM_GNU_STYLE
  * Defined as 1 if the compiler understands GNU style inline assembly.
  */
-#if defined(_MSC_VER)
+#if defined(_MSC_VER) || defined(__WATCOMC__)
 # define RT_INLINE_ASM_GNU_STYLE 0
 #else
 # define RT_INLINE_ASM_GNU_STYLE 1
@@ -2750,6 +2851,16 @@
 # endif
 #elif defined(__GNUC__) && defined(__cplusplus)
 /* 4.5 or later, I think, if in ++11 mode... */
+#endif
+
+/** @def RT_FAR_DATA
+ * Set to 1 if we're in 16-bit mode and use far pointers.
+ */
+#if ARCH_BITS == 16 && defined(__WATCOMC__) \
+  && (defined(__COMPACT__) || defined(__LARGE__))
+# define RT_FAR_DATA 1
+#else
+# define RT_FAR_DATA 0
 #endif
 
 /** @} */
