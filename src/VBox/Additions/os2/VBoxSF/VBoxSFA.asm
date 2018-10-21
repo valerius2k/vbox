@@ -682,7 +682,8 @@ segment DATA32
 g_pfnDos16Write:
     dd  DOS16WRITE  ; flat
 
-
+GLOBALNAME g_fLog_enable
+    dd  0
 
 
 
@@ -1700,6 +1701,8 @@ VBOXSF_EP16_BEGIN FS_INIT, 'FS_INIT'
     je      .parse_error
     and     al, ~20h                    ; uppercase
 
+    cmp     al, 'D'                     ; /D - output debug messages
+    je      .debug
     cmp     al, 'V'                     ; /V - verbose
     je      .parse_verbose
     cmp     al, 'Q'                     ; /Q - quiet.
@@ -1712,6 +1715,15 @@ VBOXSF_EP16_BEGIN FS_INIT, 'FS_INIT'
 
 .parse_quiet:
     mov     byte [es:NAME(g_fVerbose)], 0
+    jmp     .parse_next
+
+.debug:
+    push    ds
+    mov     ax, DATA32 wrt FLAT
+    mov     ds, ax
+    mov     eax, NAME(g_fLog_enable wrt FLAT)
+    mov     dword [eax], 1
+    pop     ds
     jmp     .parse_next
 
 .parse_error:

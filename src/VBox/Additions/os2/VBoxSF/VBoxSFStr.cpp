@@ -50,7 +50,7 @@ PSHFLSTRING make_shflstring(const char* const s)
     int len = strlen(s);
     if (len > 0xFFFE)
     {
-        Log(("vboxsf: make_shflstring: string too long\n"));
+        log(("vboxsf: make_shflstring: string too long\n"));
         return NULL;
     }
 
@@ -107,7 +107,7 @@ PSHFLSTRING concat_cstr_shflstring(const char* const s1, PSHFLSTRING s2)
 
 PSHFLSTRING build_path(PSHFLSTRING dir, const char* const name)
 {
-    Log(("*** build_path(%p, %p)\n", dir, name));
+    log(("*** build_path(%p, %p)\n", dir, name));
     if (!dir || !name)
         return NULL;
 
@@ -148,7 +148,7 @@ APIRET APIENTRY vboxsfStrFromUtf8(char *dst, char *src,
     //                  srclen);
 
     //if (rc)
-    //    dprintf("KernStrToUcs returned %lu\n", rc);
+    //    log("KernStrToUcs returned %lu\n", rc);
     RTStrToUtf16(src, &pwsz);
 
     rc = KernStrFromUcs(0,
@@ -158,7 +158,7 @@ APIRET APIENTRY vboxsfStrFromUtf8(char *dst, char *src,
                         RTStrUniLen(src));
 
     if (rc)
-        dprintf("KernStrFromUcs returned %lu\n", rc);
+        log("KernStrFromUcs returned %lu\n", rc);
 
     RTMemFree(pwsz);
     return rc;
@@ -187,7 +187,7 @@ APIRET APIENTRY vboxsfStrToUtf8(char *dst, char *src)
                       srclen);
 
     if (rc)
-        dprintf("KernStrToUcs returned %lu\n", rc);
+        log("KernStrToUcs returned %lu\n", rc);
 
     rc = KernStrFromUcs(&uconv,
                         dst,
@@ -196,7 +196,7 @@ APIRET APIENTRY vboxsfStrToUtf8(char *dst, char *src)
                         2 * CCHMAXPATHCOMP);
 
     if (rc)
-        dprintf("KernStrFromUcs returned %lu\n", rc);
+        log("KernStrFromUcs returned %lu\n", rc);
 
     return rc;
 }

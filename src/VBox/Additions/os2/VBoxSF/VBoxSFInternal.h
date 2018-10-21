@@ -51,9 +51,7 @@
 
 #define ERROR_VOLUME_NOT_MOUNTED 0xEE00
 
-#define dprintf RTLogBackdoorPrintf
-
-#define SECTORSIZE    512
+void log(const char *fmt, ...);
 
 #pragma pack(2)
 typedef struct _FILEFNDBUF3                 /* findbuf3 */

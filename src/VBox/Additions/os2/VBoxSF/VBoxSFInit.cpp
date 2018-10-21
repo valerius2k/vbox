@@ -73,7 +73,7 @@ DECLASM(void) VBoxSFR0Init(void)
 {
     APIRET rc;
 
-    dprintf("VBoxSFR0Init: g_fpfnDevHlp=%lx u32Version=%RX32 u32Session=%RX32 pfnServiceEP=%p g_u32Info=%u (%#x)\n",
+    log("VBoxSFR0Init: g_fpfnDevHlp=%lx u32Version=%RX32 u32Session=%RX32 pfnServiceEP=%p g_u32Info=%u (%#x)\n",
          g_fpfnDevHlp, g_VBoxGuestIDC.u32Version, g_VBoxGuestIDC.u32Session, g_VBoxGuestIDC.pfnServiceEP, g_u32Info, g_u32Info);
 
     /*
@@ -109,7 +109,7 @@ DECLASM(void) VBoxSFR0Init(void)
         rc = VbglR0SfInit();
         if (RT_FAILURE(rc))
         {
-            dprintf("VBOXSF: %s: ERROR while initializing VBox subsystem (%Rrc)!\n", __FUNCTION__, rc);
+            log("VBOXSF: %s: ERROR while initializing VBox subsystem (%Rrc)!\n", __FUNCTION__, rc);
         }
 
         /* Connect the HGCM client */
@@ -117,20 +117,20 @@ DECLASM(void) VBoxSFR0Init(void)
         rc = VbglR0SfConnect(&g_clientHandle);
         if (RT_FAILURE(rc))
         {
-            dprintf("VBOXSF: %s: ERROR while connecting to host (%Rrc)!\n", __FUNCTION__, rc);
+            log("VBOXSF: %s: ERROR while connecting to host (%Rrc)!\n", __FUNCTION__, rc);
             VbglR0SfTerm();
         }
 
         rc = VbglR0SfSetUtf8(&g_clientHandle);
         if (RT_FAILURE(rc))
         {
-            dprintf("VBOXSF: VbglR0SfSetUtf8 failed. rc=%d\n", rc);
+            log("VBOXSF: VbglR0SfSetUtf8 failed. rc=%d\n", rc);
         }
 
-        dprintf("VBoxSFR0Init: completed successfully\n");
+        log("VBoxSFR0Init: completed successfully\n");
         return;
     }
     else
-        dprintf("VBoxSF: Failed to connect to VBoxGuest.sys.\n");
+        log("VBoxSF: Failed to connect to VBoxGuest.sys.\n");
 }
 

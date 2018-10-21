@@ -144,7 +144,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
 
         if (! pFindBuf->buf)
         {
-            dprintf("RTMemAlloc failed!\n");
+            log("RTMemAlloc failed!\n");
             hrc = ERROR_NOT_ENOUGH_MEMORY;
             goto FILLFINDBUFEXIT;
         }
@@ -162,7 +162,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
 
         if (rc != 0 && rc != VERR_NO_MORE_FILES)
         {
-            dprintf("VbglR0SfDirInfo failed: %d\n", rc);
+            log("VbglR0SfDirInfo failed: %d\n", rc);
             RTMemFree(pFindBuf->buf);
             hrc = vbox_err_to_os2_err(rc);
             goto FILLFINDBUFEXIT;
@@ -544,7 +544,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
                 }
 
             default:
-                dprintf("incorrect level!\n");
+                log("incorrect level!\n");
                 hrc = ERROR_INVALID_FUNCTION;
                 goto FILLFINDBUFEXIT;
         }
@@ -581,7 +581,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
     char *pwsz;
     int rc;
 
-    dprintf("FS32_FINDFIRST(%s, %x, %x, %x)\n", pszName, attr, level, flags);
+    log("FS32_FINDFIRST(%s, %x, %x, %x)\n", pszName, attr, level, flags);
 
     RT_ZERO(params);
     params.Handle = SHFL_HANDLE_NIL;
@@ -595,7 +595,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
 
     if (! pFindBuf)
     {
-        dprintf("RTMemAlloc failed!\n");
+        log("RTMemAlloc failed!\n");
         hrc = ERROR_NOT_ENOUGH_MEMORY;
         goto FS32_FINDFIRSTEXIT;
     }
@@ -612,7 +612,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
 
     if (! pDir)
     {
-        dprintf("RTMemAlloc failed!\n");
+        log("RTMemAlloc failed!\n");
         hrc = ERROR_NOT_ENOUGH_MEMORY;
         goto FS32_FINDFIRSTEXIT;
     }
@@ -636,7 +636,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
     str[lastslash - str] = '\0';
     if (*str == '\\') str++;
 
-    dprintf("str=%s\n", str);
+    log("str=%s\n", str);
 
     pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
     vboxsfStrToUtf8(pwsz, str);
@@ -666,7 +666,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
             if (p[1] == ':') p += 3;
             str = p;
 
-            dprintf("wildcard: %s\n", str);
+            log("wildcard: %s\n", str);
 
             pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
             vboxsfStrToUtf8(pwsz, str);
@@ -683,13 +683,13 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
     }
     else
     {
-        dprintf("VBOXSF: VbglR0SfCreate: %d\n", rc);
+        log("VBOXSF: VbglR0SfCreate: %d\n", rc);
         hrc = vbox_err_to_os2_err(rc);
         goto FS32_FINDFIRSTEXIT;
     }
 
 FS32_FINDFIRSTEXIT:
-    dprintf(" => %d\n", hrc);
+    log(" => %d\n", hrc);
     if (pDir)
         RTMemFree(pDir);
     return hrc;
@@ -705,7 +705,7 @@ FS32_FINDNEXT(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd, PBYTE pbData, USHORT cbData, PUS
     PVBOXSFVP pvboxsfvp;
     APIRET hrc = NO_ERROR;
 
-    dprintf("FS32_FINDNEXT(%x, %x)\n", level, flags);
+    log("FS32_FINDNEXT(%x, %x)\n", level, flags);
 
     FSH32_GETVOLPARM(pfsfsi->fsi_hVPB, &pvpfsi, &pvpfsd);
 
@@ -714,7 +714,7 @@ FS32_FINDNEXT(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd, PBYTE pbData, USHORT cbData, PUS
     hrc = FillFindBuf(pfsfsd->pFindBuf, pvboxsfvp, pbData, cbData, pcMatch, level, flags);
 
 FS32_FINDFIRSTEXIT:
-    dprintf(" => %d\n", hrc);
+    log(" => %d\n", hrc);
     return hrc;
 }
 
@@ -723,7 +723,7 @@ DECLASM(int)
 FS32_FINDCLOSE(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd)
 {
     PFINDBUF pFindBuf = pfsfsd->pFindBuf;
-    dprintf("FS32_FINDCLOSE\n");
+    log("FS32_FINDCLOSE\n");
 
     VbglR0SfClose(&g_clientHandle, &pFindBuf->map, pFindBuf->handle);
     free_shflstring(pFindBuf->path);
@@ -737,11 +737,11 @@ FS32_FINDFROMNAME(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd, PBYTE pbData, USHORT cbData,
                   USHORT level, ULONG position, PCSZ pszName, USHORT flag)
 {
     APIRET hrc;
-    dprintf("FS32_FINDFFROMNAME(%s)\n", pszName);
+    log("FS32_FINDFFROMNAME(%s)\n", pszName);
 
     hrc = FS32_FINDNEXT(pfsfsi, pfsfsd, pbData, cbData, pcMatch, level, flag);
 
-    dprintf(" => %d\n", hrc);
+    log(" => %d\n", hrc);
     return hrc;
 }
 
@@ -751,7 +751,7 @@ FS32_FINDNOTIFYFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurD
                      PUSHORT pHandle, PBYTE pbData, USHORT cbData, PUSHORT pcMatch,
                      USHORT level, USHORT flags)
 {
-    dprintf("FS32_FINDNOTIFYFIRST(%s, %x, %x, %x)\n", pszName, attr, level, flags);
+    log("FS32_FINDNOTIFYFIRST(%s, %x, %x, %x)\n", pszName, attr, level, flags);
     return ERROR_NOT_SUPPORTED;
 }
 
@@ -760,7 +760,7 @@ DECLASM(int)
 FS32_FINDNOTIFYNEXT(USHORT handle, PBYTE pbData, USHORT cbData, PUSHORT pcMatch,
                     USHORT level, ULONG timeout)
 {
-    dprintf("FS32_FINDNOTIFYNEXT(%x, %x, %lx)\n", handle, level, timeout);
+    log("FS32_FINDNOTIFYNEXT(%x, %x, %lx)\n", handle, level, timeout);
     return ERROR_NOT_SUPPORTED;
 }
 
@@ -768,6 +768,6 @@ FS32_FINDNOTIFYNEXT(USHORT handle, PBYTE pbData, USHORT cbData, PUSHORT pcMatch,
 DECLASM(int)
 FS32_FINDNOTIFYCLOSE(USHORT handle)
 {
-    dprintf("FS32_FINDNOTIFYCLOSE(%x)\n", handle);
+    log("FS32_FINDNOTIFYCLOSE(%x)\n", handle);
     return ERROR_NOT_SUPPORTED;
 }
