@@ -118,17 +118,14 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd
 {
     SHFLCREATEPARMS params = {0};
     APIRET hrc = NO_ERROR;
-    char *pszFullName;
+    char *pszFullName = NULL;
     int cbFullName;
     VBGLSFMAP map;
-    char *pwsz;
+    char *pwsz = NULL;
     PSHFLSTRING path;
-    PVPFSI pvpfsi;
-    PVPFSD pvpfsd;
-    PVBOXSFVP pvboxsfvp;
     RTTIME time;
-    FDATE d;
-    FTIME t;
+    FDATE Date;
+    FTIME Time;
     int rc;
 
     log("VBOXSF: FS32_OPENCREATE(%s, %lx, %x, %x)\n", pszName, ulOpenMode, usOpenFlags, usAttr);
@@ -161,70 +158,81 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd
         hrc = ERROR_NOT_SUPPORTED;
         goto FS32_OPENCREATEEXIT;
     }
-    else if (ulOpenMode & OPEN_ACCESS_READWRITE)
+
+    if (ulOpenMode & OPEN_ACCESS_READWRITE)
         params.CreateFlags |= SHFL_CF_ACCESS_READWRITE;
-    else if (ulOpenMode & OPEN_ACCESS_READONLY)
-        params.CreateFlags |= SHFL_CF_ACCESS_READ;
-    else if (ulOpenMode & OPEN_ACCESS_WRITEONLY)
+
+    if (ulOpenMode & OPEN_ACCESS_WRITEONLY)
         params.CreateFlags |= SHFL_CF_ACCESS_WRITE;
+    else
+        params.CreateFlags |= SHFL_CF_ACCESS_READ;
+
+    if (ulOpenMode & OPEN_SHARE_DENYNONE)
+        params.CreateFlags |= SHFL_CF_ACCESS_DENYNONE;
+    if (ulOpenMode & OPEN_SHARE_DENYREADWRITE)
+        params.CreateFlags |= SHFL_CF_ACCESS_DENYALL;
+    if (ulOpenMode & OPEN_SHARE_DENYWRITE)
+        params.CreateFlags |= SHFL_CF_ACCESS_DENYWRITE;
+    if (ulOpenMode & OPEN_SHARE_DENYREAD)
+        params.CreateFlags |= SHFL_CF_ACCESS_DENYREAD;
 
     if (usOpenFlags & OPEN_ACTION_CREATE_IF_NEW)
-    {
         params.CreateFlags |= SHFL_CF_ACT_CREATE_IF_NEW;
-        if (usOpenFlags & OPEN_ACTION_FAIL_IF_EXISTS)
-            params.CreateFlags |= SHFL_CF_ACT_FAIL_IF_EXISTS;
-        else if (usOpenFlags & OPEN_ACTION_REPLACE_IF_EXISTS)
-            params.CreateFlags |= SHFL_CF_ACT_OVERWRITE_IF_EXISTS;
-        else if (usOpenFlags & OPEN_ACTION_OPEN_IF_EXISTS)
-            params.CreateFlags |= SHFL_CF_ACT_OPEN_IF_EXISTS;
-
-        *pusAction = FILE_CREATED;
-    }
-    else if (usOpenFlags & OPEN_ACTION_FAIL_IF_NEW)
-    {
+    else
         params.CreateFlags |= SHFL_CF_ACT_FAIL_IF_NEW;
-        if (usOpenFlags & OPEN_ACTION_REPLACE_IF_EXISTS)
-        {
-            params.CreateFlags |= SHFL_CF_ACT_OVERWRITE_IF_EXISTS;
-            *pusAction = FILE_TRUNCATED;
-        }
-        else if (usOpenFlags & OPEN_ACTION_OPEN_IF_EXISTS)
-        {
-            params.CreateFlags |= SHFL_CF_ACT_OPEN_IF_EXISTS;
-            *pusAction = FILE_EXISTED;
-        }
-    }
+        
+    if (usOpenFlags & OPEN_ACTION_OPEN_IF_EXISTS)
+        params.CreateFlags |= SHFL_CF_ACT_OPEN_IF_EXISTS;
+    else
+        params.CreateFlags |= SHFL_CF_ACT_FAIL_IF_EXISTS;
+
+    if (usOpenFlags & OPEN_ACTION_REPLACE_IF_EXISTS)
+        params.CreateFlags |= SHFL_CF_ACT_REPLACE_IF_EXISTS;
     else
         params.CreateFlags |= SHFL_CF_ACCESS_APPEND;
 
-    if (ulOpenMode & OPEN_SHARE_DENYREADWRITE)
-        params.CreateFlags |= SHFL_CF_ACCESS_DENYALL;
-    else if (ulOpenMode & OPEN_SHARE_DENYWRITE)
-        params.CreateFlags |= SHFL_CF_ACCESS_DENYWRITE;
-    else if (ulOpenMode & OPEN_SHARE_DENYREAD)
-        params.CreateFlags |= SHFL_CF_ACCESS_DENYREAD;
-    else if (ulOpenMode & OPEN_SHARE_DENYNONE)
-        params.CreateFlags |= SHFL_CF_ACCESS_DENYNONE;
-
-    params.CreateFlags |= SHFL_CF_ACCESS_ATTR_READWRITE;
-
     if (usAttr & FILE_READONLY)
         params.CreateFlags &= ~SHFL_CF_ACCESS_ATTR_WRITE;
+    else
+        params.CreateFlags |= SHFL_CF_ACCESS_ATTR_READWRITE;
 
     pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
     vboxsfStrToUtf8(pwsz, (char *)pszFullName);
 
     path = make_shflstring((char *)pwsz);
-    rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
-    RTMemFree(pwsz);
-    RTMemFree(pszFullName);
 
-    if (!RT_SUCCESS(rc))
+    rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
+
+    if (params.Handle == SHFL_HANDLE_NIL)
+    {
+        log("fail\n");
+        hrc = ERROR_PATH_NOT_FOUND;
+        goto FS32_OPENCREATEEXIT;
+    }
+
+    if (! RT_SUCCESS(rc))
     {
         log("VbglR0SfCreate returned %d\n", rc);
         free_shflstring(path);
         hrc = vbox_err_to_os2_err(rc);
         goto FS32_OPENCREATEEXIT;
+    }
+
+    switch (params.Result)
+    {
+        case SHFL_FILE_EXISTS:
+            *pusAction = FILE_EXISTED;
+            break;
+
+        case SHFL_FILE_CREATED:
+            *pusAction = FILE_CREATED;
+            break;
+
+        case SHFL_FILE_REPLACED:
+            *pusAction = FILE_TRUNCATED;
+
+        default:
+            *pusAction = 0;
     }
 
     psffsd->filebuf = (PFILEBUF)RTMemAlloc(sizeof(FILEBUF));
@@ -235,8 +243,6 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd
         hrc = ERROR_NOT_ENOUGH_MEMORY;
         goto FS32_OPENCREATEEXIT;
     }
-
-    log("filebuf=%x\n", psffsd->filebuf);
 
     psffsd->filebuf->handle = params.Handle;
     psffsd->filebuf->path = path;
@@ -250,45 +256,54 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd
     /* Creation time   */
     RTTimeExplode(&time, &params.Info.BirthTime);
 
-    t.hours = time.u8Hour;
-    t.minutes = time.u8Minute;
-    t.twosecs = time.u8Second / 2;
-    d.year = time.i32Year - 1980;
-    d.month = time.u8Month;
-    d.day = time.u8MonthDay;
-    psffsi->sfi_ctime = *(PUSHORT)&t;
-    psffsi->sfi_cdate = *(PUSHORT)&d;
+    Time.hours = time.u8Hour;
+    Time.minutes = time.u8Minute;
+    Time.twosecs = time.u8Second / 2;
+    Date.year = time.i32Year - 1980;
+    Date.month = time.u8Month;
+    Date.day = time.u8MonthDay;
+    psffsi->sfi_ctime = *(PUSHORT)&Time;
+    psffsi->sfi_cdate = *(PUSHORT)&Date;
 
     /* Last access time   */
     RTTimeExplode(&time, &params.Info.AccessTime);
 
-    t.hours = time.u8Hour;
-    t.minutes = time.u8Minute;
-    t.twosecs = time.u8Second / 2;
-    d.year = time.i32Year - 1980;
-    d.month = time.u8Month;
-    d.day = time.u8MonthDay;
-    psffsi->sfi_atime = *(PUSHORT)&t;
-    psffsi->sfi_adate = *(PUSHORT)&d;
+    Time.hours = time.u8Hour;
+    Time.minutes = time.u8Minute;
+    Time.twosecs = time.u8Second / 2;
+    Date.year = time.i32Year - 1980;
+    Date.month = time.u8Month;
+    Date.day = time.u8MonthDay;
+    psffsi->sfi_atime = *(PUSHORT)&Time;
+    psffsi->sfi_adate = *(PUSHORT)&Date;
 
     /* Last write time   */
     RTTimeExplode(&time, &params.Info.ModificationTime);
 
-    t.hours = time.u8Hour;
-    t.minutes = time.u8Minute;
-    t.twosecs = time.u8Second / 2;
-    d.year = time.i32Year - 1980;
-    d.month = time.u8Month;
-    d.day = time.u8MonthDay;
-    psffsi->sfi_mtime = *(PUSHORT)&t;
-    psffsi->sfi_mdate = *(PUSHORT)&d;
+    Time.hours = time.u8Hour;
+    Time.minutes = time.u8Minute;
+    Time.twosecs = time.u8Second / 2;
+    Date.year = time.i32Year - 1980;
+    Date.month = time.u8Month;
+    Date.day = time.u8MonthDay;
+    psffsi->sfi_mtime = *(PUSHORT)&Time;
+    psffsi->sfi_mdate = *(PUSHORT)&Date;
 
-    // @todo omit ST_SCREAT | ST_PCREAT if not creating the file
-    psffsi->sfi_tstamp = ST_SCREAT | ST_PCREAT | ST_SREAD | ST_PREAD | ST_SWRITE | ST_PWRITE;
+    psffsi->sfi_tstamp = ST_SREAD | ST_PREAD | ST_SWRITE | ST_PWRITE;
+
+    if (*pusAction == FILE_CREATED)
+    {
+        psffsi->sfi_tstamp |= ST_SCREAT | ST_PCREAT;
+    }
 
     psffsi->sfi_DOSattr = VBoxToOS2Attr(params.Info.Attr.fMode);
 
 FS32_OPENCREATEEXIT:
+    if (pwsz)
+        RTMemFree(pwsz);
+    if (pszFullName)
+        RTMemFree(pszFullName);
+
     log(" => %d\n", hrc);
     return hrc;
 }
@@ -301,7 +316,6 @@ FS32_CLOSE(ULONG type, ULONG IOflag, PSFFSI psffsi, PVBOXSFFSD psffsd)
     PVPFSI pvpfsi;
     PVPFSD pvpfsd;
     PVBOXSFVP pvboxsfvp;
-    PFILEBUF filebuf = psffsd->filebuf;
     int rc;
 
     log("VBOXSF: FS32_CLOSE(%lx, %lx)\n", type, IOflag);
@@ -316,12 +330,13 @@ FS32_CLOSE(ULONG type, ULONG IOflag, PSFFSI psffsi, PVBOXSFFSD psffsd)
 
     pvboxsfvp = (PVBOXSFVP)pvpfsd;
 
-    rc = VbglR0SfClose(&g_clientHandle, &pvboxsfvp->map, filebuf->handle);
+    rc = VbglR0SfClose(&g_clientHandle, &pvboxsfvp->map, psffsd->filebuf->handle);
+
     hrc = vbox_err_to_os2_err(rc);
-    free_shflstring(filebuf->path);
-    //__asm__ __volatile__ (".byte 0xcc\n\t");
-    log("filebuf=%x\n", filebuf);
-    RTMemFree(filebuf);
+
+    free_shflstring(psffsd->filebuf->path);
+
+    RTMemFree(psffsd->filebuf);
 
 FS32_CLOSEEXIT:
     log(" => %d\n", hrc);
@@ -332,8 +347,24 @@ FS32_CLOSEEXIT:
 DECLASM(int)
 FS32_COMMIT(ULONG type, ULONG IOflag, PSFFSI psffsi, PVBOXSFFSD psffsd)
 {
+    APIRET hrc = NO_ERROR;
+    PVPFSI pvpfsi;
+    PVPFSD pvpfsd;
+    PVBOXSFVP pvboxsfvp;
+    int rc;
+
     log("VBOXSF: FS32_COMMIT(%lx, %lx)\n", type, IOflag);
-    return NO_ERROR;
+
+    FSH32_GETVOLPARM(psffsi->sfi_hVPB, &pvpfsi, &pvpfsd);
+
+    pvboxsfvp = (PVBOXSFVP)pvpfsd;
+
+    rc = VbglR0SfFlush(&g_clientHandle, &pvboxsfvp->map, psffsd->filebuf->handle);
+
+    hrc = vbox_err_to_os2_err(rc);
+
+    log(" => %d\n", hrc);
+    return hrc;
 }
 
 
@@ -1082,29 +1113,21 @@ FS32_WRITE(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOf
 
     KernCopyIn(pBuf, (char *)pvData, *pcb);
 
-    cbNewPos = psffsi->sfi_positionl + *pcb;
-
-    if (cbNewPos > psffsi->sfi_sizel)
-    {
-        rc = chsize(pvboxsfvp, psffsd, cbNewPos);
-
-        if (rc)
-        {
-            hrc = vbox_err_to_os2_err(rc);
-            goto FS32_WRITEEXIT;
-        }
-
-        psffsi->sfi_sizel = cbNewPos;
-        psffsi->sfi_size  = cbNewPos;
-    }
-
     rc = VbglR0SfWrite(&g_clientHandle, &pvboxsfvp->map, psffsd->filebuf->handle, 
                        psffsi->sfi_positionl, (uint32_t *)pcb, pBuf, false);
 
     if (RT_SUCCESS(rc))
     {
-        psffsi->sfi_positionl += *pcb;
-        psffsi->sfi_position  += *pcb;
+        cbNewPos = psffsi->sfi_positionl + *pcb;
+
+        if (cbNewPos > psffsi->sfi_sizel)
+        {
+            psffsi->sfi_sizel = cbNewPos;
+            psffsi->sfi_size  = (LONG)cbNewPos;
+        }
+
+        psffsi->sfi_positionl = cbNewPos;
+        psffsi->sfi_position  = (LONG)cbNewPos;
         psffsi->sfi_tstamp |= (ST_SWRITE | ST_PWRITE);
     }
 

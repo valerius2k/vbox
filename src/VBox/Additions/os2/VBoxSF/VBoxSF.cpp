@@ -390,6 +390,13 @@ FS32_CHDIR(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszDir, USHORT iCur
             
             rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
 
+            if (params.Handle == SHFL_HANDLE_NIL)
+            {
+                log("fail\n");
+                hrc = ERROR_PATH_NOT_FOUND;
+                goto FS32_CHDIREXIT;
+            }
+
             if (RT_SUCCESS(rc))
             {
                 pcdfsd->cwd = (PCWD)RTMemAllocZ(sizeof(CWD));
@@ -483,7 +490,7 @@ FS32_MKDIR(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
     if (params.Handle == SHFL_HANDLE_NIL)
     {
         log("fail\n");
-        hrc = vbox_err_to_os2_err(rc);
+        hrc = ERROR_PATH_NOT_FOUND;
         goto FS32_MKDIREXIT;
     }
 
@@ -569,6 +576,7 @@ FS32_MOVE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszSrc, USHORT iSrcCurDirEnd,
           PCSZ pszDst, USHORT iDstCurDirEnd, USHORT flag)
 {
     APIRET hrc = NO_ERROR;
+    SHFLCREATEPARMS params = {0};
     PSHFLSTRING oldpath = NULL, newpath = NULL;
     char *pszFullSrc = NULL;
     int cbFullSrc;
@@ -576,6 +584,7 @@ FS32_MOVE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszSrc, USHORT iSrcCurDirEnd,
     int cbFullDst;
     VBGLSFMAP map;
     char *pwszSrc = NULL, *pwszDst = NULL;
+    uint32_t flags;
     int rc;
 
     log("VBOXSF: FS32_MOVE(%s, %s, %lx)\n", pszSrc, pszDst, flag);
@@ -625,7 +634,35 @@ FS32_MOVE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszSrc, USHORT iSrcCurDirEnd,
     oldpath = make_shflstring((char *)pwszSrc);
     newpath = make_shflstring((char *)pwszDst);
 
-    rc = VbglR0SfRename(&g_clientHandle, &map, oldpath, newpath, SHFL_RENAME_FILE | SHFL_RENAME_REPLACE_IF_EXISTS);
+    params.Handle = SHFL_HANDLE_NIL;
+    params.CreateFlags = SHFL_CF_ACT_FAIL_IF_NEW;
+
+    rc = VbglR0SfCreate(&g_clientHandle, &map, oldpath, &params);
+    VbglR0SfClose(&g_clientHandle, &map, params.Handle);
+
+    if (! RT_SUCCESS(rc))
+    {
+        log("VbglR0SfCreate returned %d\n", rc);
+        hrc = ERROR_PATH_NOT_FOUND;
+        goto FS32_MOVEEXIT;
+    }
+
+    if (params.Handle == SHFL_HANDLE_NIL)
+    {
+        log("fail\n");
+        hrc = ERROR_PATH_NOT_FOUND;
+        goto FS32_MOVEEXIT;
+    }
+
+    flags = SHFL_RENAME_REPLACE_IF_EXISTS;
+
+    if (params.Info.Attr.fMode & RTFS_TYPE_DIRECTORY)
+        flags |= SHFL_RENAME_DIR;
+    else
+        flags |= SHFL_RENAME_FILE;
+
+    rc = VbglR0SfRename(&g_clientHandle, &map, oldpath, newpath, flags);
+    log("rc=%d\n", rc);
 
     hrc = vbox_err_to_os2_err(rc);
 
@@ -756,7 +793,14 @@ FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, US
 
             rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
 
-            if (!RT_SUCCESS(rc))
+            if (params.Handle == SHFL_HANDLE_NIL)
+            {
+                log("fail\n");
+                hrc = ERROR_PATH_NOT_FOUND;
+                goto FS32_FILEATTRIBUTEEXIT;
+            }
+
+            if (! RT_SUCCESS(rc))
             {
                 log("VbglR0SfCreate returned %d\n", rc);
                 hrc = vbox_err_to_os2_err(rc);
@@ -852,7 +896,7 @@ FS32_PATHINFO(USHORT flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT
     if (! RT_SUCCESS(rc))
     {
         log("VbglR0SfCreate returned %d\n", rc);
-        hrc = vbox_err_to_os2_err(rc);
+        hrc = ERROR_PATH_NOT_FOUND;
         goto FS32_PATHINFOEXIT;
     }
 
@@ -860,6 +904,13 @@ FS32_PATHINFO(USHORT flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT
     log("map=%x\n", map);
     log("params.Handle=%x\n", params.Handle);
     log("len=%x\n", len);
+
+    if (params.Handle == SHFL_HANDLE_NIL)
+    {
+        log("fail\n");
+        hrc = ERROR_PATH_NOT_FOUND;
+        goto FS32_PATHINFOEXIT;
+    }
 
     switch (flag)
     {
