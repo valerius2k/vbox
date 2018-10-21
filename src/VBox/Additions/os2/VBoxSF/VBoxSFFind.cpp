@@ -595,7 +595,6 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
 
     if (! pFindBuf)
     {
-        log("RTMemAlloc failed!\n");
         hrc = ERROR_NOT_ENOUGH_MEMORY;
         goto FS32_FINDFIRSTEXIT;
     }
@@ -612,7 +611,6 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
 
     if (! pDir)
     {
-        log("RTMemAlloc failed!\n");
         hrc = ERROR_NOT_ENOUGH_MEMORY;
         goto FS32_FINDFIRSTEXIT;
     }
@@ -639,8 +637,16 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
     log("str=%s\n", str);
 
     pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+
+    if (! pwsz)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_FINDFIRSTEXIT;
+    }
+
     vboxsfStrToUtf8(pwsz, str);
 
+    log("000\n");
     path = make_shflstring(pwsz);
     rc = VbglR0SfCreate(&g_clientHandle, &pvboxsfvp->map, path, &params);
     free_shflstring(path);
@@ -648,8 +654,10 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
 
     if (RT_SUCCESS(rc))
     {
+        log("001\n");
         if (params.Result == SHFL_FILE_EXISTS && params.Handle != SHFL_HANDLE_NIL)
         {
+            log("002\n");
             pfsfsd->pFindBuf = pFindBuf;
 
             pFindBuf->len = 16384;
@@ -669,29 +677,40 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
             log("wildcard: %s\n", str);
 
             pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+
+            if (! pwsz)
+            {
+                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                goto FS32_FINDFIRSTEXIT;
+            }
+
             vboxsfStrToUtf8(pwsz, str);
 
             pFindBuf->path = make_shflstring(pwsz);
             RTMemFree(pwsz);
+            log("003\n");
             hrc = FillFindBuf(pFindBuf, pvboxsfvp, pbData, cbData, pcMatch, level, flags);
+            log("004: hrc=%lu\n", hrc);
         }
         else
         {
             hrc = vbox_err_to_os2_err(rc);
+            log("005: hrc=%lu\n", hrc);
             goto FS32_FINDFIRSTEXIT;
         }
     }
     else
     {
-        log("VBOXSF: VbglR0SfCreate: %d\n", rc);
         hrc = vbox_err_to_os2_err(rc);
+        log("006: hrc=%lu\n", hrc);
         goto FS32_FINDFIRSTEXIT;
     }
 
 FS32_FINDFIRSTEXIT:
-    log(" => %d\n", hrc);
     if (pDir)
         RTMemFree(pDir);
+
+    log(" => %d\n", hrc);
     return hrc;
 }
 

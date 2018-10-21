@@ -161,40 +161,49 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd
 
     if (ulOpenMode & OPEN_ACCESS_READWRITE)
         params.CreateFlags |= SHFL_CF_ACCESS_READWRITE;
-
-    if (ulOpenMode & OPEN_ACCESS_WRITEONLY)
-        params.CreateFlags |= SHFL_CF_ACCESS_WRITE;
     else
-        params.CreateFlags |= SHFL_CF_ACCESS_READ;
+    {
+        if (ulOpenMode & OPEN_ACCESS_WRITEONLY)
+            params.CreateFlags |= SHFL_CF_ACCESS_WRITE;
+        else
+            params.CreateFlags |= SHFL_CF_ACCESS_READ;
+    }
 
-    if (ulOpenMode & OPEN_SHARE_DENYNONE)
-        params.CreateFlags |= SHFL_CF_ACCESS_DENYNONE;
-    if (ulOpenMode & OPEN_SHARE_DENYREADWRITE)
-        params.CreateFlags |= SHFL_CF_ACCESS_DENYALL;
-    if (ulOpenMode & OPEN_SHARE_DENYWRITE)
-        params.CreateFlags |= SHFL_CF_ACCESS_DENYWRITE;
     if (ulOpenMode & OPEN_SHARE_DENYREAD)
         params.CreateFlags |= SHFL_CF_ACCESS_DENYREAD;
+    else
+    {
+        if (ulOpenMode & OPEN_SHARE_DENYREADWRITE)
+            params.CreateFlags |= SHFL_CF_ACCESS_DENYALL;
+        else if (ulOpenMode & OPEN_SHARE_DENYWRITE)
+            params.CreateFlags |= SHFL_CF_ACCESS_DENYWRITE;
+    }
 
-    if (usOpenFlags & OPEN_ACTION_CREATE_IF_NEW)
-        params.CreateFlags |= SHFL_CF_ACT_CREATE_IF_NEW;
-    else
+    if (ulOpenMode & OPEN_SHARE_DENYNONE)
+            params.CreateFlags &= ~SHFL_CF_ACCESS_MASK_DENY;
+
+    if (! (usOpenFlags & OPEN_ACTION_CREATE_IF_NEW) )
         params.CreateFlags |= SHFL_CF_ACT_FAIL_IF_NEW;
-        
-    if (usOpenFlags & OPEN_ACTION_OPEN_IF_EXISTS)
-        params.CreateFlags |= SHFL_CF_ACT_OPEN_IF_EXISTS;
     else
+        params.CreateFlags &= ~SHFL_CF_ACT_FAIL_IF_NEW;
+        
+    if (! (usOpenFlags & OPEN_ACTION_OPEN_IF_EXISTS) )
         params.CreateFlags |= SHFL_CF_ACT_FAIL_IF_EXISTS;
+    else
+        params.CreateFlags &= ~SHFL_CF_ACT_FAIL_IF_EXISTS;
 
     if (usOpenFlags & OPEN_ACTION_REPLACE_IF_EXISTS)
         params.CreateFlags |= SHFL_CF_ACT_REPLACE_IF_EXISTS;
     else
+    {
+        params.CreateFlags &= ~SHFL_CF_ACT_REPLACE_IF_EXISTS;
         params.CreateFlags |= SHFL_CF_ACCESS_APPEND;
+    }
+
+    params.CreateFlags |= SHFL_CF_ACCESS_ATTR_READWRITE;
 
     if (usAttr & FILE_READONLY)
         params.CreateFlags &= ~SHFL_CF_ACCESS_ATTR_WRITE;
-    else
-        params.CreateFlags |= SHFL_CF_ACCESS_ATTR_READWRITE;
 
     pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
     vboxsfStrToUtf8(pwsz, (char *)pszFullName);
@@ -206,7 +215,16 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd
     if (params.Handle == SHFL_HANDLE_NIL)
     {
         log("fail\n");
-        hrc = ERROR_PATH_NOT_FOUND;
+
+        if (! (usOpenFlags & OPEN_ACTION_CREATE_IF_NEW) )
+        {
+            hrc = ERROR_OPEN_FAILED;
+        }
+        else
+        {
+            hrc = ERROR_PATH_NOT_FOUND;
+        }
+
         goto FS32_OPENCREATEEXIT;
     }
 
