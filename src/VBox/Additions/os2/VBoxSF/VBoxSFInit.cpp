@@ -85,9 +85,11 @@ DECLASM(void) VBoxSFR0Init(void)
     {
 #if 0 // ???
         int rc = RTR0Init(0);
+
         if (RT_SUCCESS(rc))
         {
             rc = VbglInitClient();
+
             if (RT_SUCCESS(rc))
             {
 #endif // ???
@@ -96,17 +98,22 @@ DECLASM(void) VBoxSFR0Init(void)
          * Lock the 32-bit segments in memory.
          */
         static KernVMLock_t s_Text32, s_Data32;
+
         rc = KernVMLock(VMDHL_LONG,
                         &_text, (uintptr_t)&_etext - (uintptr_t)&_text,
                         &s_Text32, (KernPageList_t *)-1, NULL);
+
         AssertMsg(rc == NO_ERROR, ("locking text32 failed, rc=%d\n"));
+
         rc = KernVMLock(VMDHL_LONG | VMDHL_WRITE,
                         &_data, (uintptr_t)&_end - (uintptr_t)&_data,
                         &s_Data32, (KernPageList_t *)-1, NULL);
         AssertMsg(rc == NO_ERROR, ("locking text32 failed, rc=%d\n"));
 #endif
+
         /* Initialize VBox subsystem. */
         rc = VbglR0SfInit();
+
         if (RT_FAILURE(rc))
         {
             log("VBOXSF: %s: ERROR while initializing VBox subsystem (%Rrc)!\n", __FUNCTION__, rc);
@@ -114,7 +121,9 @@ DECLASM(void) VBoxSFR0Init(void)
 
         /* Connect the HGCM client */
         RT_ZERO(g_clientHandle);
+
         rc = VbglR0SfConnect(&g_clientHandle);
+
         if (RT_FAILURE(rc))
         {
             log("VBOXSF: %s: ERROR while connecting to host (%Rrc)!\n", __FUNCTION__, rc);
@@ -122,6 +131,7 @@ DECLASM(void) VBoxSFR0Init(void)
         }
 
         rc = VbglR0SfSetUtf8(&g_clientHandle);
+
         if (RT_FAILURE(rc))
         {
             log("VBOXSF: VbglR0SfSetUtf8 failed. rc=%d\n", rc);

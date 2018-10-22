@@ -112,9 +112,9 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
 }
 
 DECLASM(int)
-FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
-                PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG ulOpenMode, USHORT usOpenFlags,
-                PUSHORT pusAction, USHORT usAttr, PBYTE pcEABuf, PUSHORT pfgenflag)
+FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
+                PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG ulOpenMode, ULONG usOpenFlags,
+                PUSHORT pusAction, ULONG usAttr, PBYTE pcEABuf, PUSHORT pfgenflag)
 {
     SHFLCREATEPARMS params = {0};
     APIRET hrc = NO_ERROR;
@@ -128,7 +128,7 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd
     FTIME Time;
     int rc;
 
-    log("VBOXSF: FS32_OPENCREATE(%s, %lx, %x, %x)\n", pszName, ulOpenMode, usOpenFlags, usAttr);
+    log("VBOXSF: FS32_OPENCREATE(%s, %lx, %lx, %lx)\n", pszName, ulOpenMode, usOpenFlags, usAttr);
 
     RT_ZERO(params);
     params.Handle = SHFL_HANDLE_NIL;
@@ -1213,29 +1213,29 @@ FS32_FILELOCKS(PSFFSI psffsi, PVBOXSFFSD psffsd, struct filelock *pUnLockRange,
 
 
 DECLASM(int)
-FS32_IOCTL(PSFFSI psffsi, PVBOXSFFSD psffsd, USHORT cat, USHORT func,
-           PVOID pParm, USHORT lenParm, PUSHORT plenParmIO,
-           PVOID pData, USHORT lenData, PUSHORT plenDataIO)
+FS32_IOCTL(PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG cat, ULONG func,
+           PVOID pParm, ULONG lenParm, PUSHORT plenParmIO,
+           PVOID pData, ULONG lenData, PUSHORT plenDataIO)
 {
-    log("VBOXSF: FS32_IOCTL(%x, %x)\n", cat, func);
+    log("VBOXSF: FS32_IOCTL(%lx, %lx)\n", cat, func);
     return ERROR_NOT_SUPPORTED;
 }
 
 
 DECLASM(int)
-FS32_FILEIO(PSFFSI psffsi, PVBOXSFFSD psffsd, PBYTE pCmdList, USHORT cbCmdList,
-            PUSHORT poError, USHORT IOflag)
+FS32_FILEIO(PSFFSI psffsi, PVBOXSFFSD psffsd, PBYTE pCmdList, ULONG cbCmdList,
+            PUSHORT poError, ULONG IOflag)
 {
-    log("VBOXSF: FS32_FILEIO(%x)\n", IOflag);
+    log("VBOXSF: FS32_FILEIO(%lx)\n", IOflag);
     return ERROR_NOT_SUPPORTED;
 }
 
 
 DECLASM(int)
-FS32_NMPIPE(PSFFSI psffsi, PVBOXSFFSD psffsd, USHORT OpType, union npoper *pOpRec,
+FS32_NMPIPE(PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG OpType, union npoper *pOpRec,
             PBYTE pData, PCSZ pszName)
 {
-    log("VBOXSF: FS32_NPIPE(%x, %s)\n", OpType, pszName);
+    log("VBOXSF: FS32_NPIPE(%lx, %s)\n", OpType, pszName);
     return ERROR_NOT_SUPPORTED;
 }
 
@@ -1243,7 +1243,7 @@ FS32_NMPIPE(PSFFSI psffsi, PVBOXSFFSD psffsd, USHORT OpType, union npoper *pOpRe
 DECLASM(int)
 FS32_VERIFYUNCNAME(ULONG flag, PCSZ pszName)
 {
-    log("VBOXSF: FS32_VERIFYUNCNAME(%x, %s)\n", flag, pszName);
+    log("VBOXSF: FS32_VERIFYUNCNAME(%lx, %s)\n", flag, pszName);
 
     if (! stricmp((char *)pszName, "\\\\vboxsvr"))
         return NO_ERROR;
@@ -1253,9 +1253,9 @@ FS32_VERIFYUNCNAME(ULONG flag, PCSZ pszName)
 
 DECLASM(int)
 FS32_OPENPAGEFILE(PULONG pFlag, PULONG pcMaxReq, PCSZ pszName, PSFFSI psffsi, PVBOXSFFSD psffsd,
-                  USHORT ulOpenMode, USHORT usOpenFlag, USHORT usAttr, ULONG Reserved)
+                  ULONG ulOpenMode, ULONG ulOpenFlag, ULONG ulAttr, ULONG Reserved)
 {
-    log("VBOXSF: FS32_OPENPAGEFILE(%s, %x, %x, %x)\n", pszName, ulOpenMode, usOpenFlag, usAttr);
+    log("VBOXSF: FS32_OPENPAGEFILE(%s, %lx, %lx, %lx)\n", pszName, ulOpenMode, ulOpenFlag, ulAttr);
     return ERROR_NOT_SUPPORTED;
 }
 
@@ -1269,9 +1269,9 @@ FS32_SETSWAP(PSFFSI psffsi, PVBOXSFFSD psffsd)
 
 
 DECLASM(int)
-FS32_ALLOCATEPAGESPACE(PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG cb, USHORT cbWantContig)
+FS32_ALLOCATEPAGESPACE(PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG cb, ULONG cbWantContig)
 {
-    log("VBOXSF: FS32_ALLOCATEPAGESPACE(%lu, %u)\n", cb, cbWantContig);
+    log("VBOXSF: FS32_ALLOCATEPAGESPACE(%lu, %lu)\n", cb, cbWantContig);
     return ERROR_NOT_SUPPORTED;
 }
 
@@ -1282,4 +1282,3 @@ FS32_DOPAGEIO(PSFFSI psffsi, PVBOXSFFSD psffsd, struct PageCmdHeader *pList)
     log("VBOXSF: FS32_DOPAGEIO\n");
     return ERROR_NOT_SUPPORTED;
 }
-

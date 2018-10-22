@@ -80,8 +80,8 @@ uint32_t OS2ToVBoxAttr(uint32_t attr)
 }
 
 APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
-                            PBYTE pbData, USHORT cbData, PUSHORT pcMatch,
-                            USHORT level, USHORT flags)
+                            PBYTE pbData, ULONG cbData, PUSHORT pcMatch,
+                            ULONG level, ULONG flags)
 {
     USHORT usEntriesWanted;
     APIRET hrc = NO_ERROR;
@@ -219,7 +219,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
         {
             case FIL_STANDARD:
                 {
-                    FILEFNDBUF3 findbuf;
+                    FILEFNDBUF findbuf;
                     char *pszFileName = (char *)file->name.String.utf8;
                     RTTIME time;
                     memset(&findbuf, 0, sizeof(findbuf));
@@ -255,7 +255,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
                     findbuf.ftimeLastWrite.hours = time.u8Hour;
                     findbuf.cbFile = (ULONG)file->Info.cbObject;
                     findbuf.cbFileAlloc = (ULONG)file->Info.cbAllocated;
-                    cbSize = sizeof(FILEFNDBUF3) - CCHMAXPATHCOMP + findbuf.cchName;
+                    cbSize = sizeof(FILEFNDBUF) - CCHMAXPATHCOMP + findbuf.cchName;
                     /* Check for file attributes */
                     if (pFindBuf->bMustAttr)
                     {
@@ -565,9 +565,9 @@ FILLFINDBUFEXIT:
 }
 
 DECLASM(int)
-FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd, USHORT attr,
-               PFSFSI pfsfsi, PVBOXFSFSD pfsfsd, PBYTE pbData, USHORT cbData, PUSHORT pcMatch,
-               USHORT level, USHORT flags)
+FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, ULONG attr,
+               PFSFSI pfsfsi, PVBOXFSFSD pfsfsd, PBYTE pbData, ULONG cbData, PUSHORT pcMatch,
+               ULONG level, ULONG flags)
 {
     SHFLCREATEPARMS params = {0};
     PFINDBUF pFindBuf;
@@ -581,7 +581,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd,
     char *pwsz;
     int rc;
 
-    log("FS32_FINDFIRST(%s, %x, %x, %x)\n", pszName, attr, level, flags);
+    log("FS32_FINDFIRST(%s, %lx, %lx, %lx)\n", pszName, attr, level, flags);
 
     RT_ZERO(params);
     params.Handle = SHFL_HANDLE_NIL;
@@ -716,15 +716,15 @@ FS32_FINDFIRSTEXIT:
 
 
 DECLASM(int)
-FS32_FINDNEXT(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd, PBYTE pbData, USHORT cbData, PUSHORT pcMatch,
-              USHORT level, USHORT flags)
+FS32_FINDNEXT(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd, PBYTE pbData, ULONG cbData, PUSHORT pcMatch,
+              ULONG level, ULONG flags)
 {
     PVPFSI pvpfsi;
     PVPFSD pvpfsd;
     PVBOXSFVP pvboxsfvp;
     APIRET hrc = NO_ERROR;
 
-    log("FS32_FINDNEXT(%x, %x)\n", level, flags);
+    log("FS32_FINDNEXT(%lx, %lx)\n", level, flags);
 
     FSH32_GETVOLPARM(pfsfsi->fsi_hVPB, &pvpfsi, &pvpfsd);
 
@@ -752,8 +752,8 @@ FS32_FINDCLOSE(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd)
 
 
 DECLASM(int)
-FS32_FINDFROMNAME(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd, PBYTE pbData, USHORT cbData, PUSHORT pcMatch,
-                  USHORT level, ULONG position, PCSZ pszName, USHORT flag)
+FS32_FINDFROMNAME(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd, PBYTE pbData, ULONG cbData, PUSHORT pcMatch,
+                  ULONG level, ULONG position, PCSZ pszName, ULONG flag)
 {
     APIRET hrc;
     log("FS32_FINDFFROMNAME(%s)\n", pszName);
@@ -766,27 +766,27 @@ FS32_FINDFROMNAME(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd, PBYTE pbData, USHORT cbData,
 
 
 DECLASM(int)
-FS32_FINDNOTIFYFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, USHORT iCurDirEnd, USHORT attr,
+FS32_FINDNOTIFYFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, ULONG attr,
                      PUSHORT pHandle, PBYTE pbData, USHORT cbData, PUSHORT pcMatch,
-                     USHORT level, USHORT flags)
+                     ULONG level, ULONG flags)
 {
-    log("FS32_FINDNOTIFYFIRST(%s, %x, %x, %x)\n", pszName, attr, level, flags);
+    log("FS32_FINDNOTIFYFIRST(%s, %lx, %lx, %lx)\n", pszName, attr, level, flags);
     return ERROR_NOT_SUPPORTED;
 }
 
 
 DECLASM(int)
-FS32_FINDNOTIFYNEXT(USHORT handle, PBYTE pbData, USHORT cbData, PUSHORT pcMatch,
-                    USHORT level, ULONG timeout)
+FS32_FINDNOTIFYNEXT(ULONG handle, PBYTE pbData, ULONG cbData, PUSHORT pcMatch,
+                    ULONG level, ULONG timeout)
 {
-    log("FS32_FINDNOTIFYNEXT(%x, %x, %lx)\n", handle, level, timeout);
+    log("FS32_FINDNOTIFYNEXT(%lx, %lx, %lx)\n", handle, level, timeout);
     return ERROR_NOT_SUPPORTED;
 }
 
 
 DECLASM(int)
-FS32_FINDNOTIFYCLOSE(USHORT handle)
+FS32_FINDNOTIFYCLOSE(ULONG handle)
 {
-    log("FS32_FINDNOTIFYCLOSE(%x)\n", handle);
+    log("FS32_FINDNOTIFYCLOSE(%lx)\n", handle);
     return ERROR_NOT_SUPPORTED;
 }

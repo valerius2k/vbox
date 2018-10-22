@@ -54,7 +54,7 @@
 void log(const char *fmt, ...);
 
 #pragma pack(2)
-typedef struct _FILEFNDBUF3                 /* findbuf3 */
+typedef struct _FILEFNDBUF                 /* findbuf */
 {
     FDATE   fdateCreation;
     FTIME   ftimeCreation;
@@ -64,9 +64,24 @@ typedef struct _FILEFNDBUF3                 /* findbuf3 */
     FTIME   ftimeLastWrite;
     ULONG   cbFile;
     ULONG   cbFileAlloc;
-    ULONG   attrFile;                    /* widened field */
+    USHORT  attrFile;
     UCHAR   cchName;
     CHAR    achName[CCHMAXPATHCOMP];
+} FILEFNDBUF;
+typedef FILEFNDBUF *PFILEFNDBUF;
+
+typedef struct _FILEFNDBUF3 {   /* findbuf3 */
+    FDATE   fdateCreation;
+    FTIME   ftimeCreation;
+    FDATE   fdateLastAccess;
+    FTIME   ftimeLastAccess;
+    FDATE   fdateLastWrite;
+    FTIME   ftimeLastWrite;
+    ULONG   cbFile;
+    ULONG   cbFileAlloc;
+    USHORT  attrFile;
+    UCHAR   cchName;
+    CHAR    achName[CCHMAXPATHCOMP]; /* initial room for zero terminator */
 } FILEFNDBUF3;
 typedef FILEFNDBUF3 *PFILEFNDBUF3;
 
@@ -96,7 +111,7 @@ typedef struct _FILEFNDBUF2    /* findbuf2 */
     FTIME  ftimeLastWrite;
     ULONG  cbFile;
     ULONG  cbFileAlloc;
-    SHORT attrFile;
+    USHORT attrFile;
     ULONG  cbList;
     UCHAR  cchName;
     CHAR   achName[CCHMAXPATHCOMP];

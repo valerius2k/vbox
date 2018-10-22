@@ -48,6 +48,7 @@ UconvObj uconv = {0};
 PSHFLSTRING make_shflstring(const char* const s)
 {
     int len = strlen(s);
+
     if (len > 0xFFFE)
     {
         log(("vboxsf: make_shflstring: string too long\n"));
@@ -55,8 +56,11 @@ PSHFLSTRING make_shflstring(const char* const s)
     }
 
     PSHFLSTRING rv = (PSHFLSTRING)RTMemAllocZ(sizeof(SHFLSTRING) + len);
-    if (!rv)
+
+    if (! rv)
+    {
         return NULL;
+    }
 
     rv->u16Length = len;
     rv->u16Size = len + 1;
@@ -72,15 +76,21 @@ void free_shflstring(PSHFLSTRING s)
 PSHFLSTRING clone_shflstring(PSHFLSTRING s)
 {
     PSHFLSTRING rv = (PSHFLSTRING)RTMemAllocZ(sizeof(SHFLSTRING) + s->u16Length);
+
     if (rv)
+    {
         memcpy(rv, s, sizeof(SHFLSTRING) + s->u16Length);
+    }
+
     return rv;
 }
 
 PSHFLSTRING concat_shflstring_cstr(PSHFLSTRING s1, const char* const s2)
 {
     size_t s2len = strlen(s2);
+
     PSHFLSTRING rv = (PSHFLSTRING)RTMemAllocZ(sizeof(SHFLSTRING) + s1->u16Length + s2len);
+
     if (rv)
     {
         memcpy(rv, s1, sizeof(SHFLSTRING) + s1->u16Length);
@@ -88,13 +98,16 @@ PSHFLSTRING concat_shflstring_cstr(PSHFLSTRING s1, const char* const s2)
         rv->u16Length += s2len;
         rv->u16Size += s2len;
     }
+
     return rv;
 }
 
 PSHFLSTRING concat_cstr_shflstring(const char* const s1, PSHFLSTRING s2)
 {
     size_t s1len = strlen(s1);
+
     PSHFLSTRING rv = (PSHFLSTRING)RTMemAllocZ(sizeof(SHFLSTRING) + s1len + s2->u16Length);
+
     if (rv)
     {
         strcpy((char *)rv->String.utf8, s1);
@@ -102,17 +115,21 @@ PSHFLSTRING concat_cstr_shflstring(const char* const s1, PSHFLSTRING s2)
         rv->u16Length = s1len + s2->u16Length;
         rv->u16Size = rv->u16Length + 1;
     }
+
     return rv;
 }
 
 PSHFLSTRING build_path(PSHFLSTRING dir, const char* const name)
 {
     log(("*** build_path(%p, %p)\n", dir, name));
+
     if (!dir || !name)
         return NULL;
 
     size_t len = dir->u16Length + strlen(name) + 1;
+
     PSHFLSTRING rv = (PSHFLSTRING)RTMemAllocZ(sizeof(SHFLSTRING) + len);
+
     if (rv)
     {
         strcpy((char *)rv->String.utf8, (char *)dir->String.utf8);
@@ -121,6 +138,7 @@ PSHFLSTRING build_path(PSHFLSTRING dir, const char* const name)
         rv->u16Length = len;
         rv->u16Size = rv->u16Length + 1;
     }
+
     return rv;
 }
 
@@ -129,7 +147,6 @@ APIRET APIENTRY vboxsfStrFromUtf8(char *dst, char *src,
 {
     APIRET  rc = NO_ERROR;
     ULONG   newlen;
-    //UniChar buf_ucs2[CCHMAXPATHCOMP];
     PRTUTF16 pwsz;
     static  char initted = 0;
 
@@ -139,16 +156,6 @@ APIRET APIENTRY vboxsfStrFromUtf8(char *dst, char *src,
         initted = 1;
     }
 
-    //memset(buf_ucs2, 0, sizeof(buf_ucs2));
-
-    //rc = KernStrToUcs(&uconv,
-    //                  buf_ucs2,
-    //                  src,
-    //                  2 * CCHMAXPATHCOMP,
-    //                  srclen);
-
-    //if (rc)
-    //    log("KernStrToUcs returned %lu\n", rc);
     RTStrToUtf16(src, &pwsz);
 
     rc = KernStrFromUcs(0,
@@ -158,9 +165,12 @@ APIRET APIENTRY vboxsfStrFromUtf8(char *dst, char *src,
                         RTStrUniLen(src));
 
     if (rc)
+    {
         log("KernStrFromUcs returned %lu\n", rc);
+    }
 
     RTMemFree(pwsz);
+
     return rc;
 }
 
@@ -187,7 +197,9 @@ APIRET APIENTRY vboxsfStrToUtf8(char *dst, char *src)
                       srclen);
 
     if (rc)
+    {
         log("KernStrToUcs returned %lu\n", rc);
+    }
 
     rc = KernStrFromUcs(&uconv,
                         dst,
@@ -196,7 +208,9 @@ APIRET APIENTRY vboxsfStrToUtf8(char *dst, char *src)
                         2 * CCHMAXPATHCOMP);
 
     if (rc)
+    {
         log("KernStrFromUcs returned %lu\n", rc);
+    }
 
     return rc;
 }
@@ -204,7 +218,9 @@ APIRET APIENTRY vboxsfStrToUtf8(char *dst, char *src)
 int tolower (int c)
 {
     if (c >= 'A' && c <= 'Z')
+    {
         return (c + ('a' - 'A'));
+    }
 
     return c;
 }
@@ -214,15 +230,21 @@ char *strncpy(char *dst, char *src, int len)
     char *ret;
 
     ret = dst;
-    for( ;len; --len ) {
+
+    for( ;len; --len )
+    {
         if( *src == '\0' ) 
             break;
+
         *dst++ = *src++;
     }
-    while( len != 0 ) {
+
+    while( len != 0 )
+    {
         *dst++ = '\0';      /* pad destination string with null chars */
         --len;
     }
+
     return( ret );
 }
 
@@ -245,32 +267,52 @@ char *strstr(const char *s1, const char *s2 )
     char *end_of_s1;
     int  s1len, s2len;
 
-    if( s2[0] == '\0' ) {
+    if( s2[0] == '\0' )
+    {
         return( (char *)s1 );
-    } else if( s2[1] == '\0' ) {
+    }
+    else if( s2[1] == '\0' )
+    {
         return( strchr( s1, s2[0] ) );
     }
+
     end_of_s1 = (char *)memchr( s1, '\0', ~0 );
     s2len = strlen( (char *)s2 );
-    for( ;; ) {
+
+    for(;;)
+    {
         s1len = end_of_s1 - s1;
+
         if( s1len < s2len )
+        {
             break;
+        }
+
         s1 = (char *)memchr( s1, *s2, s1len );  /* find start of possible match */
 
         if( s1 == 0 )
+        {
             break;
+        }
+
         if( memeq( (void *)s1, (void *)s2, s2len ) )
+        {
             return( (char *)s1 );
+        }
+
         ++s1;
     }
+
     return( 0 );
 }
 
 int stricmp( const char *s, const char *t )
 {
     for( ; tolower(*s) == tolower(*t); s++, t++ )
+    {
         if( *s == '\0' )
             return( 0 );
+    }
+
     return( tolower(*s) - tolower(*t) );
 }
