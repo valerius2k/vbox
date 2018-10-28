@@ -396,6 +396,7 @@ extern KernSelToFlat
 segment CODE16
 extern FSH_FORCENOSWAP
 extern DOS16WRITE
+extern DOS16GETINFOSEG
 extern FSH_GETVOLPARM
 extern FSH_PROBEBUF
 extern FSH_WILDMATCH
@@ -654,6 +655,10 @@ GLOBALNAME g_fVerbose
 GLOBALNAME g_u32Info
     dd 0
 
+;GLOBALNAME g_fpfnDos16GetInfoSeg
+;    dw  DOS16GETINFOSEG
+;    dw  seg DOS16GETINFOSEG
+
 ;; Far pointer to DOS16WRITE (corrected set before called).
 ; Just a 'temporary' hack to work around a wlink/nasm issue.
 GLOBALNAME g_fpfnDos16Write
@@ -680,12 +685,16 @@ GLOBALNAME g_VBoxGuestIDC
 ; This must be present, we've got fixups against it.
 segment DATA32
 g_pfnDos16Write:
-    dd  DOS16WRITE  ; flat
+    dd  DOS16WRITE       ; flat
+
+;g_pfnDos16GetInfoSeg:
+;    dd  DOS16GETINFOSEG  ; flat
 
 GLOBALNAME g_fLog_enable
     dd  0
 
-
+GLOBALNAME g_selGIS
+    dw  0
 
 
 
@@ -1773,6 +1782,20 @@ segment CODE16
     call    NAME(FS_INIT_FPUTS)
 .quiet:
 
+    ;
+    ; Get Global InfoSeg selector
+    ; APIRET  _Pascal DosGetInfoSeg(PSEL pselGlobal, PSEL pselLocal);
+    ;
+    call    NAME(FS_INIT_GET_GINFOSEG)
+    push    ds
+    push    ecx
+    mov     cx, DATA32 wrt FLAT
+    mov     ds, cx
+    mov     ecx, NAME(g_selGIS wrt FLAT)
+    mov     word [ecx], ax
+    pop     ecx
+    pop     ds
+
     ; return success.
     xor     eax, eax
 .done:
@@ -1853,6 +1876,69 @@ GLOBALNAME FS_INIT_FPUTS
     ret
 ENDPROC FS_INIT_FPUTS
 
+
+%if 1
+;;
+; Dos16GetInfoSeg wrapper.
+;
+; @param    none
+; @uses     nothing.
+; @returns  a GIS selector in ax
+GLOBALNAME FS_INIT_GET_GINFOSEG
+    push    bp
+    mov     bp, sp
+    push    es                          ; bp - 02h
+    push    ds                          ; bp - 04h
+    push    bx                          ; bp - 06h
+    push    cx                          ; bp - 08h
+    push    dx                          ; bp - 0ah
+    push    si                          ; bp - 0ch
+    push    di                          ; bp - 0eh
+
+    ; APIRET  _Pascal DosGetInfoSeg(PSEL pselGlobal, PSEL pselLocal);
+    xor     ecx, ecx
+    xor     ax, ax
+    push    ax                          ; selGlobal
+    mov     cx, sp
+    push    ax                          ; selLocal
+    mov     dx, sp
+    push    ss                          ;
+    push    cx                          ; pselGlobal
+    push    ss                          ;
+    push    dx                          ; pselLocal
+    
+%if 1 ; wlink/nasm generates a non-aliased fixup here which results in 16-bit offset with the flat 32-bit selector.
+    call far DOS16GETINFOSEG
+%else
+    ; convert flat pointer to a far pointer using the tiled algorithm.
+    mov     ax, DATA32 wrt FLAT
+    mov     ds, ax
+    mov     eax, g_pfnDos16GetInfoSeg wrt FLAT
+    movzx   eax, word [eax + 2]                     ; High word of the flat address (in DATA32).
+    shl     ax, 3
+    or      ax, 0007h
+    mov     dx, DATA16
+    mov     ds, dx
+    mov     [NAME(g_fpfnDos16GetInfoSeg) + 2], ax        ; Update the selector (in DATA16).
+    ; do the call
+    call far [NAME(g_fpfnDos16GetInfoSeg)]
+%endif
+
+    mov     esp, ecx
+    mov     ax, [esp]
+
+    lea     sp, [bp - 0eh]
+    pop     di
+    pop     si
+    pop     dx
+    pop     cx
+    pop     bx
+    pop     ds
+    pop     es
+    pop     bp
+    ret
+ENDPROC FS_INIT_GET_GINFOSEG
+%endif
 
 
 ;;

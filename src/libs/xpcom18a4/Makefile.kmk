@@ -791,7 +791,7 @@ $(evalcall VBOX_XPCOM_X86,VBox-xpcom-components)
 VBox-xpcom-threads_TEMPLATE = XPCOM
 VBox-xpcom-threads_INSTTYPE = none
 VBox-xpcom-threads_DEFS = _IMPL_NS_COM
-VBox-xpcom-threads_DEFS.os2 = OS2_PM_EVENT_QUEUES
+VBox-xpcom-threads_DEFS.os2 = # OS2_PM_EVENT_QUEUES
 VBox-xpcom-threads_SOURCES = \
 	xpcom/threads/plevent.c \
 	xpcom/threads/nsAutoLock.cpp \

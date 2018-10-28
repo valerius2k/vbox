@@ -41,6 +41,7 @@
 #include <iprt/assert.h>
 
 extern VBGLSFCLIENT g_clientHandle;
+extern PGINFOSEG g_pGIS;
 
 
 uint32_t VBoxToOS2Attr(uint32_t fMode)
@@ -61,6 +62,7 @@ uint32_t VBoxToOS2Attr(uint32_t fMode)
     return attr;
 }
 
+
 uint32_t OS2ToVBoxAttr(uint32_t attr)
 {
     uint32_t fMode = 0;
@@ -79,6 +81,20 @@ uint32_t OS2ToVBoxAttr(uint32_t attr)
     return fMode;
 }
 
+
+DECLASM(int)
+FS32_FINDCLOSE(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd)
+{
+    PFINDBUF pFindBuf = pfsfsd->pFindBuf;
+    log("FS32_FINDCLOSE\n");
+
+    VbglR0SfClose(&g_clientHandle, &pFindBuf->map, pFindBuf->handle);
+    free_shflstring(pFindBuf->path);
+    RTMemFree(pFindBuf);
+    return NO_ERROR;
+}
+
+
 APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
                             PBYTE pbData, ULONG cbData, PUSHORT pcMatch,
                             ULONG level, ULONG flags)
@@ -91,6 +107,9 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
     ULONG cbSize = 0;
     bool skip = false;
     int rc;
+
+    log("g_pGIS=%lx\n", g_pGIS);
+    log("timezone=%u minutes\n", g_pGIS->timezone);
 
     usEntriesWanted = *pcMatch;
     *pcMatch = 0;
@@ -706,9 +725,20 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
         goto FS32_FINDFIRSTEXIT;
     }
 
+    if ( (hrc == ERROR_NO_MORE_FILES ||
+          hrc == ERROR_BUFFER_OVERFLOW ||
+          hrc == ERROR_EAS_DIDNT_FIT)
+         && *pcMatch )
+        hrc = 0;
+
 FS32_FINDFIRSTEXIT:
     if (pDir)
         RTMemFree(pDir);
+
+    if (hrc && hrc != ERROR_EAS_DIDNT_FIT)
+    {
+        FS32_FINDCLOSE(pfsfsi, pfsfsd);
+    }
 
     log(" => %d\n", hrc);
     return hrc;
@@ -735,19 +765,6 @@ FS32_FINDNEXT(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd, PBYTE pbData, ULONG cbData, PUSH
 FS32_FINDFIRSTEXIT:
     log(" => %d\n", hrc);
     return hrc;
-}
-
-
-DECLASM(int)
-FS32_FINDCLOSE(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd)
-{
-    PFINDBUF pFindBuf = pfsfsd->pFindBuf;
-    log("FS32_FINDCLOSE\n");
-
-    VbglR0SfClose(&g_clientHandle, &pFindBuf->map, pFindBuf->handle);
-    free_shflstring(pFindBuf->path);
-    RTMemFree(pFindBuf);
-    return NO_ERROR;
 }
 
 

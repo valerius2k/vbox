@@ -33,6 +33,7 @@
 #define ___VBoxSFInternal_h___
 
 
+#define INCL_DOSINFOSEG
 #define INCL_BASE
 #define INCL_ERROR
 #include <os2.h>

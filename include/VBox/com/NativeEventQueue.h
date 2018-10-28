@@ -103,14 +103,14 @@ public:
     static int uninit();
     static NativeEventQueue *getMainEventQueue();
 
-#if !defined(RT_OS_WINDOWS) && !defined(RT_OS_OS2)
+#if !defined(RT_OS_WINDOWS) && !(defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES))
     already_AddRefed<nsIEventQueue> getIEventQueue()
     {
         return mEventQ.get();
     }
 #elif defined(RT_OS_WINDOWS)
     static int dispatchMessageOnWindows(MSG const *pMsg, int rc);
-#elif defined(RT_OS_OS2)
+#elif defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES)
     static int dispatchMessageOnPM(HAB hab, QMSG const *pMsg, int rc);
 #endif
 
@@ -124,7 +124,7 @@ private:
     /** Duplicated thread handle for MsgWaitForMultipleObjects. */
     HANDLE mhThread;
 
-#elif defined(RT_OS_OS2)
+#elif defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES)
 
     ULONG mThreadId;
     ULONG mHwnd = 0;
@@ -133,7 +133,7 @@ private:
     HMQ   mHmq = 0;
 
 #endif
-#if !defined(RT_OS_WINDOWS) && !defined(RT_OS_OS2)
+#if !defined(RT_OS_WINDOWS) && !(defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES))
 
     /** Whether it was created (and thus needs destroying) or if a queue already
      *  associated with the thread was used. */

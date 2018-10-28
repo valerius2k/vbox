@@ -182,23 +182,52 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     if (ulOpenMode & OPEN_SHARE_DENYNONE)
             params.CreateFlags &= ~SHFL_CF_ACCESS_MASK_DENY;
 
+    params.CreateFlags |= SHFL_CF_ACCESS_APPEND;
+
+#if 0
+    if (usOpenFlags & FILE_CREATE)
+    {
+        params.CreateFlags |= SHFL_CF_ACT_CREATE_IF_NEW;
+
+        if (usOpenFlags & FILE_TRUNCATE)
+        {
+            params.CreateFlags |= (SHFL_CF_ACT_OVERWRITE_IF_EXISTS
+                                   | SHFL_CF_ACCESS_WRITE);
+        }
+        else
+        {
+            params.CreateFlags |= SHFL_CF_ACT_OPEN_IF_EXISTS;
+        }
+    }
+    else if (usOpenFlags & FILE_OPEN)
+    {
+        params.CreateFlags |= SHFL_CF_ACT_FAIL_IF_NEW;
+
+        if (usOpenFlags & FILE_TRUNCATE)
+        {
+            params.CreateFlags |= (SHFL_CF_ACT_OVERWRITE_IF_EXISTS
+                    | SHFL_CF_ACCESS_WRITE);
+        }
+    }
+#endif
+
     if (! (usOpenFlags & OPEN_ACTION_CREATE_IF_NEW) )
         params.CreateFlags |= SHFL_CF_ACT_FAIL_IF_NEW;
-    else
-        params.CreateFlags &= ~SHFL_CF_ACT_FAIL_IF_NEW;
+    //else
+    //    params.CreateFlags &= ~SHFL_CF_ACT_FAIL_IF_NEW;
         
     if (! (usOpenFlags & OPEN_ACTION_OPEN_IF_EXISTS) )
         params.CreateFlags |= SHFL_CF_ACT_FAIL_IF_EXISTS;
-    else
-        params.CreateFlags &= ~SHFL_CF_ACT_FAIL_IF_EXISTS;
+    //else
+    //    params.CreateFlags &= ~SHFL_CF_ACT_FAIL_IF_EXISTS;
 
     if (usOpenFlags & OPEN_ACTION_REPLACE_IF_EXISTS)
-        params.CreateFlags |= SHFL_CF_ACT_REPLACE_IF_EXISTS;
-    else
-    {
-        params.CreateFlags &= ~SHFL_CF_ACT_REPLACE_IF_EXISTS;
-        params.CreateFlags |= SHFL_CF_ACCESS_APPEND;
-    }
+        params.CreateFlags |= SHFL_CF_ACT_OVERWRITE_IF_EXISTS;
+    //else
+    //{
+    //    params.CreateFlags &= ~SHFL_CF_ACT_REPLACE_IF_EXISTS;
+    //    log("no replace\n");
+    //}
 
     params.CreateFlags |= SHFL_CF_ACCESS_ATTR_READWRITE;
 
@@ -764,6 +793,10 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
 
         case 1: // set
             {
+                // Local time from UTC offset in nanoseconds
+                RTTIMESPEC delta;
+                //RTTimeSpecSetNano(&delta, );
+
                 if (!(psffsi->sfi_mode & OPEN_ACCESS_WRITEONLY) &&
                     !(psffsi->sfi_mode & OPEN_ACCESS_READWRITE))
                 {
@@ -807,6 +840,8 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             time.u8Minute = Time.minutes;
                             time.u8Hour = Time.hours;
                             RTTimeImplode(&file->Info.BirthTime, &time);
+                            //RTTimeSpecSetNano(&delta, time.);
+                            //RTTimeSpecSub(&file->Info.BirthTime, &time);
                             /* Last access time   */
                             memcpy(&Date, &filestatus.fdateLastAccess, sizeof(USHORT));
                             memcpy(&Time, &filestatus.ftimeLastAccess, sizeof(USHORT));

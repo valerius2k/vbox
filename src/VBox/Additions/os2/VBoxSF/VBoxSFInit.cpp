@@ -53,6 +53,8 @@ extern uint32_t g_u32Info;
 /* from sys0.asm and the linker/end.lib. */
 extern char _text, _etext, _data, _end;
 extern VBGLSFCLIENT g_clientHandle;
+extern USHORT    g_selGIS;
+extern PGINFOSEG g_pGIS;
 RT_C_DECLS_END
 
 
@@ -137,6 +139,11 @@ DECLASM(void) VBoxSFR0Init(void)
             log("VBOXSF: VbglR0SfSetUtf8 failed. rc=%d\n", rc);
         }
 
+        /* Initialize Global Infoseg pointer */
+        ULONG ulPtr = g_selGIS;
+        ulPtr <<= 16;
+        g_pGIS = (PGINFOSEG)KernSelToFlat(ulPtr);
+        
         log("VBoxSFR0Init: completed successfully\n");
         return;
     }

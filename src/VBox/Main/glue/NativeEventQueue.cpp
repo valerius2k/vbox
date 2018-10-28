@@ -52,7 +52,7 @@ namespace com
 // NativeEventQueue class
 ////////////////////////////////////////////////////////////////////////////////
 
-#if defined(RT_OS_OS2)
+#if defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES)
 # define EVENTQUEUE_WIN_LPARAM_MAGIC   (void *)0xf241b819
 #endif
 
@@ -70,7 +70,7 @@ namespace com
  *          vboxapi/PlatformMSCOM::interruptWaitEvents(). */
 #define EVENTQUEUE_WIN_LPARAM_MAGIC   UINT32_C(0xf241b819)
 
-#elif defined(RT_OS_OS2)
+#elif defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES)
 
 # define CHECK_THREAD_RET(ret) \
     do { \
@@ -99,11 +99,11 @@ namespace com
 /** Pointer to the main event queue. */
 NativeEventQueue *NativeEventQueue::sMainQueue = NULL;
 
-#ifdef RT_OS_OS2
+#if defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES)
 static const char *WinClass = "VBoxCOM_WinClass";
 #endif
 
-#if !defined(RT_OS_WINDOWS) && !defined(RT_OS_OS2)
+#if !defined(RT_OS_WINDOWS) && !(defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES))
 
 struct MyPLEvent : public PLEvent
 {
@@ -137,7 +137,7 @@ void PR_CALLBACK com::NativeEventQueue::plEventDestructor(PLEvent *self)
 
 #endif // VBOX_WITH_XPCOM
 
-#ifdef RT_OS_OS2
+#if defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES)
 MRESULT EXPENTRY
 recvWndProc(HWND hwnd, ULONG uMsg, MPARAM mp1, MPARAM mp2)
 {
@@ -170,7 +170,7 @@ NativeEventQueue::NativeEventQueue()
                          DUPLICATE_SAME_ACCESS))
       mhThread = INVALID_HANDLE_VALUE;
 
-#elif defined(RT_OS_OS2)
+#elif defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES)
 
     PTIB ptib; PPIB ppib;
     DosGetInfoBlocks(&ptib, &ppib);
@@ -263,7 +263,7 @@ NativeEventQueue::~NativeEventQueue()
         CloseHandle(mhThread);
         mhThread = INVALID_HANDLE_VALUE;
     }
-#elif defined(RT_OS_OS2)
+#elif defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES)
     if (mHwnd != NULLHANDLE)
     {
         /* Destroy window */
@@ -288,7 +288,8 @@ NativeEventQueue::~NativeEventQueue()
         if (mEQCreated)
         {
             mEventQ->StopAcceptingEvents();
-            mEventQ->ProcessPendingEvents(mHab);
+            //mEventQ->ProcessPendingEvents(mHab);
+            mEventQ->ProcessPendingEvents();
             mEventQService->DestroyThreadEventQueue();
         }
         mEventQ = nsnull;
@@ -317,7 +318,7 @@ int NativeEventQueue::init()
     {
         sMainQueue = new NativeEventQueue();
         AssertPtr(sMainQueue);
-#if !defined(RT_OS_WINDOWS) && !defined(RT_OS_OS2)
+#if !defined(RT_OS_WINDOWS) && !(defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES))
         /* Check that it actually is the main event queue, i.e. that
            we're called on the right thread. */
         nsCOMPtr<nsIEventQueue> q;
@@ -537,7 +538,7 @@ static int processPendingEvents(void)
     return rc;
 }
 
-#elif defined(RT_OS_OS2)
+#elif defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES)
 
 /**
  * Dispatch a message on PM.
@@ -669,7 +670,7 @@ int NativeEventQueue::processEventQueue(RTMSINTERVAL cMsTimeout)
     int rc;
     CHECK_THREAD_RET(VERR_INVALID_CONTEXT);
 
-#if !defined(RT_OS_WINDOWS) && !defined(RT_OS_OS2)
+#if !defined(RT_OS_WINDOWS) && !(defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES))
     /*
      * Process pending events, if none are available and we're not in a
      * poll call, wait for some to appear.  (We have to be a little bit
@@ -740,7 +741,7 @@ int NativeEventQueue::processEventQueue(RTMSINTERVAL cMsTimeout)
             rc = processPendingEvents();
         }
     }
-#elif defined(RT_OS_OS2)
+#elif defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES)
     if (cMsTimeout == RT_INDEFINITE_WAIT)
     {
         BOOL fRet;
@@ -821,7 +822,7 @@ BOOL NativeEventQueue::postEvent(NativeEvent *pEvent)
             AssertFailed();
     }
     return fRc;
-#elif defined(RT_OS_OS2)
+#elif defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES)
     /* Note! The event == NULL case is duplicated in vboxapi/PlatformMSCOM::interruptWaitEvents(). */
     BOOL fRc = WinPostMsg(mHwnd, WM_USER, (MPARAM)pEvent, EVENTQUEUE_WIN_LPARAM_MAGIC);
     if (!fRc)
@@ -856,7 +857,7 @@ BOOL NativeEventQueue::postEvent(NativeEvent *pEvent)
  */
 int NativeEventQueue::getSelectFD()
 {
-#if defined(VBOX_WITH_XPCOM) && !defined(RT_OS_OS2)
+#if defined(VBOX_WITH_XPCOM) && !(defined(RT_OS_OS2) && defined(OS2_PM_EVENT_QUEUES))
     return mEventQ->GetEventQueueSelectFD();
 #else
     return -1;
