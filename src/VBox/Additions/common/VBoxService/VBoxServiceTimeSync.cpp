@@ -92,6 +92,13 @@
 # include <sys/time.h>
 #endif
 
+#ifdef RT_OS_OS2
+#define  INCL_BASE
+#include <os2.h>
+#include <ctype.h>
+#include <stdlib.h>
+#endif
+
 #include <iprt/thread.h>
 #include <iprt/string.h>
 #include <iprt/semaphore.h>
@@ -344,6 +351,74 @@ static DECLCALLBACK(int) vgsvcTimeSyncInit(void)
         VGSvcError("vgsvcTimeSyncInit: Could not get time adjustment values! Last error: %ld!\n", dwErr);
     }
 #endif /* RT_OS_WINDOWS */
+#ifdef RT_OS_OS2
+    /**
+     *   Initialize timezone field in Global Infoseg
+     *   by passing it to DosSetDateTime in the
+     *   DATETIME structure (otherwise this field
+     *   remains uninitialized). Then it will be
+     *   possible to get it from drivers (required
+     *   by the shared folders IFS).
+     */
+    if (RT_SUCCESS(rc))
+    {
+        char *pszValue;
+        char *pHours, *pMinutes;
+        int hours = 0;
+        int minutes = 0;
+        bool fNegative = false;
+        DATETIME dt;
+
+        if (! DosScanEnv((PCSZ)"TZ", (UCHAR **)&pszValue) )
+        {
+            // parse TZ variable and get an offset
+            // between the local time and GMT
+            pHours = pszValue;
+
+            // skip some letters at the beginning
+            while (*pHours && isalpha(*pHours))
+            {
+                pHours++;
+            }
+
+            switch (*pHours)
+            {
+                case '-':
+                    fNegative = true;
+                    pHours++;
+                    break;
+
+                case '+':
+                    fNegative = false;
+                    pHours++;
+                    break;
+                    
+                default:
+                    ;
+            }
+
+            hours = strtol(pHours, &pMinutes, 0);
+
+            if (pMinutes && *pMinutes == ':')
+            {
+                // skip a colon separator
+                pMinutes++;
+                minutes = strtol(pMinutes, &pMinutes, 0);
+            }
+
+            minutes += hours * 60;
+
+            if (fNegative)
+            {
+                minutes = -minutes;
+            }
+
+            DosGetDateTime(&dt);
+            dt.timezone = minutes;
+            DosSetDateTime(&dt);
+        }
+    }
+#endif /* RT_OS_OS2     */
 
     return rc;
 }

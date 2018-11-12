@@ -41,7 +41,7 @@
 #include <iprt/assert.h>
 
 extern VBGLSFCLIENT g_clientHandle;
-extern PGINFOSEG g_pGIS;
+extern PGINFOSEG    g_pGIS;
 
 
 uint32_t VBoxToOS2Attr(uint32_t fMode)
@@ -90,12 +90,18 @@ FS32_FINDCLOSE(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd)
 
     VbglR0SfClose(&g_clientHandle, &pFindBuf->map, pFindBuf->handle);
     free_shflstring(pFindBuf->path);
+
+    if (pFindBuf->tmp)
+    {
+        VbglR0SfUnmapFolder(&g_clientHandle, &pFindBuf->map);
+    }
+
     RTMemFree(pFindBuf);
     return NO_ERROR;
 }
 
 
-APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
+APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                             PBYTE pbData, ULONG cbData, PUSHORT pcMatch,
                             ULONG level, ULONG flags)
 {
@@ -105,11 +111,12 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf, PVBOXSFVP pvboxsfvp,
     char *p, *lastslash;
     USHORT usNeededLen;
     ULONG cbSize = 0;
+    PSZ pszTzValue;
     bool skip = false;
     int rc;
 
     log("g_pGIS=%lx\n", g_pGIS);
-    log("timezone=%u minutes\n", g_pGIS->timezone);
+    log("timezone=%d minutes\n", (SHORT)g_pGIS->timezone);
 
     usEntriesWanted = *pcMatch;
     *pcMatch = 0;
@@ -591,10 +598,11 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
     SHFLCREATEPARMS params = {0};
     PFINDBUF pFindBuf;
     PSHFLSTRING path;
-    PVPFSI pvpfsi;
-    PVPFSD pvpfsd;
-    PVBOXSFVP pvboxsfvp;
+    VBGLSFMAP map;
+    bool tmp;
+    char *pFile = NULL;
     char *pDir = NULL;
+    int cbDir;
     char *p, *str, *lastslash;
     APIRET hrc = NO_ERROR;
     char *pwsz;
@@ -603,12 +611,10 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
     log("FS32_FINDFIRST(%s, %lx, %lx, %lx)\n", pszName, attr, level, flags);
 
     RT_ZERO(params);
+    pfsfsd->pFindBuf = NULL;
+
     params.Handle = SHFL_HANDLE_NIL;
     params.CreateFlags = SHFL_CF_DIRECTORY | SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW | SHFL_CF_ACCESS_READ;
-
-    FSH32_GETVOLPARM(pfsfsi->fsi_hVPB, &pvpfsi, &pvpfsd);
-
-    pvboxsfvp = (PVBOXSFVP)pvpfsd;
 
     pFindBuf = (PFINDBUF)RTMemAllocZ(sizeof(FINDBUF));
 
@@ -626,7 +632,17 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
     attr &= (FILE_READONLY | FILE_HIDDEN | FILE_SYSTEM | FILE_DIRECTORY | FILE_ARCHIVED);
     pFindBuf->bAttr = (BYTE)~attr;
 
-    pDir = (char *)RTMemAllocZ(strlen((char *)pszName) + 1);
+    cbDir = strlen((char *)pszName) + 1;
+
+    pFile = (char *)RTMemAllocZ(cbDir);
+
+    if (! pFile)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_FINDFIRSTEXIT;
+    }
+
+    pDir = (char *)RTMemAllocZ(cbDir);
 
     if (! pDir)
     {
@@ -635,23 +651,30 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
     }
 
     // get the directory name
-    strcpy(pDir, (char *)pszName);
+    hrc = parseFileName((char *)pszName, pcdfsi, pFile, &cbDir, &map, &tmp);
 
+    if (hrc)
+    {
+        log("Filename parse error!\n");
+        goto FS32_FINDFIRSTEXIT;
+    }
+
+    log("pDir=%s\n", pDir); 
+
+    strcpy(pDir, pFile);
     p = pDir;
 
-    // skip drive letter and colon
-    if (p[1] == ':') p += 2;
-    lastslash = str = p;
-
-    // change backslashes to slashes
-    do {
-        lastslash = p;
-        p = strchr(p + 1, '\\');
-    } while (p && p < pDir + strlen(pDir));
-
-    // cut off file part from directory part
-    str[lastslash - str] = '\0';
-    if (*str == '\\') str++;
+    str = p;
+    lastslash = strrchr(p, '\\');
+    
+    if (lastslash)
+    {
+        str[lastslash - str] = '\0';
+    }
+    else
+    {
+        str[0] = '\0';
+    }
 
     log("str=%s\n", str);
 
@@ -667,7 +690,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
 
     log("000\n");
     path = make_shflstring(pwsz);
-    rc = VbglR0SfCreate(&g_clientHandle, &pvboxsfvp->map, path, &params);
+    rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
     free_shflstring(path);
     RTMemFree(pwsz);
 
@@ -681,17 +704,13 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
 
             pFindBuf->len = 16384;
             pFindBuf->handle = params.Handle;
-            pFindBuf->map = pvboxsfvp->map;
+            pFindBuf->map = map;
+            pFindBuf->tmp = tmp;
             pFindBuf->has_more_files = true;
 
-            // get the directory name
-            strcpy(pDir, (char *)pszName);
+            cbDir = strlen((char *)pszName) + 1;
 
-            p = pDir;
-
-            // skip d:
-            if (p[1] == ':') p += 3;
-            str = p;
+            str = pFile;
 
             log("wildcard: %s\n", str);
 
@@ -708,7 +727,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
             pFindBuf->path = make_shflstring(pwsz);
             RTMemFree(pwsz);
             log("003\n");
-            hrc = FillFindBuf(pFindBuf, pvboxsfvp, pbData, cbData, pcMatch, level, flags);
+            hrc = FillFindBuf(pFindBuf, pbData, cbData, pcMatch, level, flags);
             log("004: hrc=%lu\n", hrc);
         }
         else
@@ -732,13 +751,23 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
         hrc = 0;
 
 FS32_FINDFIRSTEXIT:
+    if (pfsfsd->pFindBuf)
+    {
+        if (hrc && hrc != ERROR_EAS_DIDNT_FIT)
+        {
+            FS32_FINDCLOSE(pfsfsi, pfsfsd);
+        }
+    }
+    else
+    {
+        if (pFindBuf)
+            RTMemFree(pFindBuf);
+    }
+
     if (pDir)
         RTMemFree(pDir);
-
-    if (hrc && hrc != ERROR_EAS_DIDNT_FIT)
-    {
-        FS32_FINDCLOSE(pfsfsi, pfsfsd);
-    }
+    if (pFile)
+        RTMemFree(pFile);
 
     log(" => %d\n", hrc);
     return hrc;
@@ -749,18 +778,11 @@ DECLASM(int)
 FS32_FINDNEXT(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd, PBYTE pbData, ULONG cbData, PUSHORT pcMatch,
               ULONG level, ULONG flags)
 {
-    PVPFSI pvpfsi;
-    PVPFSD pvpfsd;
-    PVBOXSFVP pvboxsfvp;
     APIRET hrc = NO_ERROR;
 
     log("FS32_FINDNEXT(%lx, %lx)\n", level, flags);
 
-    FSH32_GETVOLPARM(pfsfsi->fsi_hVPB, &pvpfsi, &pvpfsd);
-
-    pvboxsfvp = (PVBOXSFVP)pvpfsd;
-
-    hrc = FillFindBuf(pfsfsd->pFindBuf, pvboxsfvp, pbData, cbData, pcMatch, level, flags);
+    hrc = FillFindBuf(pfsfsd->pFindBuf, pbData, cbData, pcMatch, level, flags);
 
 FS32_FINDFIRSTEXIT:
     log(" => %d\n", hrc);

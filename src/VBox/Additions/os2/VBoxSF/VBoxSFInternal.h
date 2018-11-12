@@ -121,7 +121,6 @@ typedef FILEFNDBUF2 *PFILEFNDBUF2;
 
 typedef struct _FILEFNDBUF4L                /* findbuf4l */
 {
-    ULONG    oNextEntryOffset;            /* new field */
     FDATE    fdateCreation;
     FTIME    ftimeCreation;
     FDATE    fdateLastAccess;
@@ -149,6 +148,8 @@ typedef struct _FILEBUF
 {
     SHFLHANDLE handle;
     PSHFLSTRING path;
+    VBGLSFMAP map;
+    bool tmp;
 } FILEBUF, *PFILEBUF;
 
 /**
@@ -160,6 +161,7 @@ typedef struct VBOXSFVP
 {
     uint32_t u32Dummy;
     VBGLSFMAP  map;
+    char *pszShareName;
     char szLabel[12];
 } VBOXSFVP;
 AssertCompile(sizeof(VBOXSFVP) <= sizeof(VPFSD));
@@ -210,6 +212,7 @@ typedef struct _FINDBUF
     uint32_t bAttr;
     uint32_t bMustAttr;
     VBGLSFMAP  map;
+    bool tmp;
 } FINDBUF, *PFINDBUF;
 
 /**
@@ -236,8 +239,11 @@ PSHFLSTRING build_path(PSHFLSTRING dir, const char* const name);
 APIRET APIENTRY vboxsfStrFromUtf8(char *dst, char *src, ULONG len, ULONG srclen);
 APIRET APIENTRY vboxsfStrToUtf8(char *dst, char *src);
 APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
-                              char *pszParsedPath, int *cbParsedPath, VBGLSFMAP *map);
+                              char *pszParsedPath, int *cbParsedPath,
+                              VBGLSFMAP *map, bool *tmp);
 
+APIRET APIENTRY doScanEnv(PCSZ  pszName,
+                          PSZ  *ppszValue);
 RT_C_DECLS_BEGIN
 
 /* IFS Helpers */
@@ -254,5 +260,6 @@ USHORT vbox_err_to_os2_err(int rc);
 
 int tolower (int c);
 char *strncpy(char *dst, char *src, int len);
+char *strrchr(const char *cp, int ch);
 
 #endif

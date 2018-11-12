@@ -397,6 +397,7 @@ segment CODE16
 extern FSH_FORCENOSWAP
 extern DOS16WRITE
 extern DOS16GETINFOSEG
+extern DOS16GETENV
 extern FSH_GETVOLPARM
 extern FSH_PROBEBUF
 extern FSH_WILDMATCH
@@ -597,6 +598,37 @@ GLOBALNAME FSH32_WILDMATCH_exit2
     ret
 VBOXSF_EP32_END     FSH32_WILDMATCH
 
+;;
+;   void LogPrint(const char *str);
+;
+;   A 32-bit wrapper for a 16-bit LogPrintf
+;   routine from QSINIT / os4ldr / ArcaOS loader
+;
+;   @param a FLAT pointer to an output string
+;
+VBOXSF_EP32_BEGIN LogPrint, 'LogPrint'
+    ; switch to 16-bits and reserve one dword on a stack
+    VBOXSF_32_TO_16     LogPrint, 1*4
+segment CODE16
+    push  ds
+    mov   ax, DATA32 wrt FLAT
+    mov   ds, ax
+    mov   ecx, _KernTKSSBase
+    mov   ecx, [ds:ecx]
+    pop   ds
+    mov   eax, [ebp + 8h]              ; get a FLAT pointer to the output string
+    sub   eax, ecx                     ; convert it
+    mov   cx, ss                       ; to a far 16:16
+    shl   ecx, 16                      ; pointer
+    mov   cx, ax                       ;
+    mov   [esp + 0*4], ecx
+    call  far [NAME(g_fpLog_printf)]
+    ; switch back to 32 bits
+    VBOXSF_16_TO_32     LogPrint
+    ; restore stack
+    VBOXSF_EPILOGUE
+    ret
+VBOXSF_EP32_END   LogPrint
 
 ;*******************************************************************************
 ;*  Global Variables                                                           *
@@ -655,6 +687,10 @@ GLOBALNAME g_fVerbose
 GLOBALNAME g_u32Info
     dd 0
 
+;GLOBALNAME g_fpfnDos16GetEnv
+;    dw  DOS16GETENV
+;    dw  seg DOS16GETENV
+
 ;GLOBALNAME g_fpfnDos16GetInfoSeg
 ;    dw  DOS16GETINFOSEG
 ;    dw  seg DOS16GETINFOSEG
@@ -664,6 +700,11 @@ GLOBALNAME g_u32Info
 GLOBALNAME g_fpfnDos16Write
     dw  DOS16WRITE
     dw  seg DOS16WRITE
+
+;; Far pointer to Log_printf routine
+;  of QSINIT / os4ldr
+GLOBALNAME g_fpLog_printf
+    dd  0
 
 ;;
 ; The attach dd data.
@@ -684,11 +725,16 @@ GLOBALNAME g_VBoxGuestIDC
 ;;
 ; This must be present, we've got fixups against it.
 segment DATA32
+extern _KernTKSSBase
+
 g_pfnDos16Write:
     dd  DOS16WRITE       ; flat
 
 ;g_pfnDos16GetInfoSeg:
 ;    dd  DOS16GETINFOSEG  ; flat
+
+;g_pfnDos16GetEnv:
+;    dd  DOS16GETENV      ; flat
 
 GLOBALNAME g_fLog_enable
     dd  0
@@ -696,7 +742,11 @@ GLOBALNAME g_fLog_enable
 GLOBALNAME g_selGIS
     dw  0
 
+GLOBALNAME g_selEnv
+    dw  0
 
+GLOBALNAME g_fLogPrint
+    db  0
 
 ;
 ;
@@ -1796,6 +1846,20 @@ segment CODE16
     pop     ecx
     pop     ds
 
+    ;
+    ; Get Global Environment selector
+    ; APIRET  _Pascal DosGetEnv(PSEL pselEnv, PSEL pcmdOffset);
+    ;
+    call    NAME(FS_INIT_GET_ENV)
+    push    ds
+    push    ecx
+    mov     cx, DATA32 wrt FLAT
+    mov     ds, cx
+    mov     ecx, NAME(g_selEnv wrt FLAT)
+    mov     word [ecx], ax
+    pop     ecx
+    pop     ds
+
     ; return success.
     xor     eax, eax
 .done:
@@ -1877,7 +1941,6 @@ GLOBALNAME FS_INIT_FPUTS
 ENDPROC FS_INIT_FPUTS
 
 
-%if 1
 ;;
 ; Dos16GetInfoSeg wrapper.
 ;
@@ -1938,7 +2001,68 @@ GLOBALNAME FS_INIT_GET_GINFOSEG
     pop     bp
     ret
 ENDPROC FS_INIT_GET_GINFOSEG
+
+
+;;
+; Dos16GetEnv wrapper.
+;
+; @param    none
+; @uses     nothing.
+; @returns  an environment selector in ax
+GLOBALNAME FS_INIT_GET_ENV
+    push    bp
+    mov     bp, sp
+    push    es                          ; bp - 02h
+    push    ds                          ; bp - 04h
+    push    bx                          ; bp - 06h
+    push    cx                          ; bp - 08h
+    push    dx                          ; bp - 0ah
+    push    si                          ; bp - 0ch
+    push    di                          ; bp - 0eh
+
+    ; APIRET  _Pascal DosGetEnv(PSEL pselEnv, PUSHORT pcmdOffset;
+    xor     ecx, ecx
+    xor     ax, ax
+    push    ax                          ; selEnv
+    mov     cx, sp
+    push    ax                          ; cmdOffset
+    mov     dx, sp
+    push    ss                          ;
+    push    cx                          ; pselEnv
+    push    ss                          ;
+    push    dx                          ; pcmdOffset
+    
+%if 1 ; wlink/nasm generates a non-aliased fixup here which results in 16-bit offset with the flat 32-bit selector.
+    call far DOS16GETENV
+%else
+    ; convert flat pointer to a far pointer using the tiled algorithm.
+    mov     ax, DATA32 wrt FLAT
+    mov     ds, ax
+    mov     eax, g_pfnDos16GetEnv wrt FLAT
+    movzx   eax, word [eax + 2]                     ; High word of the flat address (in DATA32).
+    shl     ax, 3
+    or      ax, 0007h
+    mov     dx, DATA16
+    mov     ds, dx
+    mov     [NAME(g_fpfnDos16GetEnv) + 2], ax        ; Update the selector (in DATA16).
+    ; do the call
+    call far [NAME(g_fpfnDos16GetEnv)]
 %endif
+
+    mov     esp, ecx
+    mov     ax, [esp]
+
+    lea     sp, [bp - 0eh]
+    pop     di
+    pop     si
+    pop     dx
+    pop     cx
+    pop     bx
+    pop     ds
+    pop     es
+    pop     bp
+    ret
+ENDPROC FS_INIT_GET_ENV
 
 
 ;;
@@ -1979,6 +2103,36 @@ GLOBALNAME VBoxSFR0Init16Bit
     call far [NAME(g_VBoxGuestAttachDD) + 6]
 .attach_attempt_done:
 
+    ;
+    ; Get a far pointer to LogPrintf() routine from the DOSHLP segment
+    ;
+    push    ds
+    mov     ax, 100h                   ; DOSHLP selector
+    mov     ds, ax
+    xor     eax, eax
+    cmp     dword [eax], 342F534Fh     ; check for QSINIT / os4ldr signature ('OS/4')
+    je      .qsinit
+    cmp     dword [eax], 41435241h     ; check for Arca OS loader signature ('ARCA')
+    jne     .no_qsinit
+.qsinit:
+    add     eax, 4                     ; next dword
+    mov     dx, [eax]
+    cmp     dx, 30h                    ; check for QSINIT / os4ldr version
+    jb      .no_qsinit
+    mov     ax, [eax + 2 * 17h]
+    mov     edx, 100h                  ; DOSHLP selector
+    shl     edx, 16
+    mov     dx, ax
+    mov     ax, DATA32 wrt FLAT
+    mov     ds, ax
+    mov     eax, NAME(g_fLogPrint wrt FLAT)
+    mov     byte [eax], 1
+    mov     ax, DATA16
+    mov     ds, ax
+    mov     [NAME(g_fpLog_printf)], edx
+.no_qsinit:
+    pop     ds
+    
 %ifndef DONT_LOCK_SEGMENTS
     ;
     ; Lock the two 16-bit segments.
@@ -2063,4 +2217,3 @@ GLOBALNAME dbgstr16
     ret
 ENDPROC dbgstr16
 %endif
-
