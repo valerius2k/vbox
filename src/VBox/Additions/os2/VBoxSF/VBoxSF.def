@@ -3,7 +3,7 @@
 ;
 
 LIBRARY VBoxSF
-DESCRIPTION 'VirtualBox Guest Additions Shared Folder FSD for OS/2.'
+DESCRIPTION '@FILEVER@  VirtualBox Guest Additions Shared Folder FSD for OS/2.'
 DATA PRELOAD SINGLE SHARED MOVABLE
 CODE PRELOAD MOVABLE
 EXPORTS

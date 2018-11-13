@@ -114,7 +114,7 @@ if1of ($(KBUILD_TARGET), darwin freebsd haiku $(if $(defined VBOX_WITH_ADDITION_
   # A library is used to make sure that VBoxGuestA-os2.asm is first in the link. (temporary hack?)
   VBoxGuest_SOURCES       = \
   	VBoxGuestA-os2.asm \
-  	VBoxGuest-os2.def
+  	$(PATH_OBJ)/VBoxGuest/VBoxGuest-os2.def
   #VBoxGuest_LDFLAGS       = -s -t -v
   VBoxGuest_LIBS          = \
   	$(VBoxGuestLibOs2Hack_1_TARGET) \
@@ -233,6 +233,14 @@ ifeq ($(KBUILD_TARGET),win)
 #PROGRAMS += VBoxGuestInst
 VBoxGuestInst_TEMPLATE= NewVBoxGuestR3Exe
 VBoxGuestInst_SOURCES = win/VBoxGuestInst.cpp
+endif
+
+ifeq ($(KBUILD_TARGET),os2)
+$(PATH_OBJ)/VBoxGuest/VBoxGuest-os2.def: $(PATH_SUB_CURRENT)/VBoxGuest-os2.def
+	@mkdir -p $(dir $@)
+	$(QUIET)$(SED) \
+		-e 's/@FILEVER@/$(VBOX_OS2_FILEVER)/' \
+		$< >$@
 endif
 
 include $(FILE_KBUILD_SUB_FOOTER)

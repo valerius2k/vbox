@@ -26,7 +26,7 @@
 
 
 PHYSICAL DEVICE VBoxDrv
-DESCRIPTION 'VirtualBox.org Support Driver for OS/2.'
+DESCRIPTION '@FILEVER@  VirtualBox.org Support Driver for OS/2.'
 CODE PRELOAD EXECUTEREAD
 DATA PRELOAD
 ; We're using wlink.exe, so this doesn't work.

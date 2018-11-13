@@ -42,7 +42,14 @@ VBoxControl_SOURCES = \
 	VBoxControl.cpp
 VBoxControl_SOURCES.win = \
 	VBoxControl.rc
+VBoxControl_SOURCES.os2 = \
+	$(PATH_OBJ)/VBoxControl/VBoxControl-os2.def
 VBoxControl_LDFLAGS.darwin = -framework IOKit
+
+$(PATH_OBJ)/VBoxControl/VBoxControl-os2.def:
+	@mkdir -p $(dir $@)
+	@echo NAME VBoxControl >$@
+	@echo "DESCRIPTION '$(VBOX_OS2_FILEVER)  VirtualBox Guest Additions control utility.'" >>$@
 
 include $(FILE_KBUILD_SUB_FOOTER)
 

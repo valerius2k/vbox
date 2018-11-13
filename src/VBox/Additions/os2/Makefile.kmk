@@ -33,6 +33,7 @@ ifndef VBOX_OSE
  include $(PATH_SUB_CURRENT)/Bin/Makefile.kmk
 endif
 include $(PATH_SUB_CURRENT)/VBoxSF/Makefile.kmk
+include $(PATH_SUB_CURRENT)/Installer/Makefile.kmk
 
 
 #
@@ -40,9 +41,28 @@ include $(PATH_SUB_CURRENT)/VBoxSF/Makefile.kmk
 #
 PROGRAMS += VBoxReplaceDll
 VBoxReplaceDll_TEMPLATE = NewVBoxGuestR3Exe
-VBoxReplaceDll_SOURCES = VBoxReplaceDll.cpp
+VBoxReplaceDll_SOURCES = \
+		VBoxReplaceDll.cpp \
+		$(PATH_OBJ)/VBoxReplaceDll/VBoxReplaceDll.def
 
+#
+# Mount/attach tool
+#
+PROGRAMS += VBoxSFAttach
+VBoxSFAttach_TEMPLATE   = NewVBoxGuestR3Exe
+VBoxSFAttach_SOURCES    = \
+        VBoxSFAttach.cpp \
+        $(PATH_OBJ)/VBoxSFAttach/VBoxSFAttach.def
+
+$(PATH_OBJ)/VBoxReplaceDll/VBoxReplaceDll.def:
+	@mkdir -p $(dir $@)
+	@echo NAME VBoxReplaceDll >$@
+	@echo "DESCRIPTION '$(VBOX_OS2_FILEVER)  VirtualBox Guest Additions unlock DLL helper.'" >>$@
+
+$(PATH_OBJ)/VBoxSFAttach/VBoxSFAttach.def:
+	@mkdir -p $(dir $@)
+	@echo NAME VBoxSFAttach >$@
+	@echo "DESCRIPTION '$(VBOX_OS2_FILEVER)  VirtualBox Guest Additions attach/detach shared folders.'" >>$@
 
 
 include $(FILE_KBUILD_SUB_FOOTER)
-

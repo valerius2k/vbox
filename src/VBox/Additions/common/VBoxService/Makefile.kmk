@@ -113,7 +113,7 @@ VBoxService_SOURCES.win  += \
 	VBoxService-win.cpp
 
 VBoxService_SOURCES.os2   = \
-	VBoxService-os2.def \
+	$(PATH_OBJ)/VBoxService/VBoxService-os2.def \
 	VBoxServiceClipboard-os2.cpp
 
 VBoxService_LDFLAGS.darwin = -framework IOKit
@@ -141,6 +141,14 @@ ifdef VBOX_WITH_GUEST_PROPS
  	nsl \
 	kstat \
 	contract
+endif
+
+ifeq ($(KBUILD_TARGET),os2)
+$(PATH_OBJ)/VBoxService/VBoxService-os2.def: $(PATH_SUB_CURRENT)/VBoxService-os2.def
+	@mkdir -p $(dir $@)
+	$(QUIET)$(SED) \
+		-e 's/@FILEVER@/$(VBOX_OS2_FILEVER)/' \
+		$< >$@
 endif
 
 #

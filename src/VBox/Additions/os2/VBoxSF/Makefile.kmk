@@ -6,11 +6,6 @@
 SUB_DEPTH = ../../../../..
 include $(KBUILD_PATH)/subheader.kmk
 
-PROGRAMS += VBoxSFAttach
-VBoxSFAttach_TEMPLATE   = NewVBoxGuestR3Exe
-VBoxSFAttach_SOURCES    = \
-        VBoxSFAttach.cpp
-
 #?DLLS += VBoxSF
 SYSMODS += VBoxSF
 VBoxSF_TEMPLATE      = VBOXGUESTR0
@@ -35,12 +30,17 @@ VBoxSF_SOURCES       = \
 	VBoxSFFile.cpp \
 	VBoxSFFind.cpp \
 	VBoxSFInit.cpp \
-	VBoxSF.def
+	$(PATH_OBJ)/VBoxSF/VBoxSF.def
 VBoxSF_LIBS          = \
 	$(VBOX_LIB_VBGL_R0) \
 	$(VBOX_LIB_IPRT_GUEST_R0) \
 	$(VBOX_GCC_LIBGCC) \
 	end
 
-include $(FILE_KBUILD_SUB_FOOTER)
+$(PATH_OBJ)/VBoxSF/VBoxSF.def: $(PATH_SUB_CURRENT)/VBoxSF.def
+	@mkdir -p $(dir $@)
+	$(QUIET)$(SED) \
+		-e 's/@FILEVER@/$(VBOX_OS2_FILEVER)/' \
+		$< >$@
 
+include $(FILE_KBUILD_SUB_FOOTER)

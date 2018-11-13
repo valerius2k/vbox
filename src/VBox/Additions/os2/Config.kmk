@@ -33,6 +33,9 @@ TOOL_MSLINK510_LD ?= $(PATH_DDKBASE)/tools/link.exe
 PATH_TOOL_VAC308  ?= D:/VACpp/v3.08
 PATH_TOOL_ALP     ?= D:/Toolkit/v4.52/bin
 
+TOOL_WAT2MAP      ?= gawk -f $(PATH_ROOT)/mapsym.awk
+TOOL_MAPSYM       ?= mapsym
+
 #
 # Template for VAC308 Gradd stuff.
 #
