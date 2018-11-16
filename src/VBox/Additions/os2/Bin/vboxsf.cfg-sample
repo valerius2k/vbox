@@ -1,0 +1,12 @@
+;-----------------------------------------------------;
+; Drive letters assigned to shared folders            ;
+;-----------------------------------------------------;
+; this is a comment                                   ;
+# this is a comment too                               ;
+; empty lines, extra tabs and spaces are ignored      ;
+;-----------------------------------------------------;
+; share     ; drive letter  ; subdirectory on the host
+;-----------------------------------------------------;
+os2f		f:				; /mnt/os2f
+os2l		l:              ; /mnt/os2l
+valerius	m:              ; /home/valerius

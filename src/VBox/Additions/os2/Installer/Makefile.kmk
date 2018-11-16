@@ -1,0 +1,107 @@
+# $Id: Makefile.kmk 172 2018-10-20 12:27:05Z valerius $
+## @file
+# Makefile for the OS/2 installer / Additions ISO.
+#
+
+#
+# Copyright (C) 2006-2015 Oracle Corporation
+#
+# This file is part of VirtualBox Open Source Edition (OSE), as
+# available from http://www.virtualbox.org. This file is free software;
+# you can redistribute it and/or modify it under the terms of the GNU
+# General Public License (GPL) as published by the Free Software
+# Foundation, in version 2 as it comes in the "COPYING" file of the
+# VirtualBox OSE distribution. VirtualBox OSE is distributed in the
+# hope that it will be useful, but WITHOUT ANY WARRANTY of any kind.
+#
+
+SUB_DEPTH = ../../../../..
+include $(KBUILD_PATH)/subheader.kmk
+
+PATH_ADDITIONS_OS2 := $(PATH_ROOT)/src/VBox/Additions/os2
+basename := VBoxAdditions-$(KBUILD_TARGET)-$(KBUILD_TARGET_ARCH)-$(VBOX_OS2_VERSION)
+PKG    := $(PATH_STAGE_BIN)/additions/$(basename).zip
+ISOIMG := $(PATH_OBJ)/Additions/os2/$(basename).iso
+CDDIR  := $(PATH_OBJ)/Additions/os2/cd
+
+PACKING += \
+	$(PKG)
+
+OTHER_CLEAN += \
+	$(ISOIMG) \
+	$(CDDIR).flg \
+	$(CDDIR)/os2/VBoxControl.exe \
+	$(CDDIR)/os2/VBoxReplaceDll.exe \
+	$(CDDIR)/os2/VBoxService.exe \
+	$(CDDIR)/os2/VBoxSFAttach.exe \
+	$(CDDIR)/os2/dll/vbxgradd.dll \
+	$(CDDIR)/os2/boot/VBoxMouse.sys \
+	$(CDDIR)/os2/boot/VBoxGuest.sys \
+	$(CDDIR)/os2/boot/VBoxGuest.sym \
+	$(CDDIR)/os2/boot/VBoxSF.ifs \
+	$(CDDIR)/os2/boot/VBoxSF.sym \
+	$(CDDIR)/usr/lib/gcc1.dll \
+	$(CDDIR)/usr/lib/libc066.dll \
+	$(CDDIR)/usr/lib/libcx0.dll \
+	$(CDDIR)/readme.txt
+
+DRIVER_FILES := \
+	$(PATH_STAGE_BIN)/additions/VBoxGuest.sys \
+	$(PATH_STAGE_BIN)/additions/VBoxGuest.sym \
+	$(PATH_STAGE_BIN)/additions/VBoxSF.ifs \
+	$(PATH_STAGE_BIN)/additions/VBoxSF.sym
+
+KLIBC_FILES := \
+	/@unixroot/usr/lib/gcc1.dll \
+	/@unixroot/usr/lib/libc066.dll \
+	/@unixroot/usr/lib/libcx0.dll
+
+EXE_FILES := \
+	$(PATH_STAGE_BIN)/additions/VBoxControl.exe \
+	$(PATH_STAGE_BIN)/additions/VBoxReplaceDll.exe \
+	$(PATH_STAGE_BIN)/additions/VBoxService.exe \
+	$(PATH_STAGE_BIN)/additions/VBoxSFAttach.exe
+
+$(PKG): $(ISOIMG)
+		$(QUIET)zip -r9j $@ $< >/dev/null 2>&1
+
+$(ISOIMG): $(CDDIR).flg
+		$(QUIET)$(VBOX_MKISOFS) \
+			-iso-level 3 \
+			-no-iso-translate \
+			-allow-lowercase \
+			-r -J -U -D \
+			-V OS2Additions \
+			-o $@ $(CDDIR) >/dev/null 2>&1
+
+$(CDDIR).flg: \
+		$(EXE_FILES) \
+		$(DRIVER_FILES)
+			$(QUIET)$(MKDIR) -p $(CDDIR)/os2/boot
+			$(QUIET)$(MKDIR) -p $(CDDIR)/os2/dll
+			$(QUIET)$(MKDIR) -p $(CDDIR)/usr/lib
+			$(QUIET)$(CP) $(EXE_FILES) $(CDDIR)/os2
+			$(QUIET)$(CP) $(DRIVER_FILES) $(CDDIR)/os2/boot
+			$(QUIET)$(CP) $(KLIBC_FILES) $(CDDIR)/usr/lib
+			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Bin/VBoxMouse.sys $(CDDIR)/os2/boot
+			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Bin/vbxgradd.dll $(CDDIR)/os2/dll
+			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Bin/vboxsf.cfg-sample $(CDDIR)/os2/boot
+			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Doc/readme.txt $(CDDIR)
+			$(QUIET)touch $@
+
+$(PATH_STAGE_BIN)/additions/VBoxGuest.sym: $(PATH_OBJ)/VBoxGuest/VBoxGuest.vmp
+			$(QUIET)cd $(dir $@) && $(TOOL_MAPSYM) $< >/dev/null 2>&1
+
+$(PATH_OBJ)/VBoxGuest/VBoxGuest.vmp: $(PATH_OBJ)/VBoxGuest/VBoxGuest.map
+			$(QUIET)$(TOOL_WAT2MAP) $< >$@
+
+$(PATH_STAGE_BIN)/additions/VBoxSF.sym: $(PATH_OBJ)/VBoxSF/VBoxSF.vmp
+			$(QUIET)cd $(dir $@) && $(TOOL_MAPSYM) $< >/dev/null 2>&1
+
+$(PATH_OBJ)/VBoxSF/VBoxSF.vmp: $(PATH_OBJ)/VBoxSF/VBoxSF.map
+			$(QUIET)$(TOOL_WAT2MAP) $< >$@
+
+include $(FILE_KBUILD_SUB_FOOTER)
+
+all: \
+	$(PKG)
