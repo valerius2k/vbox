@@ -93,6 +93,191 @@ static RTSEMEVENTMULTI  g_AutoMountEvent = NIL_RTSEMEVENTMULTI;
 /** The Shared Folders service client ID. */
 static uint32_t         g_SharedFoldersSvcClientID = 0;
 
+#ifdef RT_OS_OS2
+
+#define MAX_DRIVES 24
+
+#define MIN(a, b) (a < b ? a : b)
+
+typedef struct _vbsf_mount
+{
+    char *pszShareName;
+    char *pszMountPoint;
+} vbsf_mount;
+
+/*  explicit mount points list got 
+ *  from '\os2\boot\vboxsf.cfg' file
+ */
+static vbsf_mount g_pMountList[MAX_DRIVES] = {0};
+static int g_cMounts = 0;
+
+#define LINE_MAX_LEN 1024
+
+/* read file line by line */
+int vbsvcOS2GetLine(FILE *fd, char *pszLine)
+{
+    static char prevbuf[LINE_MAX_LEN] = {0};
+    static int cb = 0;
+    char *p, *p1, *p2, *p3, *p4;
+
+    if (! fd || ! pszLine)
+        return 1;
+      
+    for (;;)
+    {
+        p1 = strstr(prevbuf, "\r\n");
+        p2 = strchr(prevbuf, '\r');
+        p3 = strchr(prevbuf, '\n');
+        p4 = strchr(prevbuf, '\0');
+
+        if ( cb && ( p1 || p2 || p3 || p4 ) )
+        {
+            char *r = NULL, *r1 = NULL, *r2 = NULL;
+            int len, l = 0;
+
+            p = prevbuf + LINE_MAX_LEN;
+
+            if (p1 && p1 < p)
+                p = p1;
+            if (p2 && p2 < p)
+                p = p2;
+            if (p3 && p3 < p)
+                p = p3;
+            if (p4 && p4 < p)
+                p = p4;
+
+            // skip comments
+            r = prevbuf + LINE_MAX_LEN;
+
+            r1 = strchr(prevbuf, ';');
+            r2 = strchr(prevbuf, '#');
+
+            if (r1 && r1 < r)
+                r = r1;
+            if (r2 && r2 < r)
+                r = r2;
+            
+            if (r < p)
+                len = r - prevbuf;
+            else
+                len = p - prevbuf;
+
+            strncpy(pszLine, prevbuf, len);
+            pszLine[len] = '\0';
+
+            if (p1)
+                p += 2;
+            else
+                p += 1;
+
+            if (r < p)
+                cb -= p - r;
+            else
+                cb -= p - prevbuf;
+
+            strncpy(prevbuf, p, cb);
+            prevbuf[cb] = '\0';
+
+            return 0;
+        }
+        else
+        {
+            if (! feof(fd))
+                cb += fread(prevbuf + cb, 1, LINE_MAX_LEN - cb, fd);
+            else
+                // line too long or empty
+                return 1;
+        }
+    }
+
+    return 1;
+}
+
+
+/* Parse vboxsf.cfg config file */
+static void vbsvcOS2AutoMountParseConfig(void)
+{
+    char szCfg[CCHMAXPATHCOMP];
+    char szLine[LINE_MAX_LEN];
+    ULONG ulTemp;
+    char *p;
+    char *pszShareName;
+    char *pszMountPoint;
+    vbsf_mount *mnt;
+    int len;
+    FILE *fd;
+
+    DosQuerySysInfo(QSV_BOOT_DRIVE, QSV_BOOT_DRIVE, &ulTemp, sizeof(ulTemp));
+   
+    szCfg[0] = 'a' + ulTemp - 1;
+    szCfg[1] = ':';
+    strcpy(&szCfg[2], "\\os2\\boot\\vboxsf.cfg");
+   
+    fd = fopen(szCfg, "r");
+
+    if (! fd)
+    {
+        return;
+    }
+
+    while (! vbsvcOS2GetLine(fd, (char *)szLine) )
+    {
+        // skip empty lines
+        if (! *szLine)
+            continue;
+
+        // change tabs to spaces
+        while ( (p = strchr(szLine, '\t')) )
+        {
+            *p = ' ';
+        }
+
+        // remove duplicate spaces
+        while ( (p = strstr(szLine, "  ")) )
+        {
+            strncpy(p + 1, p + 2, LINE_MAX_LEN - (p - szLine) - 1);
+            p[LINE_MAX_LEN - (p - szLine)] = '\0';
+        }
+
+        p = strchr(szLine, ' ');
+
+        if (p)
+        {
+            /* share name */
+            len = p - szLine;
+            pszShareName = (char *)RTMemAlloc(len + 1);
+            strncpy(pszShareName, szLine, len);
+            pszShareName[len] = '\0';
+
+            /* drive letter assigned */
+            p++;
+            len = strlen(p);
+            pszMountPoint = (char *)RTMemAlloc(len + 1);
+            strncpy(pszMountPoint, p, len);
+            pszMountPoint[len] = '\0';
+
+            mnt = &g_pMountList[g_cMounts++];
+            mnt->pszShareName = pszShareName;
+            mnt->pszMountPoint = pszMountPoint;
+            
+            if (g_cMounts >= MAX_DRIVES)
+            {
+                break;
+            }
+        }
+        else
+        {
+            /*  no space separating the share name 
+             *  and drive letter, skip it
+             */
+        }
+    }
+
+    fclose(fd);
+}
+
+#endif
+
 
 /**
  * @interface_method_impl{VBOXSERVICE,pfnInit}
@@ -123,6 +308,10 @@ static DECLCALLBACK(int) vbsvcAutoMountInit(void)
         RTSemEventMultiDestroy(g_AutoMountEvent);
         g_AutoMountEvent = NIL_RTSEMEVENTMULTI;
     }
+
+#ifdef RT_OS_OS2
+    vbsvcOS2AutoMountParseConfig();
+#endif
 
     return rc;
 }
@@ -161,28 +350,47 @@ static bool vbsvcAutoMountShareIsMounted(const char *pszShare, char *pszMountPoi
         fclose(pFh);
     }
 #elif defined(RT_OS_OS2)
-    APIRET hrc;
-    char buf[sizeof(FSQBUFFER2) + 3 * CCHMAXPATH] = {0};
-    PFSQBUFFER2 pBuf = (PFSQBUFFER2)buf;
-    ULONG cbBuf = sizeof(buf);
+    char buf[sizeof(FSQBUFFER2) + 3 * CCHMAXPATH];
     char szDriveLetter[] = "c:";
+    PFSQBUFFER2 pBuf = (PFSQBUFFER2)buf;
+    ULONG cbBuf;
+    APIRET hrc;
     int index;
 
     for (index = 0; index < 'z' - 'c' + 1; index++, szDriveLetter[0]++)
     {
-        hrc = DosQueryFSAttach(szDriveLetter, 0, FSAIL_QUERYNAME,
+        cbBuf = sizeof(buf);
+        memset(buf, 0, sizeof(buf));
+
+        hrc = DosQueryFSAttach(szDriveLetter,
+                               0, FSAIL_QUERYNAME,
                                pBuf, &cbBuf);
 
-        if ( ! hrc && pBuf->iType == FSAT_REMOTEDRV &&
-             pBuf->rgFSAData[pBuf->cbName + pBuf->cbFSDName] &&
-             ! strcmp((char *)&pBuf->rgFSAData[pBuf->cbName + pBuf->cbFSDName], pszShare) )
-            break;
-    }
+        if (! hrc)
+        {
+            char *pszFSDName = (char *)pBuf->szName + pBuf->cbName + 1;
+            char *prgFSAData = pszFSDName + pBuf->cbFSDName + 1;
+            char *p = NULL;
 
-    if (index != 'z' - 'c' + 1)
-    {
-        fMounted = RTStrPrintf(pszMountPoint, cbMountPoint, "%s", szDriveLetter)
-                 ? true : false;
+            if (*prgFSAData)
+            {
+                p = strrchr(prgFSAData, '\\');
+
+                if (p)
+                {
+                    p++;
+                }
+            }
+
+            if ( pBuf->iType == FSAT_REMOTEDRV &&
+                 ! RTStrICmp(pszFSDName, "vboxsf") &&
+                 p && ! RTStrICmp(p, pszShare) )
+            {
+                RTStrPrintf(pszMountPoint, cbMountPoint, "%s", szDriveLetter);
+                fMounted = true;
+                break;
+            }
+        }
     }
 #else
     FILE *pFh = setmntent(_PATH_MOUNTED, "r+t"); /** @todo r=bird: why open it for writing? (the '+') */
@@ -244,7 +452,7 @@ static int vbsvcAutoMountUnmount(const char *pszMountPoint)
     }
 #ifdef RT_OS_OS2
     if (hrc)
-        rc = RTErrConvertFromErrno(hrc);
+        rc = RTErrConvertFromOS2(hrc);
 #else
     if (r == -1)  /** @todo r=bird: RTThreadSleep set errno.  */
         rc = RTErrConvertFromErrno(errno);
@@ -310,14 +518,9 @@ static int vbsvcAutoMountPrepareMountPoint(const char *pszMountPoint, const char
  * @param   pszMountPoint   The mount point.
  * @param   pOpts           The mount options.
  */
-#ifdef RT_OS_OS2
-static int vbsvcAutoMountSharedFolder(const char *pszShareName, const char *pszMountPoint)
-{
-#else
 static int vbsvcAutoMountSharedFolder(const char *pszShareName, const char *pszMountPoint, struct vbsf_mount_opts *pOpts)
 {
     AssertPtr(pOpts);
-#endif
 
     int rc = VINF_SUCCESS;
     bool fSkip = false;
@@ -576,25 +779,82 @@ static int vbsvcAutoMountProcessMappings(PCVBGLR3SHAREDFOLDERMAPPING paMappings,
             {
                 char szMountPoint[RTPATH_MAX];
 #ifdef RT_OS_OS2
-                char   pszDriveLetter[] = "c:";
-                char   buf[sizeof(FSQBUFFER2) + 3 * CCHMAXPATH] = {0};
+                char   szDriveLetter[] = "c:";
+                char   buf[sizeof(FSQBUFFER2) + 3 * CCHMAXPATH];
                 PFSQBUFFER2 pBuf = (PFSQBUFFER2)buf;
-                ULONG  cbBuf = sizeof(buf);
+                ULONG  cbBuf;
                 APIRET hrc;
-                int    index;
+                int  index;
+                bool fFound = false;
+                char szFirstFree[3] = {0};
 
-                // find the first free drive letter
-                for (index = 0; index < 'z' - 'c' + 1; index++, pszDriveLetter[0] ++)
+                // find the first free drive letter (or keep using the already existing mountings)
+                for (index = 0; index < 'z' - 'c' + 1; index++, szDriveLetter[0]++)
                 {
-                    if ( (hrc = DosQueryFSAttach(pszDriveLetter, 0, FSAIL_QUERYNAME, pBuf, &cbBuf)) == ERROR_INVALID_DRIVE )
+                    cbBuf = sizeof(buf);
+                    memset(buf, 0, sizeof(buf));
+
+                    hrc = DosQueryFSAttach(szDriveLetter, 0, FSAIL_QUERYNAME, pBuf, &cbBuf);
+
+                    if (! hrc)
+                    {
+                        char *pszFSDName = (char *)pBuf->szName + pBuf->cbName + 1;
+                        char *prgFSAData = pszFSDName + pBuf->cbFSDName + 1;
+                        char *p = NULL;
+
+                        if (*prgFSAData)
+                        {
+                            p = strrchr(prgFSAData, '\\');
+
+                            if (p)
+                            {
+                                p++;
+                            }
+                        }
+
+                        if ( p && pBuf->iType == FSAT_REMOTEDRV &&
+                             ! RTStrICmp(p, pszShareName) &&
+                             ! RTStrICmp(pszFSDName, "vboxsf") )
+                        {
+                            strcpy(szMountPoint, (char *)pBuf->szName);
+                            fFound = true;
+                        }
+                    }
+                    else if (hrc == ERROR_INVALID_DRIVE && ! *szFirstFree)
+                    {
+                        strcpy(szFirstFree, szDriveLetter);
+                    }
+
+                    if (fFound)
                         break;
                 }
 
-                if (index != 'z' - 'c' + 1)
+                if (! fFound && *szFirstFree)
                 {
-                    strcpy(szMountPoint, pszDriveLetter);
-                    rc = vbsvcAutoMountSharedFolder(pszShareName, szMountPoint);
+                    strcpy(szMountPoint, szFirstFree);
                 }
+
+                // get drive letter from the explicit mount point list (if any)
+                if (g_cMounts)
+                {
+                    vbsf_mount *mnt = g_pMountList;
+
+                    for (index = 0; index < g_cMounts; index++, mnt++)
+                    {
+                        if (! RTStrICmp(mnt->pszShareName, pszShareName) )
+                        {
+                            strcpy(szMountPoint, mnt->pszMountPoint);
+                            break;
+                        }
+                    }
+                }
+
+                if (*szMountPoint)
+                {
+                    rc = vbsvcAutoMountSharedFolder(pszShareName, szMountPoint, NULL);
+                }
+                else
+                    VGSvcError("No free drive letters found!\n");
 #else
                 rc = RTPathJoin(szMountPoint, sizeof(szMountPoint), pszMountDir, pszShareNameFull);
                 if (RT_SUCCESS(rc))
@@ -665,8 +925,8 @@ static DECLCALLBACK(int) vbsvcAutoMountWorker(bool volatile *pfShutdown)
     {
         char *pszMountDir;
 #ifdef RT_OS_OS2
-        pszMountDir = (char *)"";
         rc = VINF_SUCCESS;
+        RTStrDupEx(&pszMountDir, "");
 #else
         rc = VbglR3SharedFolderGetMountDir(&pszMountDir);
         if (rc == VERR_NOT_FOUND)
@@ -678,8 +938,8 @@ static DECLCALLBACK(int) vbsvcAutoMountWorker(bool volatile *pfShutdown)
 
             char *pszSharePrefix;
 #ifdef RT_OS_OS2
-            pszSharePrefix = (char *)"";
             rc = VINF_SUCCESS;
+            RTStrDupEx(&pszSharePrefix, "");
 #else
             rc = VbglR3SharedFolderGetMountPrefix(&pszSharePrefix);
 #endif
@@ -753,6 +1013,22 @@ static DECLCALLBACK(int) vbsvcAutoMountWorker(bool volatile *pfShutdown)
 static DECLCALLBACK(void) vbsvcAutoMountTerm(void)
 {
     VGSvcVerbose(3, "vbsvcAutoMountTerm\n");
+
+#ifdef RT_OS_OS2
+    vbsf_mount *mnt = g_pMountList;
+
+    if (g_cMounts)
+    {
+        for (int index = 0; index < MIN(g_cMounts, MAX_DRIVES); index++, mnt++)
+        {
+            RTMemFree(mnt->pszShareName);
+            RTMemFree(mnt->pszMountPoint);
+        }
+
+        memset(g_pMountList, 0, sizeof(g_pMountList));
+        g_cMounts = 0;
+    }
+#endif
 
     VbglR3SharedFolderDisconnect(g_SharedFoldersSvcClientID);
     g_SharedFoldersSvcClientID = 0;

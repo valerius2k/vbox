@@ -37,7 +37,7 @@ VBoxService_DEFS          = VBOX_WITH_HGCM VBOXSERVICE_TIMESYNC VBOXSERVICE_MANA
 VBoxService_DEFS         += \
 	VBOX_BUILD_TARGET=\"$(KBUILD_TARGET).$(KBUILD_TARGET_ARCH)\"
 VBoxService_DEFS.win     += _WIN32_WINNT=0x0501
-VBoxService_DEFS.os2      = VBOX_WITH_HGCM VBOXSERVICE_CLIPBOARD
+VBoxService_DEFS.os2      = VBOX_WITH_HGCM VBOXSERVICE_CLIPBOARD #VBOXSERVICE_MOUSE
 ifdef VBOX_WITH_DBUS
  VBoxService_DEFS        += VBOX_WITH_DBUS
 endif
@@ -114,7 +114,8 @@ VBoxService_SOURCES.win  += \
 
 VBoxService_SOURCES.os2   = \
 	$(PATH_OBJ)/VBoxService/VBoxService-os2.def \
-	VBoxServiceClipboard-os2.cpp
+	VBoxServiceClipboard-os2.cpp \
+	VBoxServiceMouse-os2.cpp
 
 VBoxService_LDFLAGS.darwin = -framework IOKit
 

@@ -162,6 +162,7 @@ extern char         g_szLogFile[RTPATH_MAX + 128];
 extern uint32_t     g_DefaultInterval;
 extern VBOXSERVICE  g_TimeSync;
 extern VBOXSERVICE  g_Clipboard;
+extern VBOXSERVICE  g_Mouse;
 extern VBOXSERVICE  g_Control;
 extern VBOXSERVICE  g_VMInfo;
 extern VBOXSERVICE  g_CpuHotPlug;
