@@ -199,6 +199,7 @@ static void vbsvcOS2AutoMountParseConfig(void)
 {
     char szCfg[CCHMAXPATHCOMP];
     char szLine[LINE_MAX_LEN];
+    char *pszLine = szLine;
     ULONG ulTemp;
     char *p;
     char *pszShareName;
@@ -220,33 +221,47 @@ static void vbsvcOS2AutoMountParseConfig(void)
         return;
     }
 
-    while (! vbsvcOS2GetLine(fd, (char *)szLine) )
+    while (! vbsvcOS2GetLine(fd, (char *)pszLine) )
     {
         // skip empty lines
-        if (! *szLine)
+        if (! *pszLine)
             continue;
 
         // change tabs to spaces
-        while ( (p = strchr(szLine, '\t')) )
+        while ( (p = strchr(pszLine, '\t')) )
         {
             *p = ' ';
         }
 
         // remove duplicate spaces
-        while ( (p = strstr(szLine, "  ")) )
+        while ( (p = strstr(pszLine, "  ")) )
         {
-            strncpy(p + 1, p + 2, LINE_MAX_LEN - (p - szLine) - 1);
-            p[LINE_MAX_LEN - (p - szLine)] = '\0';
+            strncpy(p + 1, p + 2, LINE_MAX_LEN - (p - pszLine) - 1);
+            p[LINE_MAX_LEN - (p - pszLine)] = '\0';
+        }
+        
+        if (*pszLine == ' ')
+        {
+            // skip leading space
+            pszLine++;
         }
 
-        p = strchr(szLine, ' ');
+        len = strlen(pszLine);
+
+        if ( (p = pszLine + len - 1) && *p == ' ' )
+        {
+            // delete trailing space
+            *p = '\0';
+        }
+        
+        p = strchr(pszLine, ' ');
 
         if (p)
         {
             /* share name */
-            len = p - szLine;
+            len = p - pszLine;
             pszShareName = (char *)RTMemAlloc(len + 1);
-            strncpy(pszShareName, szLine, len);
+            strncpy(pszShareName, pszLine, len);
             pszShareName[len] = '\0';
 
             /* drive letter assigned */
@@ -843,8 +858,21 @@ static int vbsvcAutoMountProcessMappings(PCVBGLR3SHAREDFOLDERMAPPING paMappings,
                     {
                         if (! RTStrICmp(mnt->pszShareName, pszShareName) )
                         {
-                            strcpy(szMountPoint, mnt->pszMountPoint);
-                            break;
+                            char *pszFSDName = (char *)pBuf->szName + pBuf->cbName + 1;
+
+                            cbBuf = sizeof(buf);
+                            memset(buf, 0, sizeof(buf));
+
+                            hrc = DosQueryFSAttach(mnt->pszMountPoint, 0, FSAIL_QUERYNAME, pBuf, &cbBuf);
+
+                            // check if this drive letter is occupied already
+                            if ( hrc == ERROR_INVALID_DRIVE || 
+                                 (! hrc && pBuf->iType == FSAT_REMOTEDRV &&
+                                  ! RTStrICmp(pszFSDName, "vboxsf") ) )
+                            {
+                                strcpy(szMountPoint, mnt->pszMountPoint);
+                                break;
+                            }
                         }
                     }
                 }

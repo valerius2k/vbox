@@ -50,10 +50,10 @@
 /*********************************************************************************************************************************
 *   Header Files                                                                                                                 *
 *********************************************************************************************************************************/
-#define INCL_BASE
-#define INCL_PM
-#define INCL_ERRORS
-#include <os2.h>
+//#define INCL_BASE
+//#define INCL_PM
+//#define INCL_ERRORS
+//#include <os2.h>
 
 #include <fcntl.h>
 #include <io.h>
@@ -78,7 +78,7 @@ typedef struct _evbuf
 } evbuf_t;
 #pragma pack()
 
-#define BUTTONS_ALL_UP  0001
+#define BUTTONS_ALLUP   0001
 #define BUTTON1_DOWN    0002
 #define BUTTON2_DOWN    0008
 #define BUTTON3_DOWN    0020
@@ -202,7 +202,7 @@ static DECLCALLBACK(int) vgsvcMouseOs2Worker(bool volatile *pfShutdown)
         {
             VGSvcVerbose(2, "VBoxMouse: at %d, %d\n", cx, cy);
 
-            event.flags = BUTTONS_ALL_UP; // ???
+            event.flags = BUTTONS_ALLUP; // ???
             event.xPos  = cx;
             event.yPos  = cy;
             event.xMax  = 65535;
@@ -213,6 +213,9 @@ static DECLCALLBACK(int) vgsvcMouseOs2Worker(bool volatile *pfShutdown)
             len = write(fd, &event, len);
         }
     }
+
+    close(fd);
+    fd = -1;
 
     return VINF_SUCCESS;
 }
@@ -234,8 +237,6 @@ static DECLCALLBACK(void) vgsvcMouseOs2Stop(void)
 static DECLCALLBACK(void) vgsvcMouseOs2Term(void)
 {
     vboxMouseRelease();
-    close(fd);
-    fd = -1;
 }
 
 
