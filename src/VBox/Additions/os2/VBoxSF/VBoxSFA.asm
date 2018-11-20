@@ -399,6 +399,7 @@ extern DOS16WRITE
 extern DOS16GETINFOSEG
 extern DOS16GETENV
 extern FSH_GETVOLPARM
+extern FSH_QSYSINFO
 extern FSH_PROBEBUF
 extern FSH_WILDMATCH
 
@@ -478,6 +479,39 @@ segment CODE16
     VBOXSF_EPILOGUE
     ret
 VBOXSF_EP32_END     FSH32_GETVOLPARM
+
+
+;;
+; @cproto APIRET APIENTRY FSH32_QSYSINFO(USHORT index, char *pData, USHORT cbData);
+VBOXSF_EP32_BEGIN   FSH32_QSYSINFO, 'FSH32_QSYSINFO'
+    ; switch to 16-bits and reserve place in stack for FSH_QSYSINFO args (3)
+    VBOXSF_32_TO_16     FSH32_QSYSINFO, 3*4
+segment CODE16
+    mov     cx, [ebp + 8h]            ; index
+    mov     [esp + 2*4], cx
+    ; reserve place for pData far16 pointer on stack
+    push  ds
+    mov   ax, DATA32 wrt FLAT
+    mov   ds, ax
+    mov   ecx, _KernTKSSBase
+    mov   ecx, [ds:ecx]
+    pop   ds
+    mov   eax, [ebp + 10h]             ; get a FLAT pointer to pData
+    sub   eax, ecx                     ; convert it
+    mov   cx, ss                       ; to a far 16:16
+    shl   ecx, 16                      ; pointer
+    mov   cx, ax                       ;
+    mov   [esp + 1*4], ecx             ;
+    mov   cx, [ebp + 14h]              ; cbData
+    mov   [esp + 0*4], cx
+    call  far FSH_QSYSINFO
+    ; switch back to 32 bits
+    VBOXSF_16_TO_32     FSH32_QSYSINFO
+    ; restore stack
+    VBOXSF_EPILOGUE
+    ret
+VBOXSF_EP32_END     FSH32_QSYSINFO
+
 
 ;;
 ; APIRET APIENTRY FSH32_PROBEBUF(ULONG operation, char *pData, ULONG cbData);
@@ -739,11 +773,11 @@ g_pfnDos16Write:
 GLOBALNAME g_fLog_enable
     dd  0
 
-GLOBALNAME g_selGIS
-    dw  0
+;GLOBALNAME g_selGIS
+;    dw  0
 
-GLOBALNAME g_selEnv
-    dw  0
+;GLOBALNAME g_selEnv
+;    dw  0
 
 GLOBALNAME g_fLogPrint
     db  0
@@ -1832,6 +1866,7 @@ segment CODE16
     call    NAME(FS_INIT_FPUTS)
 .quiet:
 
+%if 0
     ;
     ; Get Global InfoSeg selector
     ; APIRET  _Pascal DosGetInfoSeg(PSEL pselGlobal, PSEL pselLocal);
@@ -1859,6 +1894,7 @@ segment CODE16
     mov     word [ecx], ax
     pop     ecx
     pop     ds
+%endif
 
     ; return success.
     xor     eax, eax
@@ -1940,6 +1976,8 @@ GLOBALNAME FS_INIT_FPUTS
     ret
 ENDPROC FS_INIT_FPUTS
 
+
+%if 0
 
 ;;
 ; Dos16GetInfoSeg wrapper.
@@ -2064,6 +2102,7 @@ GLOBALNAME FS_INIT_GET_ENV
     ret
 ENDPROC FS_INIT_GET_ENV
 
+%endif
 
 ;;
 ; 16-bit ring-0 init routine.

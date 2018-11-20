@@ -53,14 +53,17 @@ extern uint32_t g_u32Info;
 /* from sys0.asm and the linker/end.lib. */
 extern char _text, _etext, _data, _end;
 extern VBGLSFCLIENT g_clientHandle;
-extern USHORT    g_selGIS;
+//extern USHORT    g_selGIS;
 extern PGINFOSEG g_pGIS;
-extern USHORT    g_selEnv;
-char            *g_pEnv = NULL;
+//extern USHORT    g_selEnv;
+//char            *g_pEnv = NULL;
+extern ULONG KernSISData;
 extern ULONG     g_fpLog_printf;
 void             LogPrintf(char *fmt, ...);
 RT_C_DECLS_END
 
+
+#if 0
 
 /*!
   @brief         Gets an environment variable by name
@@ -108,6 +111,8 @@ APIRET APIENTRY doScanEnv(PCSZ  pszName,
   log("none found!\n");
   return ERROR_ENVVAR_NOT_FOUND;
 }
+
+#endif
 
 
 /**
@@ -194,14 +199,15 @@ DECLASM(void) VBoxSFR0Init(void)
         }
 
         /* Initialize Global Infoseg pointer */
-        ULONG ulPtr = g_selGIS;
-        ulPtr <<= 16;
-        g_pGIS = (PGINFOSEG)KernSelToFlat(ulPtr);
+        g_pGIS = (PGINFOSEG)&KernSISData;
+        //ULONG ulPtr = g_selGIS;
+        //ulPtr <<= 16;
+        //g_pGIS = (PGINFOSEG)KernSelToFlat(ulPtr);
         
         /* Initialize Global Environment pointer */
-        ulPtr = g_selEnv;
-        ulPtr <<= 16;
-        g_pEnv = (char *)KernSelToFlat(ulPtr);
+        //ulPtr = g_selEnv;
+        //ulPtr <<= 16;
+        //g_pEnv = (char *)KernSelToFlat(ulPtr);
         
 #ifdef DUMP_ENV
         char *env = g_pEnv;

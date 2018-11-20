@@ -122,47 +122,12 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
         }
 
         if ( strstr(szSrvName, "vboxsrv") != szSrvName &&
-             strstr(szSrvName, "vboxsvr") != szSrvName )
+             strstr(szSrvName, "vboxsvr") != szSrvName &&
+             strstr(szSrvName, "vboxfs") != szSrvName  &&
+             strstr(szSrvName, "vboxsf") != szSrvName )
         {
             return ERROR_BAD_NET_NAME;
         }
-
-        if (p)
-        {
-            p++;
-        }
-        else
-        {
-            return ERROR_INVALID_NAME;
-        }
-
-        pszShareName = p;
-        p = strchr(pszShareName, '\\');
-
-        if (! p || p - pszShareName > CCHMAXPATHCOMP - 1)
-        {
-            return ERROR_INVALID_NAME;
-        }
-
-        strncpy(szShareName, pszShareName, p - pszShareName);
-        szShareName[p - pszShareName] = '\0';
-        log("szShareName=%s\n", szShareName);
-
-        if (p)
-        {
-            p++;
-        }
-        else
-        {
-            return ERROR_INVALID_NAME;
-        }
-
-        len = strlen(p);
-
-        if (len > *pcbParsedPath)
-            return ERROR_FILENAME_EXCED_RANGE;
-
-        strcpy(pszParsedPath, p);
 
         cMappings = sizeof(mappings);
         rc = VbglR0SfQueryMappings(&g_clientHandle, mappings, &cMappings);
@@ -172,59 +137,106 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
             return vbox_err_to_os2_err(rc);
         }
 
-        len = sizeof(SHFLSTRING) + 2 * CCHMAXPATHCOMP + 2;
-        str = (PSHFLSTRING)RTMemAlloc(len);
-
-        if (! str)
+        if (p)
         {
-            return ERROR_NOT_ENOUGH_MEMORY;
-        }
+            p++;
 
-        for (i = 0; i < cMappings; i++)
-        {
-            rc = VbglR0SfQueryMapName(&g_clientHandle, mappings[i].root, str, len);
+            pszShareName = p;
+            p = strchr(pszShareName, '\\');
 
-            if (RT_SUCCESS(rc))
+            if (! p)
             {
-                char szFileName[CCHMAXPATHCOMP];
+                p = pszShareName + strlen(pszShareName);
+            }
 
-                vboxsfStrFromUtf8(szFileName, (char *)str->String.utf8, CCHMAXPATHCOMP, str->u16Length);
+            if (! p || p - pszShareName > CCHMAXPATHCOMP - 1)
+            {
+                return ERROR_INVALID_NAME;
+            }
 
-                if (! stricmp(szShareName, szFileName) )
+            strncpy(szShareName, pszShareName, p - pszShareName);
+            szShareName[p - pszShareName] = '\0';
+            log("szShareName=%s\n", szShareName);
+
+            if (p)
+            {
+                if (*p)
                 {
-                    break;
+                    p++;
                 }
             }
-        }
+            else
+            {
+                return ERROR_INVALID_NAME;
+            }
 
-        RTMemFree(str);
+            len = strlen(p);
 
-        if (i == cMappings)
-        {
-            // not found, create a temporary mapping
-            char *pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+            if (len > *pcbParsedPath)
+                return ERROR_FILENAME_EXCED_RANGE;
 
-            if (! pwsz)
+            strcpy(pszParsedPath, p);
+
+            len = sizeof(SHFLSTRING) + 2 * CCHMAXPATHCOMP + 2;
+            str = (PSHFLSTRING)RTMemAlloc(len);
+
+            if (! str)
             {
                 return ERROR_NOT_ENOUGH_MEMORY;
             }
 
-            vboxsfStrToUtf8(pwsz, szShareName);
-            str = make_shflstring(pwsz);
-            RTMemFree(pwsz);
-
-            rc = VbglR0SfMapFolder(&g_clientHandle, str, map);
-            RTMemFree(str);
-            
-            if (RT_SUCCESS(rc))
+            for (i = 0; i < cMappings; i++)
             {
-                *tmp = true;
+                rc = VbglR0SfQueryMapName(&g_clientHandle, mappings[i].root, str, len);
+
+                if (RT_SUCCESS(rc))
+                {
+                    char szFileName[CCHMAXPATHCOMP];
+
+                    vboxsfStrFromUtf8(szFileName, (char *)str->String.utf8, CCHMAXPATHCOMP, str->u16Length);
+
+                    if (! stricmp(szShareName, szFileName) )
+                    {
+                        break;
+                    }
+                }
+            }
+
+            RTMemFree(str);
+
+            if (i == cMappings)
+            {
+                // not found, create a temporary mapping
+                char *pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+
+                if (! pwsz)
+                {
+                    return ERROR_NOT_ENOUGH_MEMORY;
+                }
+
+                vboxsfStrToUtf8(pwsz, szShareName);
+                str = make_shflstring(pwsz);
+                RTMemFree(pwsz);
+
+                rc = VbglR0SfMapFolder(&g_clientHandle, str, map);
+                RTMemFree(str);
+            
+                if (RT_SUCCESS(rc))
+                {
+                    *tmp = true;
+                }
+            }
+            else
+            {
+                // found, return an existing mapping
+                *map = *(PVBGLSFMAP)&mappings[i].root;
             }
         }
         else
         {
-            // found, return an existing mapping
-            *map = *(PVBGLSFMAP)&mappings[i].root;
+            // root namespace, contains all share names
+            //*map = 0;
+            return ERROR_INVALID_NAME;
         }
 
         hrc = vbox_err_to_os2_err(rc);
@@ -258,6 +270,7 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
         hrc = NO_ERROR;
     }
 
+    *pcbParsedPath = strlen(pszParsedPath) + 1;
     return hrc;
 }
 
@@ -642,7 +655,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
 
                     case FIL_QUERYEASFROMLIST:
                     case FIL_QUERYEASFROMLISTL:
-                    case 4:
+                    case FIL_QUERYALLEAS:
                         usNeededSize = sizeof(EAOP);
                         break;
 
@@ -761,6 +774,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             filestatus.cbFile = (ULONG)file->Info.cbObject;
                             filestatus.cbFileAlloc = (ULONG)file->Info.cbAllocated;
                             KernCopyOut(pData, &filestatus, sizeof(FILESTATUS));
+                            hrc = NO_ERROR;
                             break;
                         }
  
@@ -804,6 +818,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             filestatus.cbFile = file->Info.cbObject;
                             filestatus.cbFileAlloc = file->Info.cbAllocated;
                             KernCopyOut(pData, &filestatus, sizeof(FILESTATUS3L));
+                            hrc = NO_ERROR;
                             break;
                         }
 
@@ -848,6 +863,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             filestatus.cbFileAlloc = (ULONG)file->Info.cbAllocated;
                             filestatus.cbList = sizeof(filestatus.cbList);
                             KernCopyOut(pData, &filestatus, sizeof(FILESTATUS2));
+                            hrc = NO_ERROR;
                             break;
                         }
 
@@ -892,6 +908,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             filestatus.cbFileAlloc = file->Info.cbAllocated;
                             filestatus.cbList = sizeof(filestatus.cbList);
                             KernCopyOut(pData, &filestatus, sizeof(FILESTATUS4L));
+                            hrc = NO_ERROR;
                             break;
                         }
 
@@ -900,22 +917,35 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                         {
                             EAOP filestatus;
                             KernCopyIn(&filestatus, pData, sizeof(EAOP));
-                            PFEALIST pFEA = (PFEALIST)KernSelToFlat((ULONG)filestatus.fpFEAList);
-                            // @todo: get empty EAs
-                            memset(pFEA, 0, (USHORT)pFEA->cbList);
-                            pFEA->cbList = sizeof(pFEA->cbList);
+                            filestatus.fpFEAList = (PFEALIST)KernSelToFlat((ULONG)filestatus.fpFEAList);
+                            filestatus.fpGEAList = (PGEALIST)KernSelToFlat((ULONG)filestatus.fpGEAList);
+                            hrc = GetEmptyEAS(&filestatus);
                             KernCopyOut(pData, &filestatus, sizeof(EAOP));
                             break;
                         }
 
-                    case 4: // FIL_QUERYALLEAS
+                    case FIL_QUERYALLEAS:
                         {
                             EAOP filestatus;
+                            PFEALIST pFeal;
+                            ULONG cbList;
+
                             KernCopyIn(&filestatus, pData, sizeof(EAOP));
-                            PFEALIST pFEA = (PFEALIST)KernSelToFlat((ULONG)filestatus.fpFEAList);
-                            memset(pFEA, 0, (USHORT)pFEA->cbList);
-                            pFEA->cbList = sizeof(pFEA->cbList);
+                            filestatus.fpFEAList = (PFEALIST)KernSelToFlat((ULONG)filestatus.fpFEAList);
+                            KernCopyIn(&cbList, &filestatus.fpFEAList->cbList, sizeof(filestatus.fpFEAList->cbList));
+                            pFeal = (PFEALIST)RTMemAlloc(cbList);
+                            if (! pFeal)
+                            {
+                                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                                break;
+                            }
+                            KernCopyIn(pFeal, filestatus.fpFEAList, cbList);
+                            memset(pFeal, 0, cbList);
+                            pFeal->cbList = sizeof(pFeal->cbList);
+                            KernCopyOut(filestatus.fpFEAList, pFeal, cbList);
                             KernCopyOut(pData, &filestatus, sizeof(EAOP));
+                            RTMemFree(pFeal);
+                            hrc = NO_ERROR;
                             break;
                         }
 
@@ -923,8 +953,6 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                         hrc = ERROR_INVALID_LEVEL;
                         goto FS32_FILEINFOEXIT;
                 }
-
-                hrc = NO_ERROR;
             }
             break;
 
@@ -1043,6 +1071,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             if (psffsi->sfi_DOSattr != (BYTE)filestatus.attrFile)
                                 psffsi->sfi_DOSattr = (BYTE)filestatus.attrFile;
 
+                            hrc = NO_ERROR;
                             break;
                         }
 
@@ -1136,11 +1165,13 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             if (psffsi->sfi_DOSattr != (BYTE)filestatus.attrFile)
                                 psffsi->sfi_DOSattr = (BYTE)filestatus.attrFile;
 
+                            hrc = NO_ERROR;
                             break;
                         }
 
                     case FIL_QUERYEASIZE:
                     case FIL_QUERYEASIZEL:
+                        hrc = NO_ERROR;
                         break;
 
                     default:
@@ -1393,13 +1424,50 @@ FS32_NMPIPE(PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG OpType, union npoper *pOpRec
 DECLASM(int)
 FS32_VERIFYUNCNAME(ULONG flag, PCSZ pszName)
 {
+    char *pszServer, *p;
+    APIRET hrc = NO_ERROR;
+
     log("VBOXSF: FS32_VERIFYUNCNAME(%lx, %s)\n", flag, pszName);
 
-    if (! stricmp((char *)pszName, "vboxsvr") ||
-        ! stricmp((char *)pszName, "vboxsrv") )
-        return NO_ERROR;
+    pszServer = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
+
+    if (! pszServer)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_VERIFYUNCNAMEEXIT;
+    }
+
+    if (pszName[0] != '\\' ||
+        pszName[1] != '\\')
+    {
+        hrc = ERROR_INVALID_NAME;
+        goto FS32_VERIFYUNCNAMEEXIT;
+    }
+
+    pszName += 2;
+
+    p = strchr((char *)pszName, '\\');
+
+    if (p)
+    {
+        strncpy(pszServer, (char *)pszName, p - (char *)pszName);
+        pszServer[p - (char *)pszName] = '\0';
+    }
+
+    if (! stricmp(pszServer, "vboxsvr") ||
+        ! stricmp(pszServer, "vboxsrv") ||
+        ! stricmp(pszServer, "vboxfs")  ||
+        ! stricmp(pszServer, "vboxsf") )
+        hrc = NO_ERROR;
     else
-        return ERROR_INVALID_NAME;
+        hrc = ERROR_INVALID_NAME;
+
+FS32_VERIFYUNCNAMEEXIT:
+    if (pszServer)
+        RTMemFree(pszServer);
+
+    log(" => %d\n", hrc);
+    return hrc;
 }
 
 DECLASM(int)

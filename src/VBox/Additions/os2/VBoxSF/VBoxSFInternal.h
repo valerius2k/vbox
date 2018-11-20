@@ -48,6 +48,14 @@
 #include <iprt/types.h>
 #include <iprt/assert.h>
 
+#define MIN_EA_SIZE 128
+#define MAX_EA_SIZE 65536UL
+
+#define FIL_QUERYALLEAS        4   /* Level 4, return all EA's         */
+#define FIL_QUERYFULLNAME      5   /* Level 5, return fully qualified  */
+                                   /*   name of file                   */
+#define FIL_NAMEISVALID        6   /* Level 6, check validity of       */
+
 #define MIN(a, b) ((a < b) ? a : b)
 
 #define ERROR_VOLUME_NOT_MOUNTED 0xEE00
@@ -67,7 +75,8 @@ typedef struct _FILEFNDBUF                 /* findbuf */
     ULONG   cbFileAlloc;
     USHORT  attrFile;
     UCHAR   cchName;
-    CHAR    achName[CCHMAXPATHCOMP];
+    CHAR    achName[1]; 
+    //CHAR    achName[CCHMAXPATHCOMP];
 } FILEFNDBUF;
 typedef FILEFNDBUF *PFILEFNDBUF;
 
@@ -82,7 +91,8 @@ typedef struct _FILEFNDBUF3 {   /* findbuf3 */
     ULONG   cbFileAlloc;
     USHORT  attrFile;
     UCHAR   cchName;
-    CHAR    achName[CCHMAXPATHCOMP]; /* initial room for zero terminator */
+    CHAR    achName[1]; 
+    //CHAR    achName[CCHMAXPATHCOMP]; /* initial room for zero terminator */
 } FILEFNDBUF3;
 typedef FILEFNDBUF3 *PFILEFNDBUF3;
 
@@ -98,7 +108,8 @@ typedef struct _FILEFNDBUF3L     /* findbuf */
     LONGLONG  cbFileAlloc;
     ULONG  attrFile;
     UCHAR  cchName;
-    CHAR   achName[CCHMAXPATHCOMP];
+    CHAR   achName[1]; 
+    //CHAR   achName[CCHMAXPATHCOMP];
 } FILEFNDBUF3L;
 typedef FILEFNDBUF3L *PFILEFNDBUF3L;
 
@@ -115,7 +126,8 @@ typedef struct _FILEFNDBUF2    /* findbuf2 */
     USHORT attrFile;
     ULONG  cbList;
     UCHAR  cchName;
-    CHAR   achName[CCHMAXPATHCOMP];
+    CHAR   achName[1]; 
+    //CHAR   achName[CCHMAXPATHCOMP];
 } FILEFNDBUF2;
 typedef FILEFNDBUF2 *PFILEFNDBUF2;
 
@@ -132,9 +144,17 @@ typedef struct _FILEFNDBUF4L                /* findbuf4l */
     ULONG    attrFile;                    /* widened field */
     ULONG    cbList;
     UCHAR    cchName;
-    CHAR     achName[CCHMAXPATHCOMP];
+    CHAR    achName[1]; 
+    //CHAR     achName[CCHMAXPATHCOMP];
 } FILEFNDBUF4L;
 typedef FILEFNDBUF4L  *PFILEFNDBUF4L;
+
+typedef struct _ProcInfo
+{
+    USHORT usPid;
+    USHORT usUid;
+    USHORT usPdb;
+} PROCINFO, *PPROCINFO;
 
 #pragma pack()
 
@@ -248,15 +268,21 @@ RT_C_DECLS_BEGIN
 
 /* IFS Helpers */
 APIRET APIENTRY FSH32_GETVOLPARM(USHORT hVPB, PVPFSI *pvpfsi, PVPFSD *pvpfsd);
+APIRET APIENTRY FSH32_QSYSINFO(USHORT index, char *pData, USHORT cbData);
 APIRET APIENTRY FSH32_PROBEBUF(ULONG operation, char *pData, ULONG cbData);
 APIRET APIENTRY FSH32_WILDMATCH(char *pPat, char *pStr);
 
 RT_C_DECLS_END
 
+APIRET GetProcInfo(PPROCINFO pProcInfo, USHORT usSize);
+bool IsDosSession(void);
+
 uint32_t VBoxToOS2Attr(uint32_t fMode);
 uint32_t OS2ToVBoxAttr(uint32_t attr);
 
 USHORT vbox_err_to_os2_err(int rc);
+
+APIRET GetEmptyEAS(PEAOP pEAOP);
 
 int tolower (int c);
 char *strncpy(char *dst, char *src, int len);

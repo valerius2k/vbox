@@ -112,6 +112,9 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
     USHORT usNeededLen;
     ULONG cbSize = 0;
     PSZ pszTzValue;
+    char *pszFn = NULL;
+    EAOP eaop = {0};
+    PFEALIST pFeal = NULL;
     bool skip = false;
     int rc;
 
@@ -124,27 +127,27 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
     switch (level)
     {
         case FIL_STANDARD:
-            usNeededLen = sizeof(FILEFINDBUF3) - CCHMAXPATHCOMP;
+            usNeededLen = sizeof(FILEFNDBUF3);
             break;
 
         case FIL_STANDARDL:
-            usNeededLen = sizeof(FILEFINDBUF3L) - CCHMAXPATHCOMP;
+            usNeededLen = sizeof(FILEFNDBUF3L);
             break;
 
         case FIL_QUERYEASIZE:
-            usNeededLen = sizeof(FILEFINDBUF2) - CCHMAXPATHCOMP;
+            usNeededLen = sizeof(FILEFNDBUF2);
             break;
 
         case FIL_QUERYEASIZEL:
-            usNeededLen = sizeof(FILEFINDBUF4L) - CCHMAXPATHCOMP;
+            usNeededLen = sizeof(FILEFNDBUF4L);
             break;
 
         case FIL_QUERYEASFROMLIST:
-            usNeededLen = sizeof(EAOP) + sizeof(FILEFINDBUF3) + sizeof(ULONG);
+            usNeededLen = sizeof(EAOP) + sizeof(FILEFNDBUF3) + MIN_EA_SIZE;
             break;
 
         case FIL_QUERYEASFROMLISTL:
-            usNeededLen = sizeof(EAOP) + sizeof(FILEFINDBUF3L) + sizeof(ULONG);
+            usNeededLen = sizeof(EAOP) + sizeof(FILEFNDBUF3L) + MIN_EA_SIZE;
             break;
 
         default:
@@ -161,8 +164,40 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
         goto FILLFINDBUFEXIT;
     }
 
+    if (level == FIL_QUERYEASFROMLIST || level == FIL_QUERYEASFROMLISTL)
+    {
+        memcpy(&eaop, pbData, sizeof (EAOP));
+        pFeal = (PFEALIST)RTMemAlloc(MIN_EA_SIZE);
+        
+        if (! pFeal)
+        {
+            hrc = ERROR_NOT_ENOUGH_MEMORY;
+            goto FILLFINDBUFEXIT;
+        }
+    }
+
+    memset(pbData, 0, cbData);
+
+    if (level == FIL_QUERYEASFROMLIST || level == FIL_QUERYEASFROMLISTL)
+    {
+        KernCopyOut(pbData, &eaop, sizeof(EAOP));
+        pbData += sizeof(EAOP);
+        cbData -= sizeof(EAOP);
+
+        eaop.fpFEAList = pFeal;
+        eaop.fpGEAList = (PGEALIST)KernSelToFlat((ULONG)eaop.fpGEAList);
+    }
+
     if (! pFindBuf->has_more_files)
         return ERROR_NO_MORE_FILES;
+
+    pszFn = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
+
+    if (! pszFn)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FILLFINDBUFEXIT;
+    }
 
     if (! pFindBuf->buf)
     {
@@ -230,14 +265,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                 pbData += sizeof(ULONG);
                 cbData -= sizeof(ULONG);
             }
-
-            if (level == FIL_QUERYEASFROMLIST || level == FIL_QUERYEASFROMLISTL)
-            {
-                EAOP dummy  = {0};
-                KernCopyOut(pbData, &dummy, sizeof(EAOP));
-                pbData += sizeof(EAOP);
-                cbData -= sizeof(EAOP);
-            }
         }
         skip = false;
 
@@ -249,10 +276,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     char *pszFileName = (char *)file->name.String.utf8;
                     RTTIME time;
                     memset(&findbuf, 0, sizeof(findbuf));
-                    /* File name */
-                    vboxsfStrFromUtf8(findbuf.achName, (char *)pszFileName, 
-                        CCHMAXPATHCOMP, file->name.u16Length);
-                    findbuf.cchName = strlen(findbuf.achName);
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
@@ -281,7 +304,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeLastWrite.hours = time.u8Hour;
                     findbuf.cbFile = (ULONG)file->Info.cbObject;
                     findbuf.cbFileAlloc = (ULONG)file->Info.cbAllocated;
-                    cbSize = sizeof(FILEFNDBUF) - CCHMAXPATHCOMP + findbuf.cchName;
+                    cbSize = sizeof(FILEFNDBUF) - 1;
                     /* Check for file attributes */
                     if (pFindBuf->bMustAttr)
                     {
@@ -293,7 +316,13 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                             continue;
                         }
                     }
+                    /* File name */
+                    vboxsfStrFromUtf8(pszFn, (char *)pszFileName, 
+                        CCHMAXPATHCOMP, file->name.u16Length);
+                    findbuf.cchName = strlen(pszFn);
                     KernCopyOut(pbData, &findbuf, cbSize);
+                    KernCopyOut(pbData + cbSize, pszFn, findbuf.cchName + 1);
+                    cbSize += findbuf.cchName + 1;
                     break;
                 }
 
@@ -303,10 +332,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     char *pszFileName = (char *)file->name.String.utf8;
                     RTTIME time;
                     memset(&findbuf, 0, sizeof(findbuf));
-                    /* File name */
-                    vboxsfStrFromUtf8(findbuf.achName, (char *)pszFileName,
-                        CCHMAXPATHCOMP, file->name.u16Length);
-                    findbuf.cchName = strlen(findbuf.achName);
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
@@ -335,7 +360,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeLastWrite.hours = time.u8Hour;
                     findbuf.cbFile = file->Info.cbObject;
                     findbuf.cbFileAlloc = file->Info.cbAllocated;
-                    cbSize = sizeof(FILEFNDBUF3L) - CCHMAXPATHCOMP + findbuf.cchName;
+                    cbSize = sizeof(FILEFNDBUF3L) - 1;
                     /* Check for file attributes */
                     if (pFindBuf->bMustAttr)
                     {
@@ -347,7 +372,13 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                             continue;
                         }
                     }
+                    /* File name */
+                    vboxsfStrFromUtf8(pszFn, (char *)pszFileName, 
+                        CCHMAXPATHCOMP, file->name.u16Length);
+                    findbuf.cchName = strlen(pszFn);
                     KernCopyOut(pbData, &findbuf, cbSize);
+                    KernCopyOut(pbData + cbSize, pszFn, findbuf.cchName + 1);
+                    cbSize += findbuf.cchName + 1;
                     break;
                 }
 
@@ -357,10 +388,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     char *pszFileName = (char *)file->name.String.utf8;
                     RTTIME time;
                     memset(&findbuf, 0, sizeof(findbuf));
-                    /* File name */
-                    vboxsfStrFromUtf8(findbuf.achName, (char *)pszFileName, 
-                        CCHMAXPATHCOMP, file->name.u16Length);
-                    findbuf.cchName = strlen(findbuf.achName);
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
@@ -389,7 +416,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeLastWrite.hours = time.u8Hour;
                     findbuf.cbFile = (ULONG)file->Info.cbObject;
                     findbuf.cbFileAlloc = (ULONG)file->Info.cbAllocated;
-                    cbSize = sizeof(FILEFNDBUF2) - CCHMAXPATHCOMP + findbuf.cchName;
+                    cbSize = sizeof(FILEFNDBUF2) - 1;
                     /* Check for file attributes */
                     if (pFindBuf->bMustAttr)
                     {
@@ -401,8 +428,14 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                             continue;
                         }
                     }
-                    findbuf.cbList = file->Info.Attr.u.EASize.cb;
+                    findbuf.cbList = 0; //file->Info.Attr.u.EASize.cb;
+                    /* File name */
+                    vboxsfStrFromUtf8(pszFn, (char *)pszFileName, 
+                        CCHMAXPATHCOMP, file->name.u16Length);
+                    findbuf.cchName = strlen(pszFn);
                     KernCopyOut(pbData, &findbuf, cbSize);
+                    KernCopyOut(pbData + cbSize, pszFn, findbuf.cchName + 1);
+                    cbSize += findbuf.cchName + 1;
                     break;
                 }
 
@@ -412,10 +445,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     RTTIME time;
                     char *pszFileName = (char *)file->name.String.utf8;
                     memset(&findbuf, 0, sizeof(findbuf));
-                    /* File name */
-                    vboxsfStrFromUtf8(findbuf.achName, (char *)pszFileName, 
-                        CCHMAXPATHCOMP, file->name.u16Length);
-                    findbuf.cchName = strlen(findbuf.achName);
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
@@ -444,7 +473,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeLastWrite.hours = time.u8Hour;
                     findbuf.cbFile = file->Info.cbObject;
                     findbuf.cbFileAlloc = file->Info.cbAllocated;
-                    cbSize = sizeof(FILEFNDBUF4L) - CCHMAXPATHCOMP + findbuf.cchName;
+                    cbSize = sizeof(FILEFNDBUF4L) - 1;
                     /* Check for file attributes */
                     if (pFindBuf->bMustAttr)
                     {
@@ -456,8 +485,14 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                             continue;
                         }
                     }
-                    findbuf.cbList = file->Info.Attr.u.EASize.cb;
+                    findbuf.cbList = 0; //file->Info.Attr.u.EASize.cb;
+                    /* File name */
+                    vboxsfStrFromUtf8(pszFn, (char *)pszFileName, 
+                        CCHMAXPATHCOMP, file->name.u16Length);
+                    findbuf.cchName = strlen(pszFn);
                     KernCopyOut(pbData, &findbuf, cbSize);
+                    KernCopyOut(pbData + cbSize, pszFn, findbuf.cchName + 1);
+                    cbSize += findbuf.cchName + 1;
                     break;
                 }
 
@@ -466,11 +501,9 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     FILEFNDBUF3 findbuf;
                     char *pszFileName = (char *)file->name.String.utf8;
                     RTTIME time;
+                    ULONG ulFeaSize;
+                    BYTE len;
                     memset(&findbuf, 0, sizeof(findbuf));
-                    /* File name */
-                    vboxsfStrFromUtf8(findbuf.achName, (char *)pszFileName, 
-                        CCHMAXPATHCOMP, file->name.u16Length);
-                    findbuf.cchName = strlen(findbuf.achName);
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
@@ -499,7 +532,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeLastWrite.hours = time.u8Hour;
                     findbuf.cbFile = (ULONG)file->Info.cbObject;
                     findbuf.cbFileAlloc = (ULONG)file->Info.cbAllocated;
-                    cbSize = sizeof(FILEFNDBUF3) - CCHMAXPATHCOMP + findbuf.cchName;
+                    cbSize = sizeof(FILEFNDBUF3) - 2;
                     /* Check for file attributes */
                     if (pFindBuf->bMustAttr)
                     {
@@ -512,6 +545,30 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                         }
                     }
                     KernCopyOut(pbData, &findbuf, cbSize);
+                    cbData -= cbSize;
+                    pbData += cbSize;
+                    /* File name */
+                    vboxsfStrFromUtf8(pszFn, (char *)pszFileName, 
+                        CCHMAXPATHCOMP, file->name.u16Length);
+                    len = strlen(pszFn);
+                    eaop.fpFEAList->cbList = cbData - (len + 2);
+                    hrc = GetEmptyEAS(&eaop);
+                    if (hrc && (hrc != ERROR_EAS_DIDNT_FIT))
+                        goto FILLFINDBUFEXIT;
+                    else if (hrc == ERROR_EAS_DIDNT_FIT)
+                        ulFeaSize = sizeof(eaop.fpFEAList->cbList);
+                    else
+                        ulFeaSize = eaop.fpFEAList->cbList;
+                    KernCopyOut(pbData, eaop.fpFEAList, ulFeaSize);
+                    cbData -= ulFeaSize;
+                    pbData += ulFeaSize;
+                    KernCopyOut(pbData, &len, sizeof(len));
+                    pbData += sizeof(len);
+                    cbData -= sizeof(len);
+                    KernCopyOut(pbData, pszFn, len + 1);
+                    cbSize += len + 1;
+                    pbData += len + 1;
+                    cbData -= len + 1;
                     break;
                 }
 
@@ -520,11 +577,9 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     FILEFNDBUF3L findbuf;
                     char *pszFileName = (char *)file->name.String.utf8;
                     RTTIME time;
+                    ULONG ulFeaSize;
+                    BYTE len;
                     memset(&findbuf, 0, sizeof(findbuf));
-                    /* File name */
-                    vboxsfStrFromUtf8(findbuf.achName, (char *)pszFileName, 
-                        CCHMAXPATHCOMP, file->name.u16Length);
-                    findbuf.cchName = strlen(findbuf.achName);
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
@@ -553,7 +608,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeLastWrite.hours = time.u8Hour;
                     findbuf.cbFile = file->Info.cbObject;
                     findbuf.cbFileAlloc = file->Info.cbAllocated;
-                    cbSize = sizeof(FILEFNDBUF3L) - CCHMAXPATHCOMP + findbuf.cchName;
+                    cbSize = sizeof(FILEFNDBUF3L) - 2;
                     /* Check for file attributes */
                     if (pFindBuf->bMustAttr)
                     {
@@ -566,6 +621,30 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                         }
                     }
                     KernCopyOut(pbData, &findbuf, cbSize);
+                    cbData -= cbSize;
+                    pbData += cbSize;
+                    /* File name */
+                    vboxsfStrFromUtf8(pszFn, (char *)pszFileName, 
+                        CCHMAXPATHCOMP, file->name.u16Length);
+                    len = strlen(pszFn);
+                    eaop.fpFEAList->cbList = cbData - (len + 2);
+                    hrc = GetEmptyEAS(&eaop);
+                    if (hrc && (hrc != ERROR_EAS_DIDNT_FIT))
+                        goto FILLFINDBUFEXIT;
+                    else if (hrc == ERROR_EAS_DIDNT_FIT)
+                        ulFeaSize = sizeof(eaop.fpFEAList->cbList);
+                    else
+                        ulFeaSize = eaop.fpFEAList->cbList;
+                    KernCopyOut(pbData, eaop.fpFEAList, ulFeaSize);
+                    cbData -= ulFeaSize;
+                    pbData += ulFeaSize;
+                    KernCopyOut(pbData, &len, sizeof(len));
+                    pbData += sizeof(len);
+                    cbData -= sizeof(len);
+                    KernCopyOut(pbData, pszFn, len + 1);
+                    cbSize += len + 1;
+                    pbData += len + 1;
+                    cbData -= len + 1;
                     break;
                 }
 
@@ -577,8 +656,11 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
 
         (*pcMatch)++;
 
-        pbData += cbSize;
-        cbData -= cbSize;
+        if (level != FIL_QUERYEASFROMLIST && level != FIL_QUERYEASFROMLISTL)
+        {
+            pbData += cbSize;
+            cbData -= cbSize;
+        }
 
         pFindBuf->index++;
 
@@ -587,6 +669,11 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
     }
 
 FILLFINDBUFEXIT:
+    if (pszFn)
+        RTMemFree(pszFn);
+    if (pFeal)
+        RTMemFree(pFeal);
+
     return hrc;
 }
 
@@ -744,6 +831,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
         goto FS32_FINDFIRSTEXIT;
     }
 
+    log("007\n");
     if ( (hrc == ERROR_NO_MORE_FILES ||
           hrc == ERROR_BUFFER_OVERFLOW ||
           hrc == ERROR_EAS_DIDNT_FIT)
@@ -751,21 +839,28 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
         hrc = 0;
 
 FS32_FINDFIRSTEXIT:
+    log("008\n");
     if (pfsfsd->pFindBuf)
     {
         if (hrc && hrc != ERROR_EAS_DIDNT_FIT)
         {
+            log("009\n");
             FS32_FINDCLOSE(pfsfsi, pfsfsd);
+            log("010\n");
         }
     }
     else
     {
+        log("011\n");
         if (pFindBuf)
             RTMemFree(pFindBuf);
+        log("012\n");
     }
 
+    log("013\n");
     if (pDir)
         RTMemFree(pDir);
+    log("014\n");
     if (pFile)
         RTMemFree(pFile);
 

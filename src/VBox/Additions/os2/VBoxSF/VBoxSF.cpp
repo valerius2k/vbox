@@ -6,6 +6,7 @@
 /*
  * Copyright (c) 2007 knut st. osmundsen <bird-src-spam@anduin.net>
  * Copyright (c) 2015-2018 Valery V. Sedletski <_valerius-no-spam@mail.ru>
+ * Copyright (c) 2016 (?) Lars Erdmann
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -41,8 +42,11 @@
 #include <iprt/mem.h>
 
 #include <stdarg.h>
+#include <stdio.h>
 
 VBGLSFCLIENT g_clientHandle = {0};
+
+extern PGINFOSEG g_pGIS;
 
 extern "C" unsigned long g_fLog_enable;
 
@@ -53,6 +57,9 @@ extern "C" void APIENTRY LogPrint(const char *fmt);
 void log(const char *fmt, ...)
 {
     char buf[256];
+    PROCINFO Proc;
+    ULONG ulmSecs = 0;
+    USHORT usThreadID;
     va_list va;
 
     if (! g_fLog_enable)
@@ -60,9 +67,26 @@ void log(const char *fmt, ...)
         return;
     }
     
+    if (g_pGIS)
+    {
+        ulmSecs = g_pGIS->msecs;
+    }
+
+    FSH32_QSYSINFO(2, (char *)&Proc, sizeof(Proc));
+    FSH32_QSYSINFO(3, (char *)&usThreadID, 2);
+
+    memset(buf, 0, sizeof(buf));
+
+    RTStrPrintf(buf, sizeof(buf), "P:%X T:%X D:%X T:%u:%u ",
+        Proc.usPid,
+        usThreadID,
+        Proc.usPdb,
+        (USHORT)((ulmSecs / 1000) % 60),
+        (USHORT)(ulmSecs % 1000));
+
     va_start(va, fmt);
 
-    RTStrPrintfV(buf, sizeof(buf) - 1, fmt, va);
+    RTStrPrintfV(buf + strlen(buf), sizeof(buf) - strlen(buf) - 1, fmt, va);
 
     /*
      * Use LogPrintf from QSINIT / os4ldr / ArcaOS
@@ -82,6 +106,158 @@ void log(const char *fmt, ...)
 
     va_end(va);
 }
+
+
+APIRET GetProcInfo(PPROCINFO pProcInfo, USHORT usSize)
+{
+APIRET rc;
+
+   memset(pProcInfo, 0xFF, usSize);
+   rc = FSH32_QSYSINFO(2, (char *)pProcInfo, 6);
+   if (rc)
+   {
+      log("FAT32: GetProcInfo failed, rc = %d", rc);
+   }
+   return rc;
+}
+
+
+bool IsDosSession(void)
+{
+    PROCINFO pr;
+
+    GetProcInfo(&pr, sizeof pr);
+
+    if (pr.usPdb)
+    {
+        return true;
+    }
+
+    return false;
+}
+
+
+APIRET GetEmptyEAS(PEAOP peaop)
+{
+   APIRET rc;
+
+   PFEALIST pTarFeal = NULL;
+   USHORT   usMaxSize;
+   PFEA     pCurrFea;
+
+   PGEALIST pGeaList;
+   PGEA     pCurrGea;
+
+   ULONG    ulGeaSize;
+   ULONG    ulFeaSize;
+   ULONG    ulCurrFeaLen;
+   ULONG    ulCurrGeaLen;
+
+   PFEALIST pFeal = NULL;
+   ULONG    cbFeal = 0;
+
+   PGEALIST pGeal = NULL;
+   ULONG    cbGeal = 0;
+
+   KernCopyIn(&cbFeal, &peaop->fpFEAList->cbList, sizeof(peaop->fpFEAList->cbList));
+
+   pFeal = (PFEALIST)RTMemAlloc(cbFeal);
+
+   if (! pFeal)
+   {
+       rc = ERROR_NOT_ENOUGH_MEMORY;
+       goto GetEmptyEAS_exit;
+   }
+
+   KernCopyIn(pFeal, peaop->fpFEAList, cbFeal);
+
+   KernCopyIn(&cbGeal, &peaop->fpGEAList->cbList, sizeof(peaop->fpGEAList->cbList));
+
+   pGeal = (PGEALIST)RTMemAlloc(cbGeal);
+
+   if (! pGeal)
+   {
+       rc = ERROR_NOT_ENOUGH_MEMORY;
+       goto GetEmptyEAS_exit;
+   }
+
+   KernCopyIn(pGeal, peaop->fpGEAList, cbGeal);
+
+   pTarFeal = pFeal;
+
+   if (pTarFeal->cbList > MAX_EA_SIZE)
+      usMaxSize = (USHORT)MAX_EA_SIZE;
+   else
+      usMaxSize = (USHORT)pTarFeal->cbList;
+
+   if (usMaxSize < sizeof (ULONG))
+      return ERROR_BUFFER_OVERFLOW;
+
+   pGeaList = pGeal;
+
+   if (pGeaList->cbList > MAX_EA_SIZE)
+      return ERROR_EA_LIST_TOO_LONG;
+
+   ulFeaSize = sizeof(pTarFeal->cbList);
+   ulGeaSize = sizeof(pGeaList->cbList);
+
+   pCurrGea = pGeaList->list;
+   pCurrFea = pTarFeal->list;
+   while(ulGeaSize < pGeaList->cbList)
+      {
+      ulFeaSize += sizeof(FEA) + pCurrGea->cbName + 1;
+      ulCurrGeaLen = sizeof(GEA) + pCurrGea->cbName;
+      pCurrGea = (PGEA)((PBYTE)pCurrGea + ulCurrGeaLen);
+      ulGeaSize += ulCurrGeaLen;
+      }
+
+   if (ulFeaSize > usMaxSize)
+      {
+      /* this is what HPFS.IFS returns */
+      /* when a file does not have any EAs */
+      pTarFeal->cbList = 0xEF;
+      rc = ERROR_EAS_DIDNT_FIT;
+      }
+   else
+      {
+       /* since we DO copy something to */
+       /* FEALIST, we have to set the complete */
+       /* size of the resulting FEALIST in the */
+       /* length field */
+       pTarFeal->cbList = ulFeaSize;
+       ulGeaSize = sizeof(pGeaList->cbList);
+       pCurrGea = pGeaList->list;
+       pCurrFea = pTarFeal->list;
+       /* copy the EA names requested to the FEA area */
+       /* even if any values cannot be returned       */
+       while (ulGeaSize < pGeaList->cbList)
+          {
+          pCurrFea->fEA     = 0;
+          strcpy((char *)(pCurrFea+1), pCurrGea->szName);
+          pCurrFea->cbName  = (BYTE)strlen(pCurrGea->szName);
+          pCurrFea->cbValue = 0;
+
+          ulCurrFeaLen = sizeof(FEA) + pCurrFea->cbName + 1;
+          pCurrFea = (PFEA)((PBYTE)pCurrFea + ulCurrFeaLen);
+
+          ulCurrGeaLen = sizeof(GEA) + pCurrGea->cbName;
+          pCurrGea = (PGEA)((PBYTE)pCurrGea + ulCurrGeaLen);
+          ulGeaSize += ulCurrGeaLen;
+          }
+       rc = 0;
+       }
+
+    memcpy(peaop->fpFEAList, pTarFeal, pTarFeal->cbList);
+
+GetEmptyEAS_exit:
+    if (pFeal)
+        RTMemFree(pFeal);
+    if (pGeal)
+        RTMemFree(pGeal);
+
+    return rc;
+}
+
 
 DECLASM(void)
 FS32_EXIT(ULONG uid, ULONG pid, ULONG pdb)
@@ -835,8 +1011,8 @@ FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd,
             path = make_shflstring((char *)pwsz);
 
             params.Handle = SHFL_HANDLE_NIL;
-            params.CreateFlags = SHFL_CF_ACT_FAIL_IF_NEW;
-
+            params.CreateFlags = SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW | SHFL_CF_ACCESS_READ;
+            
             rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
 
             if (params.Handle == SHFL_HANDLE_NIL)
@@ -985,8 +1161,16 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
 
                     case FIL_QUERYEASFROMLIST:
                     case FIL_QUERYEASFROMLISTL:
-                    case 4:
+                    case FIL_QUERYALLEAS:
                         usNeededSize = sizeof(EAOP);
+                        break;
+
+                    case FIL_NAMEISVALID:
+                        rc = 0;
+                        goto FS32_PATHINFOEXIT;
+
+                    case 7:
+                        usNeededSize = strlen(pszFullName) + 1;
                         break;
 
                     default:
@@ -1203,24 +1387,45 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                         {
                             EAOP filestatus;
                             KernCopyIn(&filestatus, pData, sizeof(EAOP));
-                            PFEALIST pFEA = (PFEALIST)KernSelToFlat((ULONG)filestatus.fpFEAList);
-                            // @todo: get empty EAs
-                            memset(pFEA, 0, (USHORT)pFEA->cbList);
-                            pFEA->cbList = sizeof(pFEA->cbList);
+                            filestatus.fpFEAList = (PFEALIST)KernSelToFlat((ULONG)filestatus.fpFEAList);
+                            filestatus.fpGEAList = (PGEALIST)KernSelToFlat((ULONG)filestatus.fpGEAList);
+                            hrc = GetEmptyEAS(&filestatus);
                             KernCopyOut(pData, &filestatus, sizeof(EAOP));
                             break;
                         }
 
-                    case 4: // FIL_QUERYALLEAS
+                    case FIL_QUERYALLEAS:
                         {
                             EAOP filestatus;
+                            PFEALIST pFeal;
+                            ULONG cbList;
+
                             KernCopyIn(&filestatus, pData, sizeof(EAOP));
-                            PFEALIST pFEA = (PFEALIST)KernSelToFlat((ULONG)filestatus.fpFEAList);
-                            memset(pFEA, 0, (USHORT)pFEA->cbList);
-                            pFEA->cbList = sizeof(pFEA->cbList);
+                            filestatus.fpFEAList = (PFEALIST)KernSelToFlat((ULONG)filestatus.fpFEAList);
+                            KernCopyIn(&cbList, &filestatus.fpFEAList->cbList, sizeof(filestatus.fpFEAList->cbList));
+                            pFeal = (PFEALIST)RTMemAlloc(cbList);
+                            if (! pFeal)
+                            {
+                                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                                break;
+                            }
+                            KernCopyIn(pFeal, filestatus.fpFEAList, cbList);
+                            memset(pFeal, 0, cbList);
+                            pFeal->cbList = sizeof(pFeal->cbList);
+                            KernCopyOut(filestatus.fpFEAList, pFeal, cbList);
                             KernCopyOut(pData, &filestatus, sizeof(EAOP));
+                            RTMemFree(pFeal);
                             break;
                         }
+
+                    case FIL_NAMEISVALID:
+                        hrc = 0;
+                        break;
+
+                    case 7:
+                        strcpy((char *)pData, pszFullName);
+                        hrc = 0;
+                        break;
 
                     default:
                         hrc = ERROR_INVALID_LEVEL;
@@ -1369,6 +1574,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
 
                     case FIL_QUERYEASIZE:
                     case FIL_QUERYEASIZEL:
+                        hrc = NO_ERROR;
                         break;
 
                     default:
