@@ -293,7 +293,7 @@ FS32_ATTACH(ULONG flag, PCSZ pszDev, PVBOXSFVP pvpfsd, PVBOXSFCD pcdfsd, PBYTE p
 
     switch (flag)
     {
-        case 0: // Attach
+        case FSA_ATTACH: // Attach
             if (pszDev[1] != ':')
             {
                 /* drives only */
@@ -332,7 +332,7 @@ FS32_ATTACH(ULONG flag, PCSZ pszDev, PVBOXSFVP pvpfsd, PVBOXSFCD pcdfsd, PBYTE p
             hrc = NO_ERROR;
             break;
 
-        case 1: // Detach
+        case FSA_DETACH: // Detach
             if (pszDev[1] != ':')
             {
                 /* drives only */
@@ -343,7 +343,7 @@ FS32_ATTACH(ULONG flag, PCSZ pszDev, PVBOXSFVP pvpfsd, PVBOXSFCD pcdfsd, PBYTE p
             RTMemFree(pvboxsfvp->pszShareName);
             break;
 
-        case 2: // Query
+        case FSA_ATTACH_INFO: // Query
             len = strlen(pvboxsfvp->pszShareName) + 1;
             if (*pcbParm >= strlen(pvboxsfvp->pszShareName) + 1 && pszParm)
             {
@@ -411,8 +411,8 @@ FS32_FSINFO(ULONG flag, ULONG hVPB, PBYTE pbData, ULONG cbData, ULONG level)
 
     switch (level)
     {
-        case 1: // query/set sector and cluster information
-            if (flag == 0)
+        case FSIL_ALLOC: // query/set sector and cluster information
+            if (flag == INFO_RETRIEVE)
             {
                 // query sector and cluster information
                 if (cbData < sizeof(FSALLOCATE))
@@ -437,9 +437,9 @@ FS32_FSINFO(ULONG flag, ULONG hVPB, PBYTE pbData, ULONG cbData, ULONG level)
             }
             break;
 
-        case 2: // query/set volume label
+        case FSIL_VOLSER: // query/set volume label
             log("pbData=%lx, cbData=%lu\n", pbData, cbData);
-            if (flag == 0)
+            if (flag == INFO_RETRIEVE)
             {
                 // query volume label
                 if (cbData < sizeof(FSINFO))
@@ -456,7 +456,7 @@ FS32_FSINFO(ULONG flag, ULONG hVPB, PBYTE pbData, ULONG cbData, ULONG level)
                 rc = KernCopyOut(pbData, &FsInfo, sizeof(FSINFO));
                 log("rc=%lu\n", rc);
             }
-            else if (flag == 1)
+            else if (flag == INFO_SET)
             {
                 // set volume label
                 VOLUMELABEL Label;
@@ -560,7 +560,7 @@ FS32_CHDIR(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszDir, ULONG iCurD
 
     switch (flag)
     {
-        case 0: /* allocate new working directory */
+        case CD_EXPLICIT: /* allocate new working directory */
             log("chdir to: %s\n", pszDir);
 
             pszFullName = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
@@ -977,7 +977,7 @@ FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd,
 
     switch (flag)
     {
-        case 0: // retrieve
+        case FA_RETRIEVE: // retrieve
             file = (PSHFLDIRINFO)RTMemAlloc(len);
 
             if (! file)
@@ -1015,18 +1015,25 @@ FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd,
             
             rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
 
-            if (params.Handle == SHFL_HANDLE_NIL)
-            {
-                log("fail\n");
-                hrc = ERROR_PATH_NOT_FOUND;
-                goto FS32_FILEATTRIBUTEEXIT;
-            }
-
-            if (! RT_SUCCESS(rc))
+            if (RT_FAILURE(rc))
             {
                 log("VbglR0SfCreate returned %d\n", rc);
                 hrc = vbox_err_to_os2_err(rc);
                 goto FS32_FILEATTRIBUTEEXIT;
+            }
+
+            switch (params.Result)
+            {
+                case SHFL_PATH_NOT_FOUND:
+                    hrc = ERROR_PATH_NOT_FOUND;
+                    goto FS32_FILEATTRIBUTEEXIT;
+
+                case SHFL_FILE_EXISTS:
+                    break;
+
+                default:
+                    hrc = ERROR_FILE_NOT_FOUND;
+                    goto FS32_FILEATTRIBUTEEXIT;
             }
 
             log("path=%s\n", pszName);
@@ -1050,7 +1057,7 @@ FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd,
             *pAttr = VBoxToOS2Attr(file->Info.Attr.fMode);
             break;
 
-        case 1: // set
+        case FA_SET: // set
             hrc = ERROR_NOT_SUPPORTED;
     }
 
@@ -1137,9 +1144,9 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
     log("params.Handle=%x\n", params.Handle);
     log("len=%x\n", len);
 
-    switch (flag)
+    switch (flag & 1)
     {
-        case 0: // retrieve
+        case PI_RETRIEVE: // retrieve
             {
                 switch (level)
                 {
@@ -1436,7 +1443,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
             }
             break;
 
-        case 1: // set
+        case PI_SET: // set
             {
                 file = (PSHFLDIRINFO)RTMemAlloc(len);
 

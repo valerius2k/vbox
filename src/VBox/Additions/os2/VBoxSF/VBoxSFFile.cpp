@@ -324,13 +324,13 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     }
 
     if (ulOpenMode & OPEN_ACCESS_READWRITE)
-        params.CreateFlags |= SHFL_CF_ACCESS_READWRITE;
+        params.CreateFlags |= SHFL_CF_ACCESS_READWRITE | SHFL_CF_ACCESS_ATTR_READWRITE;
     else
     {
         if (ulOpenMode & OPEN_ACCESS_WRITEONLY)
-            params.CreateFlags |= SHFL_CF_ACCESS_WRITE;
+            params.CreateFlags |= SHFL_CF_ACCESS_WRITE | SHFL_CF_ACCESS_ATTR_WRITE;
         else
-            params.CreateFlags |= SHFL_CF_ACCESS_READ;
+            params.CreateFlags |= SHFL_CF_ACCESS_READ | SHFL_CF_ACCESS_ATTR_READ;
     }
 
     if (ulOpenMode & OPEN_SHARE_DENYREAD)
@@ -349,32 +349,6 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     params.CreateFlags |= SHFL_CF_ACCESS_APPEND;
 
 #if 0
-    if (usOpenFlags & FILE_CREATE)
-    {
-        params.CreateFlags |= SHFL_CF_ACT_CREATE_IF_NEW;
-
-        if (usOpenFlags & FILE_TRUNCATE)
-        {
-            params.CreateFlags |= (SHFL_CF_ACT_OVERWRITE_IF_EXISTS
-                                   | SHFL_CF_ACCESS_WRITE);
-        }
-        else
-        {
-            params.CreateFlags |= SHFL_CF_ACT_OPEN_IF_EXISTS;
-        }
-    }
-    else if (usOpenFlags & FILE_OPEN)
-    {
-        params.CreateFlags |= SHFL_CF_ACT_FAIL_IF_NEW;
-
-        if (usOpenFlags & FILE_TRUNCATE)
-        {
-            params.CreateFlags |= (SHFL_CF_ACT_OVERWRITE_IF_EXISTS
-                    | SHFL_CF_ACCESS_WRITE);
-        }
-    }
-#endif
-
     if (! (usOpenFlags & OPEN_ACTION_CREATE_IF_NEW) )
         params.CreateFlags |= SHFL_CF_ACT_FAIL_IF_NEW;
     //else
@@ -392,11 +366,51 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     //    params.CreateFlags &= ~SHFL_CF_ACT_REPLACE_IF_EXISTS;
     //    log("no replace\n");
     //}
+#else
+    switch (usOpenFlags & 0x13)
+    {
+        case OPEN_ACTION_OPEN_IF_EXISTS | OPEN_ACTION_CREATE_IF_NEW:
+            params.CreateFlags |= SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_CREATE_IF_NEW;
+            break;
 
-    params.CreateFlags |= SHFL_CF_ACCESS_ATTR_READWRITE;
+        case OPEN_ACTION_OPEN_IF_EXISTS | OPEN_ACTION_FAIL_IF_NEW:
+            params.CreateFlags |= SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW;
+            break;
 
-    if (usAttr & FILE_READONLY)
-        params.CreateFlags &= ~SHFL_CF_ACCESS_ATTR_WRITE;
+        case OPEN_ACTION_REPLACE_IF_EXISTS | OPEN_ACTION_CREATE_IF_NEW:
+            params.CreateFlags |= SHFL_CF_ACT_REPLACE_IF_EXISTS | SHFL_CF_ACT_CREATE_IF_NEW;
+            break;
+
+        case OPEN_ACTION_REPLACE_IF_EXISTS | OPEN_ACTION_FAIL_IF_NEW:
+            params.CreateFlags |= SHFL_CF_ACT_REPLACE_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW;
+            break;
+
+        case OPEN_ACTION_FAIL_IF_EXISTS | OPEN_ACTION_CREATE_IF_NEW:
+            params.CreateFlags |= SHFL_CF_ACT_FAIL_IF_EXISTS | SHFL_CF_ACT_CREATE_IF_NEW;
+            break;
+
+        case OPEN_ACTION_FAIL_IF_EXISTS | OPEN_ACTION_FAIL_IF_NEW:
+            params.CreateFlags |= SHFL_CF_ACT_FAIL_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW;
+            break;
+
+        default:
+            log("Invalid open flags\n");
+            hrc = ERROR_INVALID_PARAMETER;
+            goto FS32_OPENCREATEEXIT;
+    }
+#endif
+
+    //if (psffsi->sfi_sizel > 0)
+    //{
+    //    params.Info.cbObject = psffsi->sfi_sizel;
+    //}
+
+    //params.CreateFlags |= SHFL_CF_ACCESS_ATTR_READWRITE;
+
+    //if (usAttr & FILE_READONLY)
+    //    params.CreateFlags &= ~SHFL_CF_ACCESS_ATTR_WRITE;
+
+    params.Info.Attr.fMode = ((uint32_t)usAttr << RTFS_DOS_SHIFT) & RTFS_DOS_MASK_OS2;
 
     pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
     vboxsfStrToUtf8(pwsz, (char *)pszFullName);
@@ -415,7 +429,19 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
         }
         else
         {
-            hrc = ERROR_PATH_NOT_FOUND;
+            switch (params.Result)
+            {
+                case SHFL_FILE_EXISTS:
+                    hrc = ERROR_FILE_EXISTS;
+                    break;
+
+                case SHFL_PATH_NOT_FOUND:
+                    hrc = ERROR_PATH_NOT_FOUND;
+                    break;
+
+                default:
+                    hrc = ERROR_FILE_NOT_FOUND;
+            }
         }
 
         goto FS32_OPENCREATEEXIT;
@@ -429,6 +455,8 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
         goto FS32_OPENCREATEEXIT;
     }
 
+    *pusAction = 0;
+
     switch (params.Result)
     {
         case SHFL_FILE_EXISTS:
@@ -441,14 +469,15 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
 
         case SHFL_FILE_REPLACED:
             *pusAction = FILE_TRUNCATED;
+            break;
 
         default:
-            *pusAction = 0;
+            ;
     }
 
     psffsd->filebuf = (PFILEBUF)RTMemAlloc(sizeof(FILEBUF));
 
-    if (!psffsd->filebuf)
+    if (! psffsd->filebuf)
     {
         log("couldn't allocate file buf\n");
         hrc = ERROR_NOT_ENOUGH_MEMORY;
@@ -530,7 +559,7 @@ FS32_CLOSE(ULONG type, ULONG IOflag, PSFFSI psffsi, PVBOXSFFSD psffsd)
 
     log("VBOXSF: FS32_CLOSE(%lx, %lx)\n", type, IOflag);
 
-    if (type != 2)
+    if (type != FS_CL_FORSYS)
     {
         hrc = NO_ERROR;
         goto FS32_CLOSEEXIT;
@@ -582,15 +611,15 @@ FS32_CHGFILEPTRL(PSFFSI psffsi, PVBOXSFFSD psffsd, LONGLONG off, ULONG ulMethod,
 
     switch (ulMethod)
     {
-        case 0: /* relative to the beginning */
+        case CFP_RELBEGIN: /* relative to the beginning */
             llNewOffset = off;
             break;
 
-        case 1: /* relative to the current position */
+        case CFP_RELCUR: /* relative to the current position */
             llNewOffset = psffsi->sfi_positionl + off;
             break;
 
-        case 2: /* relative to the end of file */
+        case CFP_RELEND: /* relative to the end of file */
             llNewOffset = psffsi->sfi_sizel + off;
     }
     if (llNewOffset < 0)
@@ -633,7 +662,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
 
     switch (flag)
     {
-        case 0: // retrieve
+        case FI_RETRIEVE: // retrieve
             {
                 switch (level)
                 {
@@ -956,7 +985,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
             }
             break;
 
-        case 1: // set
+        case FI_SET: // set
             {
                 // Local time from UTC offset in nanoseconds
                 RTTIMESPEC delta;

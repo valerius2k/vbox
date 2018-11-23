@@ -181,7 +181,7 @@ DECLASM(void) VBoxSFR0Init(void)
         /* Connect the HGCM client */
         RT_ZERO(g_clientHandle);
 
-        rc = VbglR0SfConnect(&g_clientHandle);
+        rc = VbglR0SfConnect(&g_clientHandle); //// hang on VBox 5.0.14
 
         if (RT_FAILURE(rc))
         {
