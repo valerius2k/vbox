@@ -60,6 +60,8 @@
 
 #define ERROR_VOLUME_NOT_MOUNTED 0xEE00
 
+#define INFO_RETRIEVE		0x00
+
 void log(const char *fmt, ...);
 
 #pragma pack(2)
