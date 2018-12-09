@@ -1279,11 +1279,17 @@ extern "C" APIRET APIENTRY
 FS32_READ(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOflag)
 {
     APIRET hrc;
-    uint8_t *pBuf;
+    uint8_t *pBuf = NULL;
     ULONG cb = *pcb;
     int rc;
 
     log("VBOXSF: FS32_READ(%lx)\n", IOflag);
+
+    if (! *pcb || ! pvData)
+    {
+        hrc = ERROR_INVALID_PARAMETER;
+        goto FS32_READEXIT;
+    }
 
     pBuf = (uint8_t *)RTMemAlloc(*pcb);
 
@@ -1296,10 +1302,16 @@ FS32_READ(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOfl
         *pcb = psffsi->sfi_sizel - psffsi->sfi_positionl;
     }
 
+    if (! *pcb)
+    {
+        hrc = NO_ERROR;
+        goto FS32_READEXIT;
+    }
+
     memset(pBuf, 0, cb);
 
     rc = VbglR0SfRead(&g_clientHandle, &psffsd->filebuf->map, psffsd->filebuf->handle, 
-                      psffsi->sfi_positionl, (uint32_t *)pcb, pBuf, false);
+                      psffsi->sfi_positionl, (uint32_t *)pcb, pBuf, true); // false
 
     if (RT_SUCCESS(rc))
     {
@@ -1342,7 +1354,7 @@ FS32_WRITE(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOf
     KernCopyIn(pBuf, (char *)pvData, *pcb);
 
     rc = VbglR0SfWrite(&g_clientHandle, &psffsd->filebuf->map, psffsd->filebuf->handle, 
-                       psffsi->sfi_positionl, (uint32_t *)pcb, pBuf, false);
+                       psffsi->sfi_positionl, (uint32_t *)pcb, pBuf, true); // false
 
     if (RT_SUCCESS(rc))
     {

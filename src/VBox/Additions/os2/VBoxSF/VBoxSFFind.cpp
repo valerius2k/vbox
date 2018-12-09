@@ -815,6 +815,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
             RTMemFree(pwsz);
             log("003\n");
             hrc = FillFindBuf(pFindBuf, pbData, cbData, pcMatch, level, flags);
+            log("004: *pcMatch=%u\n", *pcMatch);
             log("004: hrc=%lu\n", hrc);
         }
         else
