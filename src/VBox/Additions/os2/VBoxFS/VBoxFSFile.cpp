@@ -571,7 +571,7 @@ FS32_COMMIT(ULONG type, ULONG IOflag, PSFFSI psffsi, PVBOXSFFSD psffsd)
 }
 
 
-DECLASM(int)
+extern "C" APIRET APIENTRY
 FS32_CHGFILEPTRL(PSFFSI psffsi, PVBOXSFFSD psffsd, LONGLONG off, ULONG ulMethod, ULONG IOflag)
 {
     APIRET hrc = NO_ERROR;
@@ -609,7 +609,7 @@ FS32_CHGFILEPTRLEXIT:
 
 
 /** Forwards the call to FS32_CHGFILEPTRL. */
-DECLASM(int)
+extern "C" APIRET APIENTRY
 FS32_CHGFILEPTR(PSFFSI psffsi, PVBOXSFFSD psffsd, LONG off, ULONG ulMethod, ULONG IOflag)
 {
     log("FS32_CHGFILEPTR(%ld, %lx, %lx)\n", off, ulMethod, IOflag);
@@ -1245,7 +1245,7 @@ FS32_NEWSIZELEXIT:
 }
 
 
-DECLASM(int)
+extern "C" APIRET APIENTRY
 FS32_READ(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOflag)
 {
     APIRET hrc;
@@ -1307,7 +1307,7 @@ FS32_READEXIT:
 }
 
 
-DECLASM(int)
+extern "C" APIRET APIENTRY
 FS32_WRITE(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOflag)
 {
     APIRET hrc;
@@ -1362,7 +1362,7 @@ FS32_WRITEEXIT:
 }
 
 
-DECLASM(int)
+extern "C" APIRET APIENTRY
 FS32_READFILEATCACHE(PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG IOflag, LONGLONG off, ULONG pcb, KernCacheList_t **ppCacheList)
 {
     log("FS32_READFILEATCACHE(%lx, %lld)\n", IOflag, off);
@@ -1370,7 +1370,7 @@ FS32_READFILEATCACHE(PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG IOflag, LONGLONG of
 }
 
 
-DECLASM(int)
+extern "C" APIRET APIENTRY
 FS32_RETURNFILECACHE(KernCacheList_t *pCacheList)
 {
     log("FS32_RETURNFILECACHE\n");
