@@ -174,7 +174,7 @@ DECLASM(void) VBoxFSR0Init(void)
 
         if (RT_FAILURE(rc))
         {
-            log("VBOXFS: %s: ERROR while initializing VBox subsystem (%Rrc)!\n", __FUNCTION__, rc);
+            log("%s: ERROR while initializing VBox subsystem (%Rrc)!\n", __FUNCTION__, rc);
             return;
         }
 
@@ -185,7 +185,7 @@ DECLASM(void) VBoxFSR0Init(void)
 
         if (RT_FAILURE(rc))
         {
-            log("VBOXFS: %s: ERROR while connecting to host (%Rrc)!\n", __FUNCTION__, rc);
+            log("%s: ERROR while connecting to host (%Rrc)!\n", __FUNCTION__, rc);
             VbglR0SfTerm();
             return;
         }
@@ -194,7 +194,7 @@ DECLASM(void) VBoxFSR0Init(void)
 
         if (RT_FAILURE(rc))
         {
-            log("VBOXFS: VbglR0SfSetUtf8 failed. rc=%d\n", rc);
+            log("VbglR0SfSetUtf8 failed. rc=%d\n", rc);
             return;
         }
 
@@ -239,6 +239,6 @@ DECLASM(void) VBoxFSR0Init(void)
     }
     else
     {
-        log("VBoxFS: Failed to connect to VBoxGuest.sys.\n");
+        log("Failed to connect to VBoxGuest.sys.\n");
     }
 }

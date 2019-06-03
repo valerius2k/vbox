@@ -51,7 +51,7 @@ PSHFLSTRING make_shflstring(const char* const s)
 
     if (len > 0xFFFE)
     {
-        log(("vboxfs: make_shflstring: string too long\n"));
+        log(("make_shflstring: string too long\n"));
         return NULL;
     }
 

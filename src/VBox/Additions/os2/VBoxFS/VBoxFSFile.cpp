@@ -123,8 +123,7 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
 
         if ( strstr(szSrvName, "vboxsrv") != szSrvName &&
              strstr(szSrvName, "vboxsvr") != szSrvName &&
-             strstr(szSrvName, "vboxfs") != szSrvName  &&
-             strstr(szSrvName, "vboxsf") != szSrvName )
+             strstr(szSrvName, "vboxfs") != szSrvName )
         {
             return ERROR_BAD_NET_NAME;
         }
@@ -292,7 +291,7 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     FTIME Time;
     int rc;
 
-    log("VBOXFS: FS32_OPENCREATE(%s, %lx, %lx, %lx)\n", pszName, ulOpenMode, usOpenFlags, usAttr);
+    log("FS32_OPENCREATE(%s, %lx, %lx, %lx)\n", pszName, ulOpenMode, usOpenFlags, usAttr);
 
     RT_ZERO(params);
     params.Handle = SHFL_HANDLE_NIL;
@@ -528,7 +527,7 @@ FS32_CLOSE(ULONG type, ULONG IOflag, PSFFSI psffsi, PVBOXSFFSD psffsd)
     APIRET hrc = NO_ERROR;
     int rc;
 
-    log("VBOXFS: FS32_CLOSE(%lx, %lx)\n", type, IOflag);
+    log("FS32_CLOSE(%lx, %lx)\n", type, IOflag);
 
     if (type != FS_CL_FORSYS)
     {
@@ -561,7 +560,7 @@ FS32_COMMIT(ULONG type, ULONG IOflag, PSFFSI psffsi, PVBOXSFFSD psffsd)
     APIRET hrc = NO_ERROR;
     int rc;
 
-    log("VBOXFS: FS32_COMMIT(%lx, %lx)\n", type, IOflag);
+    log("FS32_COMMIT(%lx, %lx)\n", type, IOflag);
 
     rc = VbglR0SfFlush(&g_clientHandle, &psffsd->filebuf->map, psffsd->filebuf->handle);
 
@@ -572,13 +571,13 @@ FS32_COMMIT(ULONG type, ULONG IOflag, PSFFSI psffsi, PVBOXSFFSD psffsd)
 }
 
 
-extern "C" APIRET APIENTRY
+DECLASM(int)
 FS32_CHGFILEPTRL(PSFFSI psffsi, PVBOXSFFSD psffsd, LONGLONG off, ULONG ulMethod, ULONG IOflag)
 {
     APIRET hrc = NO_ERROR;
     LONGLONG llNewOffset = 0;
 
-    log("VBOXFS: FS32_CHGFILEPTRL(%lld, %lx, %lx)\n", off, ulMethod, IOflag);
+    log("FS32_CHGFILEPTRL(%lld, %lx, %lx)\n", off, ulMethod, IOflag);
 
     switch (ulMethod)
     {
@@ -610,10 +609,10 @@ FS32_CHGFILEPTRLEXIT:
 
 
 /** Forwards the call to FS32_CHGFILEPTRL. */
-extern "C" APIRET APIENTRY
+DECLASM(int)
 FS32_CHGFILEPTR(PSFFSI psffsi, PVBOXSFFSD psffsd, LONG off, ULONG ulMethod, ULONG IOflag)
 {
-    log("VBOXFS: FS32_CHGFILEPTR(%ld, %lx, %lx)\n", off, ulMethod, IOflag);
+    log("FS32_CHGFILEPTR(%ld, %lx, %lx)\n", off, ulMethod, IOflag);
     return FS32_CHGFILEPTRL(psffsi, psffsd, off, ulMethod, IOflag);
 }
 
@@ -629,7 +628,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
     uint32_t len = sizeof(SHFLDIRINFO);
     int rc;
 
-    log("VBOXFS: FS32_FILEINFO(%lx, %lx, %lx)\n", flag, level, IOflag);
+    log("FS32_FILEINFO(%lx, %lx, %lx)\n", flag, level, IOflag);
 
     switch (flag)
     {
@@ -1234,7 +1233,7 @@ FS32_NEWSIZEL(PSFFSI psffsi, PVBOXSFFSD psffsd, LONGLONG cbFile, ULONG IOflag)
     PSHFLSTRING path;
     int rc;
 
-    log("VBOXFS: FS32_NEWSIZEL(%lld, %lx)\n", cbFile, IOflag);
+    log("FS32_NEWSIZEL(%lld, %lx)\n", cbFile, IOflag);
     rc = chsize(psffsd, cbFile);
 
     hrc = vbox_err_to_os2_err(rc);
@@ -1246,7 +1245,7 @@ FS32_NEWSIZELEXIT:
 }
 
 
-extern "C" APIRET APIENTRY
+DECLASM(int)
 FS32_READ(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOflag)
 {
     APIRET hrc;
@@ -1254,7 +1253,7 @@ FS32_READ(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOfl
     ULONG cb = *pcb;
     int rc;
 
-    log("VBOXFS: FS32_READ(%lx)\n", IOflag);
+    log("FS32_READ(%lx)\n", IOflag);
 
     if (! *pcb || ! pvData)
     {
@@ -1308,7 +1307,7 @@ FS32_READEXIT:
 }
 
 
-extern "C" APIRET APIENTRY
+DECLASM(int)
 FS32_WRITE(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOflag)
 {
     APIRET hrc;
@@ -1316,7 +1315,7 @@ FS32_WRITE(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOf
     uint8_t *pBuf = NULL;
     int rc;
 
-    log("VBOXFS: FS32_WRITE(%lx)\n", IOflag);
+    log("FS32_WRITE(%lx)\n", IOflag);
 
     if (! *pcb || ! pvData)
     {
@@ -1363,18 +1362,18 @@ FS32_WRITEEXIT:
 }
 
 
-extern "C" APIRET APIENTRY
+DECLASM(int)
 FS32_READFILEATCACHE(PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG IOflag, LONGLONG off, ULONG pcb, KernCacheList_t **ppCacheList)
 {
-    log("VBOXFS: FS32_READFILEATCACHE(%lx, %lld)\n", IOflag, off);
+    log("FS32_READFILEATCACHE(%lx, %lld)\n", IOflag, off);
     return ERROR_NOT_SUPPORTED;
 }
 
 
-extern "C" APIRET APIENTRY
+DECLASM(int)
 FS32_RETURNFILECACHE(KernCacheList_t *pCacheList)
 {
-    log("VBOXFS: FS32_RETURNFILECACHE\n");
+    log("FS32_RETURNFILECACHE\n");
     return ERROR_NOT_SUPPORTED;
 }
 
@@ -1384,7 +1383,7 @@ FS32_RETURNFILECACHE(KernCacheList_t *pCacheList)
 DECLASM(int)
 FS32_CANCELLOCKREQUESTL(PSFFSI psffsi, PVBOXSFFSD psffsd, struct filelockl *pLockRange)
 {
-    log("VBOXFS: FS32_CANCELLOCKREQUESTL\n");
+    log("FS32_CANCELLOCKREQUESTL\n");
     return ERROR_NOT_SUPPORTED;
 }
 
@@ -1392,7 +1391,7 @@ FS32_CANCELLOCKREQUESTL(PSFFSI psffsi, PVBOXSFFSD psffsd, struct filelockl *pLoc
 DECLASM(int)
 FS32_CANCELLOCKREQUEST(PSFFSI psffsi, PVBOXSFFSD psffsd, struct filelock *pLockRange)
 {
-    log("VBOXFS: FS32_CANCELLOCKREQUEST\n");
+    log("FS32_CANCELLOCKREQUEST\n");
     return ERROR_NOT_SUPPORTED;
 }
 
@@ -1401,7 +1400,7 @@ DECLASM(int)
 FS32_FILELOCKSL(PSFFSI psffsi, PVBOXSFFSD psffsd, struct filelockl *pUnLockRange,
                 struct filelockl *pLockRange, ULONG timeout, ULONG flags)
 {
-    log("VBOXFS: FS32_FILELOCKSL(%lu, %lx)\n", timeout, flags);
+    log("FS32_FILELOCKSL(%lu, %lx)\n", timeout, flags);
     return ERROR_NOT_SUPPORTED;
 }
 
@@ -1410,7 +1409,7 @@ DECLASM(int)
 FS32_FILELOCKS(PSFFSI psffsi, PVBOXSFFSD psffsd, struct filelock *pUnLockRange,
                struct filelock *pLockRange, ULONG timeout, ULONG flags)
 {
-    log("VBOXFS: FS32_FILELOCKS(%lu, %lx)\n", timeout, flags);
+    log("FS32_FILELOCKS(%lu, %lx)\n", timeout, flags);
     return ERROR_NOT_SUPPORTED;
 }
 
@@ -1420,7 +1419,7 @@ FS32_IOCTL(PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG cat, ULONG func,
            PVOID pParm, ULONG lenParm, PUSHORT plenParmIO,
            PVOID pData, ULONG lenData, PUSHORT plenDataIO)
 {
-    log("VBOXFS: FS32_IOCTL(%lx, %lx)\n", cat, func);
+    log("FS32_IOCTL(%lx, %lx)\n", cat, func);
     return ERROR_NOT_SUPPORTED;
 }
 
@@ -1429,7 +1428,7 @@ DECLASM(int)
 FS32_FILEIO(PSFFSI psffsi, PVBOXSFFSD psffsd, PBYTE pCmdList, ULONG cbCmdList,
             PUSHORT poError, ULONG IOflag)
 {
-    log("VBOXFS: FS32_FILEIO(%lx)\n", IOflag);
+    log("FS32_FILEIO(%lx)\n", IOflag);
     return ERROR_NOT_SUPPORTED;
 }
 
@@ -1438,7 +1437,7 @@ DECLASM(int)
 FS32_NMPIPE(PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG OpType, union npoper *pOpRec,
             PBYTE pData, PCSZ pszName)
 {
-    log("VBOXFS: FS32_NPIPE(%lx, %s)\n", OpType, pszName);
+    log("FS32_NPIPE(%lx, %s)\n", OpType, pszName);
     return ERROR_NOT_SUPPORTED;
 }
 
@@ -1449,7 +1448,7 @@ FS32_VERIFYUNCNAME(ULONG flag, PCSZ pszName)
     char *pszServer = NULL, *p;
     APIRET hrc = NO_ERROR;
 
-    log("VBOXFS: FS32_VERIFYUNCNAME(%lx, %s)\n", flag, pszName);
+    log("FS32_VERIFYUNCNAME(%lx, %s)\n", flag, pszName);
 
     pszServer = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
 
@@ -1478,8 +1477,7 @@ FS32_VERIFYUNCNAME(ULONG flag, PCSZ pszName)
 
     if (! stricmp(pszServer, "vboxsvr") ||
         ! stricmp(pszServer, "vboxsrv") ||
-        ! stricmp(pszServer, "vboxfs")  ||
-        ! stricmp(pszServer, "vboxsf") )
+        ! stricmp(pszServer, "vboxfs") )
         hrc = NO_ERROR;
     else
         hrc = ERROR_INVALID_NAME;
@@ -1496,7 +1494,7 @@ DECLASM(int)
 FS32_OPENPAGEFILE(PULONG pFlag, PULONG pcMaxReq, PCSZ pszName, PSFFSI psffsi, PVBOXSFFSD psffsd,
                   ULONG ulOpenMode, ULONG ulOpenFlag, ULONG ulAttr, ULONG Reserved)
 {
-    log("VBOXFS: FS32_OPENPAGEFILE(%s, %lx, %lx, %lx)\n", pszName, ulOpenMode, ulOpenFlag, ulAttr);
+    log("FS32_OPENPAGEFILE(%s, %lx, %lx, %lx)\n", pszName, ulOpenMode, ulOpenFlag, ulAttr);
     return ERROR_NOT_SUPPORTED;
 }
 
@@ -1504,7 +1502,7 @@ FS32_OPENPAGEFILE(PULONG pFlag, PULONG pcMaxReq, PCSZ pszName, PSFFSI psffsi, PV
 DECLASM(int)
 FS32_SETSWAP(PSFFSI psffsi, PVBOXSFFSD psffsd)
 {
-    log("VBOXFS: FS32_SETSWAP\n");
+    log("FS32_SETSWAP\n");
     return ERROR_NOT_SUPPORTED;
 }
 
@@ -1512,7 +1510,7 @@ FS32_SETSWAP(PSFFSI psffsi, PVBOXSFFSD psffsd)
 DECLASM(int)
 FS32_ALLOCATEPAGESPACE(PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG cb, ULONG cbWantContig)
 {
-    log("VBOXFS: FS32_ALLOCATEPAGESPACE(%lu, %lu)\n", cb, cbWantContig);
+    log("FS32_ALLOCATEPAGESPACE(%lu, %lu)\n", cb, cbWantContig);
     return ERROR_NOT_SUPPORTED;
 }
 
@@ -1520,6 +1518,6 @@ FS32_ALLOCATEPAGESPACE(PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG cb, ULONG cbWantC
 DECLASM(int)
 FS32_DOPAGEIO(PSFFSI psffsi, PVBOXSFFSD psffsd, struct PageCmdHeader *pList)
 {
-    log("VBOXFS: FS32_DOPAGEIO\n");
+    log("FS32_DOPAGEIO\n");
     return ERROR_NOT_SUPPORTED;
 }
