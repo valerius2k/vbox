@@ -7,6 +7,6 @@
 ;-----------------------------------------------------;
 ; share     ; drive letter  ; subdirectory on the host;
 ;-----------------------------------------------------;
-os2f		f:				; /mnt/os2f
+os2f		f:		; /mnt/os2f
 os2l		l:              ; /mnt/os2l
 valerius	m:              ; /home/valerius

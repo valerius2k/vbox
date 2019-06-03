@@ -339,34 +339,15 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     {
         if (ulOpenMode & OPEN_SHARE_DENYREADWRITE)
             params.CreateFlags |= SHFL_CF_ACCESS_DENYALL;
-        else if (ulOpenMode & OPEN_SHARE_DENYWRITE)
+        else if ( (ulOpenMode & OPEN_SHARE_DENYWRITE) ||
+                  (ulOpenMode & (OPEN_SHARE_DENYNONE | OPEN_SHARE_DENYREADWRITE |
+                                 OPEN_SHARE_DENYREAD | OPEN_SHARE_DENYWRITE)) )
             params.CreateFlags |= SHFL_CF_ACCESS_DENYWRITE;
     }
 
     if (ulOpenMode & OPEN_SHARE_DENYNONE)
             params.CreateFlags &= ~SHFL_CF_ACCESS_MASK_DENY;
 
-    params.CreateFlags |= SHFL_CF_ACCESS_APPEND;
-
-#if 0
-    if (! (usOpenFlags & OPEN_ACTION_CREATE_IF_NEW) )
-        params.CreateFlags |= SHFL_CF_ACT_FAIL_IF_NEW;
-    //else
-    //    params.CreateFlags &= ~SHFL_CF_ACT_FAIL_IF_NEW;
-        
-    if (! (usOpenFlags & OPEN_ACTION_OPEN_IF_EXISTS) )
-        params.CreateFlags |= SHFL_CF_ACT_FAIL_IF_EXISTS;
-    //else
-    //    params.CreateFlags &= ~SHFL_CF_ACT_FAIL_IF_EXISTS;
-
-    if (usOpenFlags & OPEN_ACTION_REPLACE_IF_EXISTS)
-        params.CreateFlags |= SHFL_CF_ACT_OVERWRITE_IF_EXISTS;
-    //else
-    //{
-    //    params.CreateFlags &= ~SHFL_CF_ACT_REPLACE_IF_EXISTS;
-    //    log("no replace\n");
-    //}
-#else
     switch (usOpenFlags & 0x13)
     {
         case OPEN_ACTION_OPEN_IF_EXISTS | OPEN_ACTION_CREATE_IF_NEW:
@@ -398,17 +379,6 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
             hrc = ERROR_INVALID_PARAMETER;
             goto FS32_OPENCREATEEXIT;
     }
-#endif
-
-    //if (psffsi->sfi_sizel > 0)
-    //{
-    //    params.Info.cbObject = psffsi->sfi_sizel;
-    //}
-
-    //params.CreateFlags |= SHFL_CF_ACCESS_ATTR_READWRITE;
-
-    //if (usAttr & FILE_READONLY)
-    //    params.CreateFlags &= ~SHFL_CF_ACCESS_ATTR_WRITE;
 
     params.Info.Attr.fMode = ((uint32_t)usAttr << RTFS_DOS_SHIFT) & RTFS_DOS_MASK_OS2;
 
@@ -480,6 +450,7 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     if (! psffsd->filebuf)
     {
         log("couldn't allocate file buf\n");
+        free_shflstring(path);
         hrc = ERROR_NOT_ENOUGH_MEMORY;
         goto FS32_OPENCREATEEXIT;
     }
@@ -1291,7 +1262,13 @@ FS32_READ(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOfl
         goto FS32_READEXIT;
     }
 
-    pBuf = (uint8_t *)RTMemAlloc(*pcb);
+    pBuf = (uint8_t *)RTMemAllocZ(*pcb);
+
+    if (! pBuf)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_READEXIT;
+    }
 
     if (psffsi->sfi_positionl > psffsi->sfi_sizel)
     {
@@ -1307,8 +1284,6 @@ FS32_READ(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOfl
         hrc = NO_ERROR;
         goto FS32_READEXIT;
     }
-
-    memset(pBuf, 0, cb);
 
     rc = VbglR0SfRead(&g_clientHandle, &psffsd->filebuf->map, psffsd->filebuf->handle, 
                       psffsi->sfi_positionl, (uint32_t *)pcb, pBuf, true); // false
@@ -1338,12 +1313,18 @@ FS32_WRITE(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOf
 {
     APIRET hrc;
     uint32_t cbNewPos;
-    uint8_t *pBuf;
+    uint8_t *pBuf = NULL;
     int rc;
 
     log("VBOXSF: FS32_WRITE(%lx)\n", IOflag);
 
-    pBuf = (uint8_t *)RTMemAlloc(*pcb);
+    if (! *pcb || ! pvData)
+    {
+        hrc = ERROR_INVALID_PARAMETER;
+        goto FS32_WRITEEXIT;
+    }
+
+    pBuf = (uint8_t *)RTMemAllocZ(*pcb);
 
     if (! pBuf)
     {
@@ -1465,7 +1446,7 @@ FS32_NMPIPE(PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG OpType, union npoper *pOpRec
 DECLASM(int)
 FS32_VERIFYUNCNAME(ULONG flag, PCSZ pszName)
 {
-    char *pszServer, *p;
+    char *pszServer = NULL, *p;
     APIRET hrc = NO_ERROR;
 
     log("VBOXSF: FS32_VERIFYUNCNAME(%lx, %s)\n", flag, pszName);

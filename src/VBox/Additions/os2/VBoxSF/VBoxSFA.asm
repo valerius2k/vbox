@@ -389,7 +389,8 @@ GLOBALNAME %1 %+ _32
 ;*******************************************************************************
 ;* External Symbols                                                            *
 ;*******************************************************************************
-segment CODE32
+segment TEXT32
+;segment CODE32
 extern KernThunkStackTo32
 extern KernThunkStackTo16
 extern KernSelToFlat
@@ -403,7 +404,8 @@ extern FSH_QSYSINFO
 extern FSH_PROBEBUF
 extern FSH_WILDMATCH
 
-segment CODE32
+segment TEXT32
+;segment CODE32
 extern NAME(FS32_ALLOCATEPAGESPACE)
 extern NAME(FS32_ATTACH)
 extern NAME(FS32_CANCELLOCKREQUEST)

@@ -325,6 +325,7 @@ FS32_ATTACH(ULONG flag, PCSZ pszDev, PVBOXSFVP pvpfsd, PVBOXSFCD pcdfsd, PBYTE p
             if (RT_FAILURE(rc))
             {
                 log("VbglR0SfMapFolder rc=%ld\n", rc);
+                RTMemFree(pvboxsfvp->pszShareName);
                 hrc = ERROR_VOLUME_NOT_MOUNTED;
                 goto FS32_ATTACHEXIT;
             }
@@ -345,9 +346,9 @@ FS32_ATTACH(ULONG flag, PCSZ pszDev, PVBOXSFVP pvpfsd, PVBOXSFCD pcdfsd, PBYTE p
 
         case FSA_ATTACH_INFO: // Query
             len = strlen(pvboxsfvp->pszShareName) + 1;
-            if (*pcbParm >= strlen(pvboxsfvp->pszShareName) + 1 && pszParm)
+            if (*pcbParm >= len && pszParm)
             {
-	            /* set cbFSAData to 0 => we return 0 bytes in rgFSAData area */
+                /* set cbFSAData to 0 => we return 0 bytes in rgFSAData area */
                 *((USHORT *) pszParm) = len;
                 memcpy((char *)&pszParm[2], pvboxsfvp->pszShareName, len);
                 pszParm[len + 1] = '\0';
@@ -1062,6 +1063,8 @@ FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd,
     }
 
 FS32_FILEATTRIBUTEEXIT:
+    if (params.Handle != SHFL_HANDLE_NIL)
+        VbglR0SfClose(&g_clientHandle, &map, params.Handle);
     if (tmp)
         VbglR0SfUnmapFolder(&g_clientHandle, &map);
     if (file)
@@ -1605,7 +1608,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
     }
 
 FS32_PATHINFOEXIT:
-    if (params.Handle)
+    if (params.Handle != SHFL_HANDLE_NIL)
         VbglR0SfClose(&g_clientHandle, &map, params.Handle);
     if (tmp)
         VbglR0SfUnmapFolder(&g_clientHandle, &map);

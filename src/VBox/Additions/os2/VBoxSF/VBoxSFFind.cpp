@@ -86,17 +86,40 @@ DECLASM(int)
 FS32_FINDCLOSE(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd)
 {
     PFINDBUF pFindBuf = pfsfsd->pFindBuf;
+
     log("FS32_FINDCLOSE\n");
 
-    VbglR0SfClose(&g_clientHandle, &pFindBuf->map, pFindBuf->handle);
-    free_shflstring(pFindBuf->path);
+    if (! pFindBuf)
+    {
+        return NO_ERROR;
+    }
+
+    if (pFindBuf->buf)
+    {
+        RTMemFree(pFindBuf->buf);
+    }
+
+    if (pFindBuf->handle != SHFL_HANDLE_NIL)
+    {
+        VbglR0SfClose(&g_clientHandle, &pFindBuf->map, pFindBuf->handle);
+    }
+
+    if (pFindBuf->path)
+    {
+        free_shflstring(pFindBuf->path);
+    }
 
     if (pFindBuf->tmp)
     {
         VbglR0SfUnmapFolder(&g_clientHandle, &pFindBuf->map);
     }
 
-    RTMemFree(pFindBuf);
+    if (pFindBuf)
+    {
+        RTMemFree(pFindBuf);
+    }
+
+
     return NO_ERROR;
 }
 
@@ -118,8 +141,8 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
     bool skip = false;
     int rc;
 
-    log("g_pGIS=%lx\n", g_pGIS);
-    log("timezone=%d minutes\n", (SHORT)g_pGIS->timezone);
+    //log("g_pGIS=%lx\n", g_pGIS);
+    //log("timezone=%d minutes\n", (SHORT)g_pGIS->timezone);
 
     usEntriesWanted = *pcMatch;
     *pcMatch = 0;
@@ -189,7 +212,10 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
     }
 
     if (! pFindBuf->has_more_files)
-        return ERROR_NO_MORE_FILES;
+    {
+        hrc = ERROR_NO_MORE_FILES;
+        goto FILLFINDBUFEXIT;
+    }
 
     pszFn = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
 
@@ -225,6 +251,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
         {
             log("VbglR0SfDirInfo failed: %d\n", rc);
             RTMemFree(pFindBuf->buf);
+            pFindBuf->buf = NULL;
             hrc = vbox_err_to_os2_err(rc);
             goto FILLFINDBUFEXIT;
         }
@@ -232,6 +259,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
         if (rc == VERR_NO_MORE_FILES)
         {
             RTMemFree(pFindBuf->buf);
+            pFindBuf->buf = NULL;
             hrc = ERROR_NO_MORE_FILES;
             pFindBuf->has_more_files = false;
             goto FILLFINDBUFEXIT;
@@ -683,7 +711,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
                ULONG level, ULONG flags)
 {
     SHFLCREATEPARMS params = {0};
-    PFINDBUF pFindBuf;
+    PFINDBUF pFindBuf = NULL;
     PSHFLSTRING path;
     VBGLSFMAP map;
     bool tmp;
@@ -698,7 +726,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
     log("FS32_FINDFIRST(%s, %lx, %lx, %lx)\n", pszName, attr, level, flags);
 
     RT_ZERO(params);
-    pfsfsd->pFindBuf = NULL;
+    //pfsfsd->pFindBuf = NULL;
 
     params.Handle = SHFL_HANDLE_NIL;
     params.CreateFlags = SHFL_CF_DIRECTORY | SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW | SHFL_CF_ACCESS_READ;
@@ -711,6 +739,9 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
         goto FS32_FINDFIRSTEXIT;
     }
 
+    pFindBuf->buf = NULL;
+    pfsfsd->pFindBuf = pFindBuf;
+
     if (attr & 0x0040)
         attr &= ~0x0040;
 
@@ -718,6 +749,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
     attr |= (FILE_READONLY | FILE_ARCHIVED);
     attr &= (FILE_READONLY | FILE_HIDDEN | FILE_SYSTEM | FILE_DIRECTORY | FILE_ARCHIVED);
     pFindBuf->bAttr = (BYTE)~attr;
+    pFindBuf->handle = SHFL_HANDLE_NIL;
 
     cbDir = strlen((char *)pszName) + 1;
 
@@ -775,7 +807,6 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
 
     vboxsfStrToUtf8(pwsz, str);
 
-    log("000\n");
     path = make_shflstring(pwsz);
     rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
     free_shflstring(path);
@@ -783,85 +814,78 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
 
     if (RT_SUCCESS(rc))
     {
-        log("001\n");
-        if (params.Result == SHFL_FILE_EXISTS && params.Handle != SHFL_HANDLE_NIL)
+        if (params.Result == SHFL_PATH_NOT_FOUND)
         {
-            log("002\n");
-            pfsfsd->pFindBuf = pFindBuf;
+            hrc = ERROR_PATH_NOT_FOUND;
+            goto FS32_FINDFIRSTEXIT;
+        }
 
-            pFindBuf->len = 16384;
-            pFindBuf->handle = params.Handle;
-            pFindBuf->map = map;
-            pFindBuf->tmp = tmp;
-            pFindBuf->has_more_files = true;
-
-            cbDir = strlen((char *)pszName) + 1;
-
-            str = pFile;
-
-            log("wildcard: %s\n", str);
-
-            pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
-
-            if (! pwsz)
+        if (params.Result == SHFL_FILE_EXISTS)
+        {
+            if (params.Handle != SHFL_HANDLE_NIL)
             {
-                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                pFindBuf->len = 16384;
+                pFindBuf->handle = params.Handle;
+                pFindBuf->map = map;
+                pFindBuf->tmp = tmp;
+                pFindBuf->has_more_files = true;
+
+                cbDir = strlen((char *)pszName) + 1;
+
+                str = pFile;
+
+                log("wildcard: %s\n", str);
+
+                pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+
+                if (! pwsz)
+                {
+                    hrc = ERROR_NOT_ENOUGH_MEMORY;
+                    goto FS32_FINDFIRSTEXIT;
+                }
+
+                vboxsfStrToUtf8(pwsz, str);
+
+                pFindBuf->path = make_shflstring(pwsz);
+                RTMemFree(pwsz);
+                hrc = FillFindBuf(pFindBuf, pbData, cbData, pcMatch, level, flags);
+            }
+            else
+            {
+                log("VbglR0SfCreate: handle is NULL!\n");
+                hrc = ERROR_PATH_NOT_FOUND;
                 goto FS32_FINDFIRSTEXIT;
             }
-
-            vboxsfStrToUtf8(pwsz, str);
-
-            pFindBuf->path = make_shflstring(pwsz);
-            RTMemFree(pwsz);
-            log("003\n");
-            hrc = FillFindBuf(pFindBuf, pbData, cbData, pcMatch, level, flags);
-            log("004: *pcMatch=%u\n", *pcMatch);
-            log("004: hrc=%lu\n", hrc);
         }
         else
         {
-            hrc = vbox_err_to_os2_err(rc);
-            log("005: hrc=%lu\n", hrc);
+            hrc = ERROR_FILE_NOT_FOUND;
             goto FS32_FINDFIRSTEXIT;
         }
     }
     else
     {
         hrc = vbox_err_to_os2_err(rc);
-        log("006: hrc=%lu\n", hrc);
         goto FS32_FINDFIRSTEXIT;
     }
 
-    log("007\n");
     if ( (hrc == ERROR_NO_MORE_FILES ||
           hrc == ERROR_BUFFER_OVERFLOW ||
           hrc == ERROR_EAS_DIDNT_FIT)
          && *pcMatch )
         hrc = 0;
 
+   if (hrc == ERROR_EAS_DIDNT_FIT && ! *pcMatch)
+      *pcMatch = 1;
+
 FS32_FINDFIRSTEXIT:
-    log("008\n");
-    if (pfsfsd->pFindBuf)
+    if (hrc && hrc != ERROR_EAS_DIDNT_FIT)
     {
-        if (hrc && hrc != ERROR_EAS_DIDNT_FIT)
-        {
-            log("009\n");
-            FS32_FINDCLOSE(pfsfsi, pfsfsd);
-            log("010\n");
-        }
-    }
-    else
-    {
-        log("011\n");
-        if (pFindBuf)
-            RTMemFree(pFindBuf);
-        log("012\n");
+        FS32_FINDCLOSE(pfsfsi, pfsfsd);
     }
 
-    log("013\n");
     if (pDir)
         RTMemFree(pDir);
-    log("014\n");
     if (pFile)
         RTMemFree(pFile);
 
@@ -880,7 +904,16 @@ FS32_FINDNEXT(PFSFSI pfsfsi, PVBOXFSFSD pfsfsd, PBYTE pbData, ULONG cbData, PUSH
 
     hrc = FillFindBuf(pfsfsd->pFindBuf, pbData, cbData, pcMatch, level, flags);
 
-FS32_FINDFIRSTEXIT:
+    if ( (hrc == ERROR_NO_MORE_FILES ||
+          hrc == ERROR_BUFFER_OVERFLOW ||
+          hrc == ERROR_EAS_DIDNT_FIT)
+         && *pcMatch )
+        hrc = 0;
+
+   if (hrc == ERROR_EAS_DIDNT_FIT && ! *pcMatch)
+      *pcMatch = 1;
+
+FS32_FINDNEXTEXIT:
     log(" => %d\n", hrc);
     return hrc;
 }
