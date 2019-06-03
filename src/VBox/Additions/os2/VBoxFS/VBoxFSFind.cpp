@@ -1,6 +1,6 @@
 /** $Id$ */
 /** @file
- * VBoxSF - OS/2 Shared Folders, Find File IFS EPs.
+ * VBoxFS - OS/2 Shared Folders, Find File IFS EPs.
  */
 
 /*
@@ -34,7 +34,7 @@
 *   Header Files                                                                                                                 *
 *********************************************************************************************************************************/
 #define LOG_GROUP LOG_GROUP_DEFAULT
-#include "VBoxSFInternal.h"
+#include "VBoxFSInternal.h"
 
 #include <VBox/log.h>
 #include <iprt/mem.h>
@@ -345,7 +345,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                         }
                     }
                     /* File name */
-                    vboxsfStrFromUtf8(pszFn, (char *)pszFileName, 
+                    vboxfsStrFromUtf8(pszFn, (char *)pszFileName,
                         CCHMAXPATHCOMP, file->name.u16Length);
                     findbuf.cchName = strlen(pszFn);
                     KernCopyOut(pbData, &findbuf, cbSize);
@@ -401,7 +401,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                         }
                     }
                     /* File name */
-                    vboxsfStrFromUtf8(pszFn, (char *)pszFileName, 
+                    vboxfsStrFromUtf8(pszFn, (char *)pszFileName, 
                         CCHMAXPATHCOMP, file->name.u16Length);
                     findbuf.cchName = strlen(pszFn);
                     KernCopyOut(pbData, &findbuf, cbSize);
@@ -458,7 +458,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     }
                     findbuf.cbList = 0; //file->Info.Attr.u.EASize.cb;
                     /* File name */
-                    vboxsfStrFromUtf8(pszFn, (char *)pszFileName, 
+                    vboxfsStrFromUtf8(pszFn, (char *)pszFileName, 
                         CCHMAXPATHCOMP, file->name.u16Length);
                     findbuf.cchName = strlen(pszFn);
                     KernCopyOut(pbData, &findbuf, cbSize);
@@ -515,7 +515,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     }
                     findbuf.cbList = 0; //file->Info.Attr.u.EASize.cb;
                     /* File name */
-                    vboxsfStrFromUtf8(pszFn, (char *)pszFileName, 
+                    vboxfsStrFromUtf8(pszFn, (char *)pszFileName, 
                         CCHMAXPATHCOMP, file->name.u16Length);
                     findbuf.cchName = strlen(pszFn);
                     KernCopyOut(pbData, &findbuf, cbSize);
@@ -576,7 +576,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     cbData -= cbSize;
                     pbData += cbSize;
                     /* File name */
-                    vboxsfStrFromUtf8(pszFn, (char *)pszFileName, 
+                    vboxfsStrFromUtf8(pszFn, (char *)pszFileName, 
                         CCHMAXPATHCOMP, file->name.u16Length);
                     len = strlen(pszFn);
                     eaop.fpFEAList->cbList = cbData - (len + 2);
@@ -652,7 +652,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     cbData -= cbSize;
                     pbData += cbSize;
                     /* File name */
-                    vboxsfStrFromUtf8(pszFn, (char *)pszFileName, 
+                    vboxfsStrFromUtf8(pszFn, (char *)pszFileName, 
                         CCHMAXPATHCOMP, file->name.u16Length);
                     len = strlen(pszFn);
                     eaop.fpFEAList->cbList = cbData - (len + 2);
@@ -805,7 +805,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
         goto FS32_FINDFIRSTEXIT;
     }
 
-    vboxsfStrToUtf8(pwsz, str);
+    vboxfsStrToUtf8(pwsz, str);
 
     path = make_shflstring(pwsz);
     rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
@@ -844,7 +844,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
                     goto FS32_FINDFIRSTEXIT;
                 }
 
-                vboxsfStrToUtf8(pwsz, str);
+                vboxfsStrToUtf8(pwsz, str);
 
                 pFindBuf->path = make_shflstring(pwsz);
                 RTMemFree(pwsz);

@@ -1,6 +1,6 @@
-/** $Id: VBoxSF.cpp 14 2015-11-29 02:15:22Z dmik $ */
+/** $Id: VBoxFS.cpp 14 2015-11-29 02:15:22Z dmik $ */
 /** @file
- * VBoxSF - OS/2 Shared Folders, the FS and FSD level IFS EPs
+ * VBoxFS - OS/2 Shared Folders, the FS and FSD level IFS EPs
  */
 
 /*
@@ -34,7 +34,7 @@
 *   Header Files                                                                                                                 *
 *********************************************************************************************************************************/
 #define LOG_GROUP LOG_GROUP_DEFAULT
-#include "VBoxSFInternal.h"
+#include "VBoxFSInternal.h"
 
 #include <VBox/log.h>
 #include <iprt/assert.h>
@@ -51,7 +51,7 @@ PSHFLSTRING make_shflstring(const char* const s)
 
     if (len > 0xFFFE)
     {
-        log(("vboxsf: make_shflstring: string too long\n"));
+        log(("vboxfs: make_shflstring: string too long\n"));
         return NULL;
     }
 
@@ -142,7 +142,7 @@ PSHFLSTRING build_path(PSHFLSTRING dir, const char* const name)
     return rv;
 }
 
-APIRET APIENTRY vboxsfStrFromUtf8(char *dst, char *src,
+APIRET APIENTRY vboxfsStrFromUtf8(char *dst, char *src,
                                   ULONG len, ULONG srclen)
 {
     APIRET  rc = NO_ERROR;
@@ -174,7 +174,7 @@ APIRET APIENTRY vboxsfStrFromUtf8(char *dst, char *src,
     return rc;
 }
 
-APIRET APIENTRY vboxsfStrToUtf8(char *dst, char *src)
+APIRET APIENTRY vboxfsStrToUtf8(char *dst, char *src)
 {
     APIRET  rc = NO_ERROR;
     ULONG   srclen;

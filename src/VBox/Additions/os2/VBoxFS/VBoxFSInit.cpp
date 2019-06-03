@@ -1,6 +1,6 @@
 /* $Id$ */
 /** @file
- * VBoxSF - OS/2 Shared Folders, Initialization.
+ * VBoxFS - OS/2 Shared Folders, Initialization.
  */
 
 /*
@@ -34,7 +34,7 @@
 *   Header Files                                                                                                                 *
 *********************************************************************************************************************************/
 #define LOG_GROUP LOG_GROUP_DEFAULT
-#include "VBoxSFInternal.h"
+#include "VBoxFSInternal.h"
 
 #include <VBox/VBoxGuestLib.h>
 #include <VBox/log.h>
@@ -46,7 +46,7 @@
 *   Global Variables                                                                                                             *
 *********************************************************************************************************************************/
 RT_C_DECLS_BEGIN
-/* from VBoxSFA.asm */
+/* from VBoxFSA.asm */
 extern RTFAR16 g_fpfnDevHlp;
 extern VBOXGUESTOS2IDCCONNECT g_VBoxGuestIDC;
 extern uint32_t g_u32Info;
@@ -127,11 +127,11 @@ APIRET APIENTRY doScanEnv(PCSZ  pszName,
  * while we're on the way here...
  *
  */
-DECLASM(void) VBoxSFR0Init(void)
+DECLASM(void) VBoxFSR0Init(void)
 {
     APIRET rc;
 
-    log("VBoxSFR0Init: g_fpfnDevHlp=%lx u32Version=%RX32 u32Session=%RX32 pfnServiceEP=%p g_u32Info=%u (%#x)\n",
+    log("VBoxFSR0Init: g_fpfnDevHlp=%lx u32Version=%RX32 u32Session=%RX32 pfnServiceEP=%p g_u32Info=%u (%#x)\n",
          g_fpfnDevHlp, g_VBoxGuestIDC.u32Version, g_VBoxGuestIDC.u32Session, g_VBoxGuestIDC.pfnServiceEP, g_u32Info, g_u32Info);
 
     /*
@@ -174,7 +174,7 @@ DECLASM(void) VBoxSFR0Init(void)
 
         if (RT_FAILURE(rc))
         {
-            log("VBOXSF: %s: ERROR while initializing VBox subsystem (%Rrc)!\n", __FUNCTION__, rc);
+            log("VBOXFS: %s: ERROR while initializing VBox subsystem (%Rrc)!\n", __FUNCTION__, rc);
             return;
         }
 
@@ -185,7 +185,7 @@ DECLASM(void) VBoxSFR0Init(void)
 
         if (RT_FAILURE(rc))
         {
-            log("VBOXSF: %s: ERROR while connecting to host (%Rrc)!\n", __FUNCTION__, rc);
+            log("VBOXFS: %s: ERROR while connecting to host (%Rrc)!\n", __FUNCTION__, rc);
             VbglR0SfTerm();
             return;
         }
@@ -194,7 +194,7 @@ DECLASM(void) VBoxSFR0Init(void)
 
         if (RT_FAILURE(rc))
         {
-            log("VBOXSF: VbglR0SfSetUtf8 failed. rc=%d\n", rc);
+            log("VBOXFS: VbglR0SfSetUtf8 failed. rc=%d\n", rc);
             return;
         }
 
@@ -234,11 +234,11 @@ DECLASM(void) VBoxSFR0Init(void)
         }
 #endif
 
-        log("VBoxSFR0Init: completed successfully\n");
+        log("VBoxFSR0Init: completed successfully\n");
         return;
     }
     else
     {
-        log("VBoxSF: Failed to connect to VBoxGuest.sys.\n");
+        log("VBoxFS: Failed to connect to VBoxGuest.sys.\n");
     }
 }

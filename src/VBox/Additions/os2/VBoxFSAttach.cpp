@@ -1,6 +1,6 @@
-/** $Id: VBoxSF.cpp 161 2018-04-10 00:36:59Z valerius $ */
+/** $Id: VBoxFS.cpp 161 2018-04-10 00:36:59Z valerius $ */
 /** @file
- * VBoxSF - OS/2 Shared Folders, the FS and FSD level IFS EPs
+ * VBoxFS - OS/2 Shared Folders, the FS and FSD level IFS EPs
  */
 
 /*
@@ -48,19 +48,19 @@ int main(int argc, char *argv[])
     }
 
     if (argc == 3 && !stricmp(argv[2], "/delete"))
-        rc = DosFSAttach(argv[1], "VBOXSF", NULL, 0, FS_DETACH);
+        rc = DosFSAttach(argv[1], "VBOXFS", NULL, 0, FS_DETACH);
     else
     {
         if (argc == 2)
-            rc = DosFSAttach(argv[1], "VBOXSF", NULL, 0, FS_ATTACH);
+            rc = DosFSAttach(argv[1], "VBOXFS", NULL, 0, FS_ATTACH);
         else
-            rc = DosFSAttach(argv[1], "VBOXSF", argv[2], strlen(argv[2]) + 1, FS_ATTACH);
+            rc = DosFSAttach(argv[1], "VBOXFS", argv[2], strlen(argv[2]) + 1, FS_ATTACH);
     }
 
     switch (rc)
     {
       case ERROR_INVALID_FSD_NAME:
-             puts ("Error: IFS=VBOXSF.IFS not loaded in CONFIG.SYS");
+             puts ("Error: IFS=VBOXFS.IFS not loaded in CONFIG.SYS");
              return 1;
 
       case ERROR_INVALID_PATH:

@@ -33,13 +33,13 @@ OTHER_CLEAN += \
 	$(CDDIR)/os2/VBoxControl.exe \
 	$(CDDIR)/os2/VBoxReplaceDll.exe \
 	$(CDDIR)/os2/VBoxService.exe \
-	$(CDDIR)/os2/VBoxSFAttach.exe \
+	$(CDDIR)/os2/VBoxFSAttach.exe \
 	$(CDDIR)/os2/dll/vbxgradd.dll \
 	$(CDDIR)/os2/boot/VBoxMouse.sys \
 	$(CDDIR)/os2/boot/VBoxGuest.sys \
 	$(CDDIR)/os2/boot/VBoxGuest.sym \
-	$(CDDIR)/os2/boot/VBoxSF.ifs \
-	$(CDDIR)/os2/boot/VBoxSF.sym \
+	$(CDDIR)/os2/boot/VBoxFS.ifs \
+	$(CDDIR)/os2/boot/VBoxFS.sym \
 	$(CDDIR)/usr/lib/gcc1.dll \
 	$(CDDIR)/usr/lib/libcn0.dll \
 	$(CDDIR)/usr/lib/libcx0.dll \
@@ -48,8 +48,8 @@ OTHER_CLEAN += \
 DRIVER_FILES := \
 	$(PATH_STAGE_BIN)/additions/VBoxGuest.sys \
 	$(PATH_STAGE_BIN)/additions/VBoxGuest.sym \
-	$(PATH_STAGE_BIN)/additions/VBoxSF.ifs \
-	$(PATH_STAGE_BIN)/additions/VBoxSF.sym
+	$(PATH_STAGE_BIN)/additions/VBoxFS.ifs \
+	$(PATH_STAGE_BIN)/additions/VBoxFS.sym
 
 KLIBC_FILES := \
 	/@unixroot/usr/lib/gcc1.dll \
@@ -60,7 +60,7 @@ EXE_FILES := \
 	$(PATH_STAGE_BIN)/additions/VBoxControl.exe \
 	$(PATH_STAGE_BIN)/additions/VBoxReplaceDll.exe \
 	$(PATH_STAGE_BIN)/additions/VBoxService.exe \
-	$(PATH_STAGE_BIN)/additions/VBoxSFAttach.exe
+	$(PATH_STAGE_BIN)/additions/VBoxFSAttach.exe
 
 $(PKG): $(ISOIMG)
 		$(QUIET)zip -r9j $@ $< >/dev/null 2>&1
@@ -85,7 +85,7 @@ $(CDDIR).flg: \
 			$(QUIET)$(CP) $(KLIBC_FILES) $(CDDIR)/usr/lib
 			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Bin/VBoxMouse.sys $(CDDIR)/os2/boot
 			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Bin/vbxgradd.dll $(CDDIR)/os2/dll
-			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Bin/vboxsf.cfg-sample $(CDDIR)/os2/boot
+			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Bin/vboxfs.cfg-sample $(CDDIR)/os2/boot
 			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Doc/readme.txt $(CDDIR)
 			$(QUIET)touch $@
 
@@ -95,10 +95,10 @@ $(PATH_STAGE_BIN)/additions/VBoxGuest.sym: $(PATH_OBJ)/VBoxGuest/VBoxGuest.vmp
 $(PATH_OBJ)/VBoxGuest/VBoxGuest.vmp: $(PATH_OBJ)/VBoxGuest/VBoxGuest.map
 			$(QUIET)$(TOOL_WAT2MAP) $< >$@
 
-$(PATH_STAGE_BIN)/additions/VBoxSF.sym: $(PATH_OBJ)/VBoxSF/VBoxSF.vmp
+$(PATH_STAGE_BIN)/additions/VBoxFS.sym: $(PATH_OBJ)/VBoxFS/VBoxFS.vmp
 			$(QUIET)cd $(dir $@) && $(TOOL_MAPSYM) $< >/dev/null 2>&1
 
-$(PATH_OBJ)/VBoxSF/VBoxSF.vmp: $(PATH_OBJ)/VBoxSF/VBoxSF.map
+$(PATH_OBJ)/VBoxFS/VBoxFS.vmp: $(PATH_OBJ)/VBoxFS/VBoxFS.map
 			$(QUIET)$(TOOL_WAT2MAP) $< >$@
 
 include $(FILE_KBUILD_SUB_FOOTER)

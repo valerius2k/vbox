@@ -106,7 +106,7 @@ typedef struct _vbsf_mount
 } vbsf_mount;
 
 /*  explicit mount points list got 
- *  from '\os2\boot\vboxsf.cfg' file
+ *  from '\os2\boot\vboxfs.cfg' file
  */
 static vbsf_mount g_pMountList[MAX_DRIVES] = {0};
 static int g_cMounts = 0;
@@ -194,7 +194,7 @@ int vbsvcOS2GetLine(FILE *fd, char *pszLine)
 }
 
 
-/* Parse vboxsf.cfg config file */
+/* Parse vboxfs.cfg config file */
 static void vbsvcOS2AutoMountParseConfig(void)
 {
     char szCfg[CCHMAXPATHCOMP];
@@ -212,7 +212,7 @@ static void vbsvcOS2AutoMountParseConfig(void)
    
     szCfg[0] = 'a' + ulTemp - 1;
     szCfg[1] = ':';
-    strcpy(&szCfg[2], "\\os2\\boot\\vboxsf.cfg");
+    strcpy(&szCfg[2], "\\os2\\boot\\vboxfs.cfg");
    
     fd = fopen(szCfg, "r");
 
@@ -398,7 +398,7 @@ static bool vbsvcAutoMountShareIsMounted(const char *pszShare, char *pszMountPoi
             }
 
             if ( pBuf->iType == FSAT_REMOTEDRV &&
-                 ! RTStrICmp(pszFSDName, "vboxsf") &&
+                 ! RTStrICmp(pszFSDName, "vboxfs") &&
                  p && ! RTStrICmp(p, pszShare) )
             {
                 RTStrPrintf(pszMountPoint, cbMountPoint, "%s", szDriveLetter);
@@ -452,7 +452,7 @@ static int vbsvcAutoMountUnmount(const char *pszMountPoint)
     while (uTries++ < 3)
     {
 #ifdef RT_OS_OS2
-        hrc = DosFSAttach(pszMountPoint, "VBOXSF", NULL, 0, FS_DETACH);
+        hrc = DosFSAttach(pszMountPoint, "VBOXFS", NULL, 0, FS_DETACH);
         if (! hrc)
             break;
 #else
@@ -601,7 +601,7 @@ static int vbsvcAutoMountSharedFolder(const char *pszShareName, const char *pszM
 #elif defined(RT_OS_OS2)
         char pBuf[CCHMAXPATH];
         strcpy(pBuf, pszShareName);
-        APIRET hrc = DosFSAttach(pszMountPoint, "VBOXSF", pBuf, strlen(pBuf) + 1, FS_ATTACH);
+        APIRET hrc = DosFSAttach(pszMountPoint, "VBOXFS", pBuf, strlen(pBuf) + 1, FS_ATTACH);
         if (! hrc)
         {
             VGSvcVerbose(0, "VBoxServiceAutoMountWorker: Shared folder \"%s\" was mounted to \"%s\"\n", pszShareName, pszMountPoint);
@@ -829,7 +829,7 @@ static int vbsvcAutoMountProcessMappings(PCVBGLR3SHAREDFOLDERMAPPING paMappings,
 
                         if ( p && pBuf->iType == FSAT_REMOTEDRV &&
                              ! RTStrICmp(p, pszShareName) &&
-                             ! RTStrICmp(pszFSDName, "vboxsf") )
+                             ! RTStrICmp(pszFSDName, "vboxfs") )
                         {
                             strcpy(szMountPoint, (char *)pBuf->szName);
                             fFound = true;
@@ -868,7 +868,7 @@ static int vbsvcAutoMountProcessMappings(PCVBGLR3SHAREDFOLDERMAPPING paMappings,
                             // check if this drive letter is occupied already
                             if ( hrc == ERROR_INVALID_DRIVE || 
                                  (! hrc && pBuf->iType == FSAT_REMOTEDRV &&
-                                  ! RTStrICmp(pszFSDName, "vboxsf") ) )
+                                  ! RTStrICmp(pszFSDName, "vboxfs") ) )
                             {
                                 strcpy(szMountPoint, mnt->pszMountPoint);
                                 break;

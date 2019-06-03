@@ -6,38 +6,38 @@
 SUB_DEPTH = ../../../../..
 include $(KBUILD_PATH)/subheader.kmk
 
-#?DLLS += VBoxSF
-SYSMODS += VBoxSF
-VBoxSF_TEMPLATE      = VBOXGUESTR0
-VBoxSF_SYSSUFF       = .ifs
-VBoxSF_DLLSUFF       = .ifs
-VBoxSF_DEFS          = VBOX_WITH_HGCM
-VBoxSF_INCS         := \
+#?DLLS += VBoxFS
+SYSMODS += VBoxFS
+VBoxFS_TEMPLATE      = VBOXGUESTR0
+VBoxFS_SYSSUFF       = .ifs
+VBoxFS_DLLSUFF       = .ifs
+VBoxFS_DEFS          = VBOX_WITH_HGCM
+VBoxFS_INCS         := \
 	. \
         $(PATH_ROOT)/include \
 	$(PATH_ROOT)/src/VBox/Additions/common/VBoxGuestLib \
 	$(PATH_ROOT)/src/VBox/Additions/common/VBoxGuest \
 	$(PATH_ROOT)/src/VBox/Runtime/include \
 	$(PATH_ROOT)/src/VBox/Runtime/r0drv/os2
-VBoxSF_LDFLAGS      := $(addprefix -Zlinker , \
+VBoxFS_LDFLAGS      := $(addprefix -Zlinker , \
 	SEG TYPE CODE PRELOAD DYNAMIC SHARED NONPERMANENT, \
 	    TYPE DATA PRELOAD DYNAMIC)
-#VBoxSF_LDFLAGS      += -s -t -v
-VBoxSF_SOURCES       = \
-	VBoxSFA.asm \
-	VBoxSF.cpp \
-	VBoxSFStr.cpp \
-	VBoxSFFile.cpp \
-	VBoxSFFind.cpp \
-	VBoxSFInit.cpp \
-	$(PATH_OBJ)/VBoxSF/VBoxSF.def
-VBoxSF_LIBS          = \
+#VBoxFS_LDFLAGS      += -s -t -v
+VBoxFS_SOURCES       = \
+	VBoxFSA.asm \
+	VBoxFS.cpp \
+	VBoxFSStr.cpp \
+	VBoxFSFile.cpp \
+	VBoxFSFind.cpp \
+	VBoxFSInit.cpp \
+	$(PATH_OBJ)/VBoxFS/VBoxFS.def
+VBoxFS_LIBS          = \
 	$(VBOX_LIB_VBGL_R0) \
 	$(VBOX_LIB_IPRT_GUEST_R0) \
 	$(VBOX_GCC_LIBGCC) \
 	end
 
-$(PATH_OBJ)/VBoxSF/VBoxSF.def: $(PATH_SUB_CURRENT)/VBoxSF.def
+$(PATH_OBJ)/VBoxFS/VBoxFS.def: $(PATH_SUB_CURRENT)/VBoxFS.def
 	@mkdir -p $(dir $@)
 	$(QUIET)$(SED) \
 		-e 's/@FILEVER@/$(VBOX_OS2_FILEVER)/' \

@@ -1,6 +1,6 @@
 /** $Id$ */
 /** @file
- * VBoxSF - OS/2 Shared Folder IFS, Internal Header.
+ * VBoxFS - OS/2 Shared Folder IFS, Internal Header.
  */
 
 /*
@@ -29,8 +29,8 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  */
 
-#ifndef ___VBoxSFInternal_h___
-#define ___VBoxSFInternal_h___
+#ifndef ___VBoxFSInternal_h___
+#define ___VBoxFSInternal_h___
 
 
 #define INCL_DOSINFOSEG
@@ -175,7 +175,7 @@ typedef struct _FILEBUF
 } FILEBUF, *PFILEBUF;
 
 /**
- * VBoxSF Volume Parameter Structure.
+ * VBoxFS Volume Parameter Structure.
  *
  * @remark  Overlays the 36 byte VPFSD structure (fsd.h).
  */
@@ -192,7 +192,7 @@ typedef VBOXSFVP *PVBOXSFVP;
 
 
 /**
- * VBoxSF Current Directory Structure.
+ * VBoxFS Current Directory Structure.
  *
  * @remark  Overlays the 8 byte CDFSD structure (fsd.h).
  */
@@ -207,7 +207,7 @@ typedef VBOXSFCD *PVBOXSFCD;
 
 
 /**
- * VBoxSF System File Structure.
+ * VBoxFS System File Structure.
  *
  * @remark  Overlays the 30 byte SFFSD structure (fsd.h).
  */
@@ -238,7 +238,7 @@ typedef struct _FINDBUF
 } FINDBUF, *PFINDBUF;
 
 /**
- * VBoxSF File Search Structure.
+ * VBoxFS File Search Structure.
  *
  * @remark  Overlays the 24 byte FSFSD structure (fsd.h).
  */
@@ -258,8 +258,8 @@ PSHFLSTRING clone_shflstring(PSHFLSTRING s);
 PSHFLSTRING concat_shflstring_cstr(PSHFLSTRING s1, const char* const s2);
 PSHFLSTRING concat_cstr_shflstring(const char* const s1, PSHFLSTRING s2);
 PSHFLSTRING build_path(PSHFLSTRING dir, const char* const name);
-APIRET APIENTRY vboxsfStrFromUtf8(char *dst, char *src, ULONG len, ULONG srclen);
-APIRET APIENTRY vboxsfStrToUtf8(char *dst, char *src);
+APIRET APIENTRY vboxfsStrFromUtf8(char *dst, char *src, ULONG len, ULONG srclen);
+APIRET APIENTRY vboxfsStrToUtf8(char *dst, char *src);
 APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
                               char *pszParsedPath, int *cbParsedPath,
                               VBGLSFMAP *map, bool *tmp);

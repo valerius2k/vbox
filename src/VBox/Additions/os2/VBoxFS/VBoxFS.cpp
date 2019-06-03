@@ -1,6 +1,6 @@
 /** $Id$ */
 /** @file
- * VBoxSF - OS/2 Shared Folders, the FS and FSD level IFS EPs
+ * VBoxFS - OS/2 Shared Folders, the FS and FSD level IFS EPs
  */
 
 /*
@@ -35,7 +35,7 @@
 *   Header Files                                                                                                                 *
 *********************************************************************************************************************************/
 #define LOG_GROUP LOG_GROUP_DEFAULT
-#include "VBoxSFInternal.h"
+#include "VBoxFSInternal.h"
 
 #include <VBox/log.h>
 #include <iprt/assert.h>
@@ -262,14 +262,14 @@ GetEmptyEAS_exit:
 DECLASM(void)
 FS32_EXIT(ULONG uid, ULONG pid, ULONG pdb)
 {
-    log("VBOXSF: FS32_EXIT(%lx, %lx, %lx)\n", uid, pid, pdb);
+    log("VBOXFS: FS32_EXIT(%lx, %lx, %lx)\n", uid, pid, pdb);
 }
 
 
 DECLASM(int)
 FS32_SHUTDOWN(ULONG type, ULONG reserved)
 {
-    log("VBOXSF: FS32_SHUTDOWN(%lx)\n", type);
+    log("VBOXFS: FS32_SHUTDOWN(%lx)\n", type);
     return NO_ERROR;
 }
 
@@ -281,7 +281,7 @@ FS32_ATTACH(ULONG flag, PCSZ pszDev, PVBOXSFVP pvpfsd, PVBOXSFCD pcdfsd, PBYTE p
     int    len;
     int    rc;
 
-    log("VBOXSF: FS32_ATTACH(%lx, %s, %s)\n", flag, pszDev, pszParm);
+    log("VBOXFS: FS32_ATTACH(%lx, %s, %s)\n", flag, pszDev, pszParm);
     PSHFLSTRING sharename;
     PVBOXSFVP pvboxsfvp = (PVBOXSFVP)pvpfsd;
 
@@ -375,7 +375,7 @@ FS32_ATTACHEXIT:
 DECLASM(int)
 FS32_FLUSHBUF(ULONG hVPB, ULONG flag)
 {
-    log("VBOXSF: FS32_FLUSHBUF(%lx, %lx)\n", hVPB, flag);
+    log("VBOXFS: FS32_FLUSHBUF(%lx, %lx)\n", hVPB, flag);
     return NO_ERROR;
 }
 
@@ -391,7 +391,7 @@ FS32_FSINFO(ULONG flag, ULONG hVPB, PBYTE pbData, ULONG cbData, ULONG level)
     SHFLVOLINFO volume_info;
     uint32_t bytes = sizeof(SHFLVOLINFO);
 
-    log("VBOXSF: FS32_FSINFO(%lx, %lx, %lx)\n", hVPB, flag, level);
+    log("VBOXFS: FS32_FSINFO(%lx, %lx, %lx)\n", hVPB, flag, level);
 
     if (hVPB == 0)
         return ERROR_INVALID_PARAMETER;
@@ -406,7 +406,7 @@ FS32_FSINFO(ULONG flag, ULONG hVPB, PBYTE pbData, ULONG cbData, ULONG level)
 
     if (RT_FAILURE(rv))
     {
-        log("VBOXSF: VbglR0SfFsInfo failed (%d)\n", rv);
+        log("VBOXFS: VbglR0SfFsInfo failed (%d)\n", rv);
         return vbox_err_to_os2_err(rv);
     }
 
@@ -488,7 +488,7 @@ FS32_FSCTL(union argdat *pArgdat, ULONG iArgType, ULONG func,
     PEASIZEBUF pEA = (PEASIZEBUF)pData;
     APIRET rc;
 
-    log("VBOXSF: FS32_FSCTL(%lx, %lx)\n", iArgType, func);
+    log("VBOXFS: FS32_FSCTL(%lx, %lx)\n", iArgType, func);
 
     switch (func)
     {
@@ -539,7 +539,7 @@ FS32_FSCTLEXIT:
 DECLASM(int)
 FS32_PROCESSNAME(PSZ pszName)
 {
-    log("VBOXSF: FS32_PROCESSNAME(%s)\n", pszName);
+    log("VBOXFS: FS32_PROCESSNAME(%s)\n", pszName);
     return NO_ERROR;
 }
 
@@ -557,7 +557,7 @@ FS32_CHDIR(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszDir, ULONG iCurD
     bool tmp;
     int rc;
 
-    log("VBOXSF: FS32_CHDIR(%lx, %lu)\n", flag, iCurDirEnd);
+    log("VBOXFS: FS32_CHDIR(%lx, %lu)\n", flag, iCurDirEnd);
 
     switch (flag)
     {
@@ -584,7 +584,7 @@ FS32_CHDIR(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszDir, ULONG iCurD
 
             log("pszFullName=%s\n", pszFullName);
             pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
-            vboxsfStrToUtf8(pwsz, (char *)pszFullName);
+            vboxfsStrToUtf8(pwsz, (char *)pszFullName);
 
             path = make_shflstring((char *)pwsz);
 
@@ -661,7 +661,7 @@ FS32_MKDIR(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     bool tmp;
     int rc;
 
-    log("VBOXSF: FS32_MKDIR(%s, %lu)\n", pszName, flag);
+    log("VBOXFS: FS32_MKDIR(%s, %lu)\n", pszName, flag);
 
     params.Handle = 0;
     params.Info.cbObject = 0;
@@ -687,7 +687,7 @@ FS32_MKDIR(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     }
 
     pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
-    vboxsfStrToUtf8(pwsz, (char *)pszFullName);
+    vboxfsStrToUtf8(pwsz, (char *)pszFullName);
     log("path=%s\n", pwsz);
 
     path = make_shflstring((char *)pwsz);
@@ -732,7 +732,7 @@ FS32_RMDIR(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd)
     char *pwsz = NULL;
     int rc;
 
-    log("VBOXSF: FS32_RMDIR(%s)\n", pszName);
+    log("VBOXFS: FS32_RMDIR(%s)\n", pszName);
 
     pszFullName = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
 
@@ -753,7 +753,7 @@ FS32_RMDIR(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd)
     }
 
     pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
-    vboxsfStrToUtf8(pwsz, (char *)pszFullName);
+    vboxfsStrToUtf8(pwsz, (char *)pszFullName);
 
     path = make_shflstring((char *)pwsz);
     rc = VbglR0SfRemove(&g_clientHandle, &map, path, SHFL_REMOVE_DIR);
@@ -779,7 +779,7 @@ DECLASM(int)
 FS32_COPY(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszSrc, ULONG iSrcCurDirEnd,
           PCSZ pszDst, ULONG iDstCurDirEnd, ULONG nameType)
 {
-    log("VBOXSF: FS32_COPY(%lx, %s, %s, %lx)\n", flag, pszSrc, pszDst, nameType);
+    log("VBOXFS: FS32_COPY(%lx, %s, %s, %lx)\n", flag, pszSrc, pszDst, nameType);
     return ERROR_CANNOT_COPY;
 }
 
@@ -801,7 +801,7 @@ FS32_MOVE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszSrc, ULONG iSrcCurDirEnd,
     uint32_t flags;
     int rc;
 
-    log("VBOXSF: FS32_MOVE(%s, %s, %lx)\n", pszSrc, pszDst, flag);
+    log("VBOXFS: FS32_MOVE(%s, %s, %lx)\n", pszSrc, pszDst, flag);
 
     pszFullSrc = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
 
@@ -842,8 +842,8 @@ FS32_MOVE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszSrc, ULONG iSrcCurDirEnd,
     pwszSrc = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
     pwszDst = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
 
-    vboxsfStrToUtf8(pwszSrc, (char *)pszFullSrc);
-    vboxsfStrToUtf8(pwszDst, (char *)pszFullDst);
+    vboxfsStrToUtf8(pwszSrc, (char *)pszFullSrc);
+    vboxfsStrToUtf8(pwszDst, (char *)pszFullDst);
 
     oldpath = make_shflstring((char *)pwszSrc);
     newpath = make_shflstring((char *)pwszDst);
@@ -915,7 +915,7 @@ FS32_DELETE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszFile, ULONG iCurDirEnd)
     bool tmp;
     int rc;
 
-    log("VBOXSF: FS32_DELETE(%s)\n", pszFile);
+    log("VBOXFS: FS32_DELETE(%s)\n", pszFile);
 
     pszFullName = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
 
@@ -936,7 +936,7 @@ FS32_DELETE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszFile, ULONG iCurDirEnd)
     }
 
     pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
-    vboxsfStrToUtf8(pwsz, (char *)pszFullName);
+    vboxfsStrToUtf8(pwsz, (char *)pszFullName);
 
     path = make_shflstring((char *)pwsz);
     rc = VbglR0SfRemove(&g_clientHandle, &map, path, SHFL_REMOVE_FILE);
@@ -974,7 +974,7 @@ FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd,
     bool tmp;
     int rc;
 
-    log("VBOXSF: FS32_FILEATTRIBUTE(%lx, %s)\n", flag, pszName);
+    log("VBOXFS: FS32_FILEATTRIBUTE(%lx, %s)\n", flag, pszName);
 
     switch (flag)
     {
@@ -1007,7 +1007,7 @@ FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd,
             }
 
             pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
-            vboxsfStrToUtf8(pwsz, (char *)pszFullName);
+            vboxfsStrToUtf8(pwsz, (char *)pszFullName);
 
             path = make_shflstring((char *)pwsz);
 
@@ -1098,7 +1098,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
     bool tmp;
     int rc;
 
-    log("VBOXSF: FS32_PATHINFO(%lx, %s, %lx)\n", flag, pszName, level);
+    log("VBOXFS: FS32_PATHINFO(%lx, %s, %lx)\n", flag, pszName, level);
 
     pszFullName = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
 
@@ -1119,7 +1119,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
     }
 
     pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
-    vboxsfStrToUtf8(pwsz, (char *)pszFullName);
+    vboxfsStrToUtf8(pwsz, (char *)pszFullName);
 
     path = make_shflstring((char *)pwsz);
 
@@ -1629,7 +1629,7 @@ FS32_PATHINFOEXIT:
 DECLASM(int)
 FS32_MOUNT(ULONG flag, PVPFSI pvpfsi, PVBOXSFVP pvpfsd, ULONG hVPB, PCSZ pszBoot)
 {
-    log("VBOXSF: FS32_MOUNT(%lx, %lx)\n", flag, hVPB);
+    log("VBOXFS: FS32_MOUNT(%lx, %lx)\n", flag, hVPB);
     return ERROR_NOT_SUPPORTED;
 }
 
