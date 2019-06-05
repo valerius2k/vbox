@@ -778,7 +778,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
         goto FS32_FINDFIRSTEXIT;
     }
 
-    log("pDir=%s\n", pDir); 
+    log("pFile=%s\n", pFile); 
 
     strcpy(pDir, pFile);
     p = pDir;
@@ -796,6 +796,8 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
     }
 
     log("str=%s\n", str);
+
+    str = pDir;
 
     pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
 

@@ -287,7 +287,12 @@ USHORT vbox_err_to_os2_err(int rc);
 APIRET GetEmptyEAS(PEAOP pEAOP);
 
 int tolower (int c);
-char *strncpy(char *dst, char *src, int len);
 char *strrchr(const char *cp, int ch);
+char *strncpy(char *dst, char *src, size_t len);
+int stricmp(const char *s, const char *t);
+char *strstr(const char *s1, const char *s2);
+char *strcat(char *dst, const char *app);
+char *stpcpy(char *dst, const char *src);
+
 
 #endif

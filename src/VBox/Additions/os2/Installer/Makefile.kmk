@@ -77,16 +77,19 @@ $(ISOIMG): $(CDDIR).flg
 $(CDDIR).flg: \
 		$(EXE_FILES) \
 		$(DRIVER_FILES)
+			$(QUIET)echo "  MKCD    $(CDDIR)"
 			$(QUIET)$(MKDIR) -p $(CDDIR)/os2/boot
 			$(QUIET)$(MKDIR) -p $(CDDIR)/os2/dll
 			$(QUIET)$(MKDIR) -p $(CDDIR)/usr/lib
+			$(QUIET)$(MKDIR) -p $(CDDIR)/docs
 			$(QUIET)$(CP) $(EXE_FILES) $(CDDIR)/os2
 			$(QUIET)$(CP) $(DRIVER_FILES) $(CDDIR)/os2/boot
 			$(QUIET)$(CP) $(KLIBC_FILES) $(CDDIR)/usr/lib
 			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Bin/VBoxMouse.sys $(CDDIR)/os2/boot
 			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Bin/vbxgradd.dll $(CDDIR)/os2/dll
 			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Bin/vboxfs.cfg-sample $(CDDIR)/os2/boot
-			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Doc/readme.txt $(CDDIR)
+			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Doc/readme.txt $(CDDIR)/docs
+			$(QUIET)cd $(CDDIR) && lxlite /r+ /c- *.exe *.dll *.ifs *.sys >/dev/null 2>&1
 			$(QUIET)touch $@
 
 $(PATH_STAGE_BIN)/additions/VBoxGuest.sym: $(PATH_OBJ)/VBoxGuest/VBoxGuest.vmp

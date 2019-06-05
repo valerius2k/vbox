@@ -38,6 +38,7 @@
 #include "VBoxFSInternal.h"
 
 #include <VBox/log.h>
+#include <iprt/path.h>
 #include <iprt/assert.h>
 #include <iprt/mem.h>
 
@@ -89,14 +90,16 @@ void log(const char *fmt, ...)
     RTStrPrintfV(buf + strlen(buf), sizeof(buf) - strlen(buf) - 1, fmt, va);
 
     /*
-     * Use LogPrintf from QSINIT / os4ldr / ArcaOS
-     * loader when available as it has a large log
-     * buffer (7 MB), or do fallback to a function 
+     * Use LogPrintf from QSINIT / os4ldr / arcaldr
+     * when available as it has a large log buffer
+     * (some MB's), or do fallback to a function 
      * provided by the current driver, if any.
      */
     if (g_fLogPrint)
+        /* output to qsinit / os4ldr / arcaldr log buffer */
         LogPrint(buf);
-    else // otherwise, print to a COM port directly
+    else
+        /* otherwise, print to a COM port directly */
         RTLogComPrintf(buf);
 
     /* Duplicate the same string to VBox log, 
@@ -281,7 +284,11 @@ FS32_ATTACH(ULONG flag, PCSZ pszDev, PVBOXSFVP pvpfsd, PVBOXSFCD pcdfsd, PBYTE p
     int    len;
     int    rc;
 
-    log("FS32_ATTACH(%lx, %s, %s)\n", flag, pszDev, pszParm);
+    if (flag == FSA_ATTACH)
+        log("FS32_ATTACH(%lx, %s, %s)\n", flag, pszDev, pszParm);
+    else
+        log("FS32_ATTACH(%lx, %s)\n", flag, pszDev);
+
     PSHFLSTRING sharename;
     PVBOXSFVP pvboxsfvp = (PVBOXSFVP)pvpfsd;
 
@@ -539,7 +546,39 @@ FS32_FSCTLEXIT:
 DECLASM(int)
 FS32_PROCESSNAME(PSZ pszName)
 {
+    char *pszFilter = RTPathFilename((char const *)pszName);
+
     log("FS32_PROCESSNAME(%s)\n", pszName);
+
+    /* got the idea from bird's version of
+       vboxsf.ifs (but I made it a bit shorter) */
+    if ( pszFilter && ( strchr(pszFilter, '?') || strchr(pszFilter, '*') ) )
+    {
+        /* convert DOS-style wildcard characters to WinNT style */
+        for (; *pszFilter; pszFilter++)
+        {
+            switch (*pszFilter)
+            {
+                case '*':
+                    /* DOS star, matches any number of chars (including none), except DOS dot */
+                    if (pszFilter[1] == '.')
+                        *pszFilter = '<';
+                    break;
+
+                case '?':
+                    /* DOS query sign, matches one char, except a dot, and end of name eats it */
+                    *pszFilter = '>';
+                    break;
+
+                case '.':
+                    /* DOS dot, matches a dot or end of name */
+                    if (pszFilter[1] == '?' || pszFilter[1] == '*')
+                        *pszFilter = '"';
+            }
+        }
+    }
+
+
     return NO_ERROR;
 }
 

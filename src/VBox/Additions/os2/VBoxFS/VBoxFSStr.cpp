@@ -225,7 +225,7 @@ int tolower (int c)
     return c;
 }
 
-char *strncpy(char *dst, char *src, int len)
+char *strncpy(char *dst, char *src, size_t len)
 {
     char *ret;
 
