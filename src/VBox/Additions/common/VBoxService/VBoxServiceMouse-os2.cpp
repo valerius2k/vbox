@@ -197,8 +197,8 @@ static DECLCALLBACK(int) vgsvcMouseOs2Worker(bool volatile *pfShutdown)
         uint32_t cx, cy, fFeatures;
         rc = VbglR3GetMouseStatus(&fFeatures, &cx, &cy);
 
-        if (   RT_SUCCESS(rc)
-            && (fFeatures & VMMDEV_MOUSE_HOST_WANTS_ABSOLUTE))
+        if ( RT_SUCCESS(rc)
+             && (fFeatures & VMMDEV_MOUSE_HOST_WANTS_ABSOLUTE) )
         {
             VGSvcVerbose(2, "VBoxMouse: at %d, %d\n", cx, cy);
 

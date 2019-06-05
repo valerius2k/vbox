@@ -56,11 +56,13 @@ VBoxFSAttach_SOURCES    = \
 
 $(PATH_OBJ)/VBoxReplaceDll/VBoxReplaceDll.def:
 	@mkdir -p $(dir $@)
+	@rm -rf $@
 	@echo NAME VBoxReplaceDll >$@
 	@echo "DESCRIPTION '$(VBOX_OS2_FILEVER)  VirtualBox Guest Additions unlock DLL helper.'" >>$@
 
 $(PATH_OBJ)/VBoxFSAttach/VBoxFSAttach.def:
 	@mkdir -p $(dir $@)
+	@rm -rf $@
 	@echo NAME VBoxFSAttach >$@
 	@echo "DESCRIPTION '$(VBOX_OS2_FILEVER)  VirtualBox Guest Additions attach/detach shared folders.'" >>$@
 

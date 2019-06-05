@@ -39,6 +39,7 @@ VBoxFS_LIBS          = \
 
 $(PATH_OBJ)/VBoxFS/VBoxFS.def: $(PATH_SUB_CURRENT)/VBoxFS.def
 	@mkdir -p $(dir $@)
+	@rm -rf $@
 	$(QUIET)$(SED) \
 		-e 's/@FILEVER@/$(VBOX_OS2_FILEVER)/' \
 		$< >$@
