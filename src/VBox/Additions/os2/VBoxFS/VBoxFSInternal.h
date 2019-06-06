@@ -157,7 +157,6 @@ typedef struct _ProcInfo
     USHORT usUid;
     USHORT usPdb;
 } PROCINFO, *PPROCINFO;
-
 #pragma pack()
 
 typedef struct _CWD

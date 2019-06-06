@@ -1,0 +1,159 @@
+Debugging with QSINIT / ARCALDR / OS4LDR enabled drivers.
+========================================================
+
+When Debug mode is enabled in your driver, messages can be output to:
+
+VBox log file
+-------------
+
+In case of debugging drivers (like VBox additions) in VBox VM, the debug messages could be
+redirected to VBox VM log.
+
+For messages ouput to a VM log, the driver should be linked with VBox runtime (IPRT) and
+call a "RTLogBackdoorPrintf" runtime function.
+
+The VBox log file for a current VM is located in %HOME%\VirtualBox VMs\<VM_name>\Logs\VBox.log
+by default. But it is possible to set VBox VM's directory (%HOME%\VirtualBox VMs) to some other
+location in VBox settings. Also, if your host system is Windows, then c:\Users\<Your_user> or
+c:\Documents and Settings\<Your_user> is used, instead of %HOME%.
+
+So, the debug messages are output there. However, when more than 32768 messages are sent
+by the VM, VBox considers that VM is "flooding", and mutes the VM output. When doing complex
+debugging with a lot of messages, this is inconvenient. So, we added the output to other
+places as well in our drivers.
+
+QSINIT / ARCALDR / OS4LDR log buffer
+------------------------------------
+
+If one of these three bootloaders is installed in your system, you can output to its log
+buffer. The log buffer can be as large as several megabytes. Together with messages from
+your driver, you can see the sequence of events from other drivers and the kernel. So,
+you can synchronize events from the driver of interest to events in other places of the
+system.
+
+If your system has booted successfully, you can get the contents of the log buffer as
+simple as issuing a single command.
+
+a) If you have an OS/4 kernel installed, the contents of a log buffer can be got by issuing
+a command:
+
+! copy kernlog$ log.txt
+
+-- this reads the buffer from special \dev\kernlog$ driver (built into OS/4 kernel) to
+log.txt file
+
+b) If you have IBM's kernel, and a QSINIT bootloader installed, (or you have ArcaOS, so you
+are using ARCALDR bootloader, which is a custom, stripped-down version of QSINIT) then issue
+a command:
+
+! copy oemhlp$ log.txt
+
+-- this uses \dev\oemhlp$ driver (built into OS2LDR) instead
+
+c) If you have QSINIT or ARCALDR (or a very old version of OS/4 kernel) and you have
+ACPI.PSD driver installed, then issue a command:
+
+! copy ___hlp$ log.txt
+
+-- ACPI.PSD installs its own version of \dev\oemhlp$ driver, and renames QSINIT's version
+of oemhlp$ to \dev\___hlp$. So, you need to use a renamed version instead.
+
+Debugging using a terminal, attached to a COM port
+--------------------------------------------------
+
+This applies to any driver with QSINIT / ARCALDR / OS4LDR support, like VBoxFS.ifs,
+VBoxDrv.sys, fat32.ifs, loop.add etc.
+
+When you have QSINIT / ARCALDR / OS4LDR installed, the usual way of getting the log is
+copying the log buffer to a file with 'copy' command. This, however, requires the system
+to be booted successfully, until a desktop. If your system traps, or hangs, or stops
+booting, you are still able to get the logs, and thus see what was on the debug console
+until the error occured. For that, you'll need another machine with a terminal emulator
+program installed, plus a NULL-modem cable, attached to your debugee machine's COM port.
+And yes, you'll need your debugee machine to have a COM port available.
+
+Or, if you are running your system in VBox, then it is possible to enable the COM port
+emulation in VBox (see "Serial Ports" section in VBox GUI) and use a terminal emulator
+in the host system, which will attach to a VM's COM port (see section "Debugging VBox
+VM's via a virtual COM port" below).
+
+But if you are running your system on a real machine, or redirected the VM log to a host
+COM port in "Serial Ports" section of VM settings in VBox GUI, getting the VM log via the
+serial cable on another machine, attached to it, then the following three paragraphs apply.
+
+Many modern machines, especially laptops, have no COM port available. In such cases, you
+can use a COM port on a docking station, if available. Or, a PCMCIA/Express card COM port,
+or, if your machine supports Intel AMT management tecnology, you can use AMT SOL (serial
+Over LAN) COM port via network. Machines with Intel AMT support include all modern
+ThinkPads. Also, many newer Intel Core i5/i7 machines have support for Intel ME (which
+includes AMT, as an option).
+
+If you have a Linux machine available on your network, you can use the "amtterm" command
+(the package name is usually the same, so in e.g., Debian system, you need "apt-get
+install amtterm" to install the package). So, you can connect to your AMT SOL COM port
+via network using a LAN cable (usually, a wired LAN only). Like this:
+
+! amtterm -u admin -p P@ssw0rd <Intel AMT IP address>
+
+Where "admin" is AMT login, "P@ssw0rd" is your AMT password, and <Intel AMT IP address>
+is your debugee machine IP, set in Intel AMT settings. Note that it is different from the
+IP that your machine OS has on the same LAN interface.
+
+I plan to port "amtterm" utility to OS/2 in the future, so, there will be no limitation
+to have a Linux machine. You will be able to run it from the OS/2 machine, but not yet. :(
+
+AMT SOL COM port, or PCMCIA/Express card COM ports are seen as a standard PCI COM port
+in the "pci.exe" utility output. So, you could note an I/O address there, and use it in
+"dbport" QSINIT / ARCALDR / OS4LDR command, instead of the default I/O address, which is
+0x3F8 (see below). Note that this does not require a PCMCIA or Express card driver stack
+to be installed in your OS! Your bootloader sends messages directly to an I/O port,
+without using any driver.
+
+Enabling QSINIT / OS4LDR / ARCALDR to output messages.
+-----------------------------------------------------
+
+In QSINIT / OS4LDR case, you need to create the "os2ldr.ini" file in the root directory
+of your OS/2 boot disk. As a minimum, it should contain such lines:
+
+! [================= os2ldr.ini ===================]
+! [config]
+! ; global section
+! default=1    ; default menu entry number to boot
+! timeout=30   ; boot menu timeout: 30 sec
+! dbport=0x3F8 ; COM port base address (0x3F8 for COM1)
+! dbflags=0x11 ; debug flags (leave as is for a hardware COM port)
+! ; dbflags=0  ; if it's 0, then log is output to screen
+! logsize=2048 ; log size in kilobytes
+! 
+! [kernel]
+! ; menu entries list
+! os4krnl = OS/4 kernel,VALIMIT=3072,PRELOAD=1,CTRLC=1
+! os2ldr.arc = ARCALDR, restart
+! [================= os2ldr.ini ===================]
+
+-- the relevant options here are "dbport", which specifies the COM port I/O base (0x3F8
+for COM1, use a value from "pci.exe" output for AMT SOL, or PCMCIA/Express card, or some
+other PCI com port), and "logsize", which specifies the log size in kilobytes. If it's
+zero, the log buffer is disabled. So, if the .ini file is missing, or these options are
+omitted, logging is disabled.
+
+The "config" section sets global options. The "kernel" section specifies the list of
+menu entries (the list of kernels to boot). Each kernel has it's local options (local
+for that kernel). Most options from "config" section can be set locally for a particular
+kernel. Local options are delimited by commas. Except for kernels, QSINIT can also
+boot another version of OS2LDR (specified with "restart" option). As you can see here,
+ARCALDR (renamed to "os2ldr.arc") can be booted as a second menu entry. For the full
+list of options, consult QSINIT documentation.
+
+If you have ArcaOS installed, you can enable the log buffer too. For that, you'll
+need to create the "os2ldr.cfg" file in the root directory, instead of an .ini file.
+ARCALDR supports a subset of QSINIT options. So, for ARCALDR to support logging,
+you'll need the following minimal "os2ldr.cfg" file:
+
+! [================= os2ldr.cfg ===================]
+! dbport=0x3F8
+! logsize=2048
+! [================= os2ldr.cfg ===================]
+
+As you can see here, the options are the same. The difference is the file name and that
+it has no sections. It has a list of pairs "variable=value".

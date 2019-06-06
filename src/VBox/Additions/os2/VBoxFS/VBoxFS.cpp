@@ -78,7 +78,7 @@ void log(const char *fmt, ...)
 
     memset(buf, 0, sizeof(buf));
 
-    RTStrPrintf(buf, sizeof(buf), "VBOXFS: P:%X T:%X D:%X T:%u:%u ",
+    RTStrPrintf(buf, sizeof(buf), "VBOXFS: p:%X t:%X d:%X t:%u.%u ",
         Proc.usPid,
         usThreadID,
         Proc.usPdb,
