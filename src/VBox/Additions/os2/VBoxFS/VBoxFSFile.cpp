@@ -123,7 +123,8 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
 
         if ( strstr(szSrvName, "vboxsrv") != szSrvName &&
              strstr(szSrvName, "vboxsvr") != szSrvName &&
-             strstr(szSrvName, "vboxfs") != szSrvName )
+             strstr(szSrvName, "vboxfs") != szSrvName &&
+             strstr(szSrvName, "vboxsf") != szSrvName )
         {
             return ERROR_BAD_NET_NAME;
         }
@@ -1477,7 +1478,8 @@ FS32_VERIFYUNCNAME(ULONG flag, PCSZ pszName)
 
     if (! stricmp(pszServer, "vboxsvr") ||
         ! stricmp(pszServer, "vboxsrv") ||
-        ! stricmp(pszServer, "vboxfs") )
+        ! stricmp(pszServer, "vboxfs") ||
+        ! stricmp(pszServer, "vboxsf") )
         hrc = NO_ERROR;
     else
         hrc = ERROR_INVALID_NAME;

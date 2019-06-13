@@ -266,7 +266,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
         }
     }
 
-    while (pFindBuf->bufpos < pFindBuf->buf + pFindBuf->len && *pcMatch < usEntriesWanted)
+    for (;;)
     {
         PSHFLDIRINFO file = pFindBuf->bufpos;
 
@@ -276,6 +276,11 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
             KernCopyOut(pbData - cbSize - sizeof(ULONG), &oNextEntryOffset, sizeof(ULONG));
             RTMemFree(pFindBuf->buf);
             pFindBuf->buf = file = NULL;
+            break;
+        }
+
+        if (*pcMatch >= usEntriesWanted || pFindBuf->bufpos >= pFindBuf->buf + pFindBuf->len)
+        {
             break;
         }
 

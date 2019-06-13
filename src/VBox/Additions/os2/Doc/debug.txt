@@ -9,7 +9,7 @@ VBox log file
 In case of debugging drivers (like VBox additions) in VBox VM, the debug messages could be
 redirected to VBox VM log.
 
-For messages ouput to a VM log, the driver should be linked with VBox runtime (IPRT) and
+For messages output to a VM log, the driver should be linked with VBox runtime (IPRT) and
 call a "RTLogBackdoorPrintf" runtime function.
 
 The VBox log file for a current VM is located in %HOME%\VirtualBox VMs\<VM_name>\Logs\VBox.log
@@ -83,7 +83,7 @@ serial cable on another machine, attached to it, then the following three paragr
 
 Many modern machines, especially laptops, have no COM port available. In such cases, you
 can use a COM port on a docking station, if available. Or, a PCMCIA/Express card COM port,
-or, if your machine supports Intel AMT management tecnology, you can use AMT SOL (serial
+or, if your machine supports Intel AMT management technology, you can use AMT SOL (serial
 Over LAN) COM port via network. Machines with Intel AMT support include all modern
 ThinkPads. Also, many newer Intel Core i5/i7 machines have support for Intel ME (which
 includes AMT, as an option).

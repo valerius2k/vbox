@@ -28,7 +28,10 @@ PACKING += \
 	$(PKG)
 
 OTHER_CLEAN += \
+	$(PKG) \
 	$(ISOIMG) \
+	$(PATH_STAGE_BIN)/additions/VBoxGuest.sym \
+	$(PATH_STAGE_BIN)/additions/VBoxFS.sym \
 	$(CDDIR).flg \
 	$(CDDIR)/os2/VBoxControl.exe \
 	$(CDDIR)/os2/VBoxReplaceDll.exe \
@@ -40,10 +43,14 @@ OTHER_CLEAN += \
 	$(CDDIR)/os2/boot/VBoxGuest.sym \
 	$(CDDIR)/os2/boot/VBoxFS.ifs \
 	$(CDDIR)/os2/boot/VBoxFS.sym \
+	$(CDDIR)/os2/boot/vboxfs.cfg-sample \
 	$(CDDIR)/usr/lib/gcc1.dll \
 	$(CDDIR)/usr/lib/libcn0.dll \
 	$(CDDIR)/usr/lib/libcx0.dll \
-	$(CDDIR)/readme.txt
+	$(CDDIR)/docs/readme.txt \
+	$(CDDIR)/docs/debug.txt \
+	$(CDDIR)/readme.txt \
+	$(CDDIR)/debug.txt
 
 DRIVER_FILES := \
 	$(PATH_STAGE_BIN)/additions/VBoxGuest.sys \
@@ -89,6 +96,7 @@ $(CDDIR).flg: \
 			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Bin/vbxgradd.dll $(CDDIR)/os2/dll
 			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Bin/vboxfs.cfg-sample $(CDDIR)/os2/boot
 			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Doc/readme.txt $(CDDIR)/docs
+			$(QUIET)$(CP) $(PATH_ADDITIONS_OS2)/Doc/debug.txt $(CDDIR)/docs
 			$(QUIET)cd $(CDDIR) && lxlite /r+ /c- *.exe *.dll *.ifs *.sys >/dev/null 2>&1
 			$(QUIET)touch $@
 

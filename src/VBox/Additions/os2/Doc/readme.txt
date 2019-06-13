@@ -133,7 +133,7 @@ following contents (one shared folder per line):
 The template is supplied with this Additions CD in the "os2\boot\vboxfs.cfg-sample" file. So,
 the format is simple: each line specifies a drive letter mapping: a drive letter is mapped
 to a shared folder name. Comments are allowed. Each comment starts at ';' or '#' symbol,
-until the end of line. If drive letter, specified in vboxfs.cfg, was occupied by another
+until the end of line. If a drive letter, specified in vboxfs.cfg, was occupied by another
 file system, then a first available drive letter will be used.
 
 UNC path names.

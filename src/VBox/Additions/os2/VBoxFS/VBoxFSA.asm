@@ -487,10 +487,10 @@ VBOXFS_EP32_END     FSH32_GETVOLPARM
 ; @cproto APIRET APIENTRY FSH32_QSYSINFO(USHORT index, char *pData, USHORT cbData);
 VBOXFS_EP32_BEGIN   FSH32_QSYSINFO, 'FSH32_QSYSINFO'
     ; switch to 16-bits and reserve place in stack for FSH_QSYSINFO args (3)
-    VBOXFS_32_TO_16     FSH32_QSYSINFO, 3*4
+    VBOXFS_32_TO_16     FSH32_QSYSINFO, 2*4
 segment CODE16
     mov     cx, [ebp + 8h]            ; index
-    mov     [esp + 2*4], cx
+    mov     [esp + 6], cx
     ; reserve place for pData far16 pointer on stack
     push  ds
     mov   ax, DATA32 wrt FLAT
@@ -498,14 +498,14 @@ segment CODE16
     mov   ecx, _KernTKSSBase
     mov   ecx, [ds:ecx]
     pop   ds
-    mov   eax, [ebp + 10h]             ; get a FLAT pointer to pData
+    mov   eax, [ebp + 0ch]             ; get a FLAT pointer to pData
     sub   eax, ecx                     ; convert it
     mov   cx, ss                       ; to a far 16:16
     shl   ecx, 16                      ; pointer
     mov   cx, ax                       ;
-    mov   [esp + 1*4], ecx             ;
-    mov   cx, [ebp + 14h]              ; cbData
-    mov   [esp + 0*4], cx
+    mov   [esp + 2], ecx               ;
+    mov   cx, [ebp + 10h]              ; cbData
+    mov   [esp], cx
     call  far FSH_QSYSINFO
     ; switch back to 32 bits
     VBOXFS_16_TO_32     FSH32_QSYSINFO
@@ -692,7 +692,7 @@ global FS_ATTRIBUTE
 global FS32_ATTRIBUTE
 FS_ATTRIBUTE:
 FS32_ATTRIBUTE:
-    dd FSA_REMOTE + FSA_LARGEFILE + FSA_UNC ;+ FSA_LVL7 + FSA_LOCK
+    dd FSA_REMOTE + FSA_LARGEFILE + FSA_UNC + FSA_LVL7; + FSA_LOCK
 
 ;; 64-bit mask.
 ; bit 0 - don't get the ring-0 spinlock.

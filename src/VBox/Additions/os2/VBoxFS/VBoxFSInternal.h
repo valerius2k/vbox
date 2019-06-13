@@ -64,7 +64,7 @@
 
 void log(const char *fmt, ...);
 
-#pragma pack(2)
+#pragma pack(1)
 typedef struct _FILEFNDBUF                 /* findbuf */
 {
     FDATE   fdateCreation;

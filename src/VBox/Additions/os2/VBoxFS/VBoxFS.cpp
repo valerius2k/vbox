@@ -78,7 +78,7 @@ void log(const char *fmt, ...)
 
     memset(buf, 0, sizeof(buf));
 
-    RTStrPrintf(buf, sizeof(buf), "VBOXFS: p:%X t:%X d:%X t:%u.%u ",
+    RTStrPrintf(buf, sizeof(buf), "VBOXFS: P:%X T:%X D:%X t=%u.%u ",
         Proc.usPid,
         usThreadID,
         Proc.usPdb,
@@ -1550,6 +1550,11 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
 
                             usMask = ~(FILE_READONLY | FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED);
 
+                            if (filestatus.attrFile & FILE_DIRECTORY)
+                            {
+                                usMask &= ~FILE_DIRECTORY;
+                            }
+
                             if (filestatus.attrFile & usMask)
                             {
                                 hrc = ERROR_ACCESS_DENIED;
@@ -1611,6 +1616,11 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             file->Info.Attr.fMode = OS2ToVBoxAttr(filestatus.attrFile);
 
                             usMask = ~(FILE_READONLY | FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED);
+
+                            if (filestatus.attrFile & FILE_DIRECTORY)
+                            {
+                                usMask &= ~FILE_DIRECTORY;
+                            }
 
                             if (filestatus.attrFile & usMask)
                             {
