@@ -237,12 +237,8 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
         }
 
         pFindBuf->bufpos = pFindBuf->buf;
-
-        if (pFindBuf->index >= pFindBuf->num_files)
-        {
-            pFindBuf->num_files = 0;
-            pFindBuf->index = 0;
-        }
+        pFindBuf->num_files = 0;
+        pFindBuf->index = 0;
 
         rc = VbglR0SfDirInfo(&g_clientHandle, &pFindBuf->map, pFindBuf->handle, pFindBuf->path, 0, pFindBuf->index,
                              &pFindBuf->len, pFindBuf->buf, &pFindBuf->num_files);
@@ -270,20 +266,8 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
     {
         PSHFLDIRINFO file = pFindBuf->bufpos;
 
-        if (pFindBuf->index >= pFindBuf->num_files)
-        {
-            ULONG oNextEntryOffset = 0;
-            KernCopyOut(pbData - cbSize - sizeof(ULONG), &oNextEntryOffset, sizeof(ULONG));
-            RTMemFree(pFindBuf->buf);
-            pFindBuf->buf = file = NULL;
-            break;
-        }
-
-        if (*pcMatch >= usEntriesWanted || pFindBuf->bufpos >= pFindBuf->buf + pFindBuf->len)
-        {
-            break;
-        }
-
+        log("num_files=%u\n", pFindBuf->num_files);
+        log("index=%u\n", pFindBuf->index);
         if (! skip)
         {
             if (flags == FF_GETPOS)
@@ -299,7 +283,29 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                 cbData -= sizeof(ULONG);
             }
         }
+
+        if ( pFindBuf->index >= pFindBuf->num_files ||
+             pFindBuf->bufpos >= pFindBuf->buf + pFindBuf->len )
+        {
+            ULONG oNextEntryOffset = 0;
+
+            log("file list ended\n");
+            log("*pcMatch=%u\n", *pcMatch);
+            if (skip)
+                KernCopyOut(pbData - sizeof(ULONG), &oNextEntryOffset, sizeof(ULONG));
+            else
+                KernCopyOut(pbData - cbSize - sizeof(ULONG), &oNextEntryOffset, sizeof(ULONG));
+
+            RTMemFree(pFindBuf->buf);
+            pFindBuf->buf = file = NULL;
+            break;
+        }
         skip = false;
+
+        if (*pcMatch >= usEntriesWanted)
+        {
+            break;
+        }
 
         switch (level)
         {
@@ -339,15 +345,13 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.cbFileAlloc = (ULONG)file->Info.cbAllocated;
                     cbSize = sizeof(FILEFNDBUF) - 1;
                     /* Check for file attributes */
-                    if (pFindBuf->bMustAttr)
+                    if ( ( findbuf.attrFile & pFindBuf->bAttr ) ||
+                         ( pFindBuf->bMustAttr && ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
                     {
-                        if ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr)
-                        {
-                            skip = true;
-                            pFindBuf->index++;
-                            pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
-                            continue;
-                        }
+                        skip = true;
+                        pFindBuf->index++;
+                        pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
+                        continue;
                     }
                     /* File name */
                     vboxfsStrFromUtf8(pszFn, (char *)pszFileName,
@@ -395,15 +399,13 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.cbFileAlloc = file->Info.cbAllocated;
                     cbSize = sizeof(FILEFNDBUF3L) - 1;
                     /* Check for file attributes */
-                    if (pFindBuf->bMustAttr)
+                    if ( ( findbuf.attrFile & pFindBuf->bAttr ) ||
+                         ( pFindBuf->bMustAttr && ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
                     {
-                        if ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr)
-                        {
-                            skip = true;
-                            pFindBuf->index++;
-                            pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
-                            continue;
-                        }
+                        skip = true;
+                        pFindBuf->index++;
+                        pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
+                        continue;
                     }
                     /* File name */
                     vboxfsStrFromUtf8(pszFn, (char *)pszFileName, 
@@ -451,15 +453,13 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.cbFileAlloc = (ULONG)file->Info.cbAllocated;
                     cbSize = sizeof(FILEFNDBUF2) - 1;
                     /* Check for file attributes */
-                    if (pFindBuf->bMustAttr)
+                    if ( ( findbuf.attrFile & pFindBuf->bAttr ) ||
+                         ( pFindBuf->bMustAttr && ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
                     {
-                        if ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr)
-                        {
-                            skip = true;
-                            pFindBuf->index++;
-                            pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
-                            continue;
-                        }
+                        skip = true;
+                        pFindBuf->index++;
+                        pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
+                        continue;
                     }
                     findbuf.cbList = 0; //file->Info.Attr.u.EASize.cb;
                     /* File name */
@@ -508,20 +508,20 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.cbFileAlloc = file->Info.cbAllocated;
                     cbSize = sizeof(FILEFNDBUF4L) - 1;
                     /* Check for file attributes */
-                    if (pFindBuf->bMustAttr)
+                    if ( ( findbuf.attrFile & pFindBuf->bAttr ) ||
+                         ( pFindBuf->bMustAttr && ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
                     {
-                        if ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr)
-                        {
-                            skip = true;
-                            pFindBuf->index++;
-                            pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
-                            continue;
-                        }
+                        log("skip\n");
+                        skip = true;
+                        pFindBuf->index++;
+                        pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
+                        continue;
                     }
                     findbuf.cbList = 0; //file->Info.Attr.u.EASize.cb;
                     /* File name */
                     vboxfsStrFromUtf8(pszFn, (char *)pszFileName, 
                         CCHMAXPATHCOMP, file->name.u16Length);
+                    log("pszFn=%s\n", pszFn);
                     findbuf.cchName = strlen(pszFn);
                     KernCopyOut(pbData, &findbuf, cbSize);
                     KernCopyOut(pbData + cbSize, pszFn, findbuf.cchName + 1);
@@ -567,15 +567,13 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.cbFileAlloc = (ULONG)file->Info.cbAllocated;
                     cbSize = sizeof(FILEFNDBUF3) - 2;
                     /* Check for file attributes */
-                    if (pFindBuf->bMustAttr)
+                    if ( ( findbuf.attrFile & pFindBuf->bAttr ) ||
+                         ( pFindBuf->bMustAttr && ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
                     {
-                        if ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr)
-                        {
-                            skip = true;
-                            pFindBuf->index++;
-                            pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
-                            continue;
-                        }
+                        skip = true;
+                        pFindBuf->index++;
+                        pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
+                        continue;
                     }
                     KernCopyOut(pbData, &findbuf, cbSize);
                     cbData -= cbSize;
@@ -643,15 +641,13 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.cbFileAlloc = file->Info.cbAllocated;
                     cbSize = sizeof(FILEFNDBUF3L) - 2;
                     /* Check for file attributes */
-                    if (pFindBuf->bMustAttr)
+                    if ( ( findbuf.attrFile & pFindBuf->bAttr ) ||
+                         ( pFindBuf->bMustAttr && ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
                     {
-                        if ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr)
-                        {
-                            skip = true;
-                            pFindBuf->index++;
-                            pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
-                            continue;
-                        }
+                        skip = true;
+                        pFindBuf->index++;
+                        pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
+                        continue;
                     }
                     KernCopyOut(pbData, &findbuf, cbSize);
                     cbData -= cbSize;
@@ -707,6 +703,11 @@ FILLFINDBUFEXIT:
     if (pFeal)
         RTMemFree(pFeal);
 
+    if (! *pcMatch)
+    {
+        hrc = ERROR_NO_MORE_FILES;
+    }
+
     return hrc;
 }
 
@@ -717,7 +718,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
 {
     SHFLCREATEPARMS params = {0};
     PFINDBUF pFindBuf = NULL;
-    PSHFLSTRING path;
+    PSHFLSTRING path = NULL;
     VBGLSFMAP map;
     bool tmp;
     char *pFile = NULL;
@@ -725,7 +726,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
     int cbDir;
     char *p, *str, *lastslash;
     APIRET hrc = NO_ERROR;
-    char *pwsz;
+    char *pwsz = NULL;
     int rc;
 
     log("FS32_FINDFIRST(%s, %lx, %lx, %lx)\n", pszName, attr, level, flags);
@@ -815,7 +816,15 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
     vboxfsStrToUtf8(pwsz, str);
 
     path = make_shflstring(pwsz);
+
+    if (! path)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_FINDFIRSTEXIT;
+    }
+
     rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
+
     free_shflstring(path);
     RTMemFree(pwsz);
 

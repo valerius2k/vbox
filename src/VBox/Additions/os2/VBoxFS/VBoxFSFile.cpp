@@ -383,9 +383,22 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     params.Info.Attr.fMode = ((uint32_t)usAttr << RTFS_DOS_SHIFT) & RTFS_DOS_MASK_OS2;
 
     pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+
+    if (! pwsz)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_OPENCREATEEXIT;
+    }
+
     vboxfsStrToUtf8(pwsz, (char *)pszFullName);
 
     path = make_shflstring((char *)pwsz);
+
+    if (! path)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_OPENCREATEEXIT;
+    }
 
     rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
 
@@ -414,6 +427,7 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
             }
         }
 
+        free_shflstring(path);
         goto FS32_OPENCREATEEXIT;
     }
 
@@ -1034,6 +1048,11 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
 
                             usMask = ~(FILE_READONLY | FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED);
 
+                            if (filestatus.attrFile & FILE_DIRECTORY)
+                            {
+                                usMask &= ~FILE_DIRECTORY;
+                            }
+
                             if (filestatus.attrFile & usMask)
                             {
                                 hrc = ERROR_ACCESS_DENIED;
@@ -1127,6 +1146,11 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             file->Info.Attr.fMode = OS2ToVBoxAttr(filestatus.attrFile);
 
                             usMask = ~(FILE_READONLY | FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED);
+
+                            if (filestatus.attrFile & FILE_DIRECTORY)
+                            {
+                                usMask &= ~FILE_DIRECTORY;
+                            }
 
                             if (filestatus.attrFile & usMask)
                             {
@@ -1231,7 +1255,7 @@ DECLASM(int)
 FS32_NEWSIZEL(PSFFSI psffsi, PVBOXSFFSD psffsd, LONGLONG cbFile, ULONG IOflag)
 {
     APIRET hrc = NO_ERROR;
-    PSHFLSTRING path;
+    //PSHFLSTRING path;
     int rc;
 
     log("FS32_NEWSIZEL(%lld, %lx)\n", cbFile, IOflag);
@@ -1256,7 +1280,7 @@ FS32_READ(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOfl
 
     log("FS32_READ(%lx)\n", IOflag);
 
-    if (! *pcb || ! pvData)
+    if (! pcb || ! pvData)
     {
         hrc = ERROR_INVALID_PARAMETER;
         goto FS32_READEXIT;
@@ -1318,7 +1342,7 @@ FS32_WRITE(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOf
 
     log("FS32_WRITE(%lx)\n", IOflag);
 
-    if (! *pcb || ! pvData)
+    if (! pcb || ! pvData)
     {
         hrc = ERROR_INVALID_PARAMETER;
         goto FS32_WRITEEXIT;

@@ -324,7 +324,15 @@ FS32_ATTACH(ULONG flag, PCSZ pszDev, PVBOXSFVP pvpfsd, PVBOXSFCD pcdfsd, PBYTE p
             strcat(pvboxsfvp->pszShareName, (char *)pszParm);
 
             sharename = make_shflstring((char *)pszParm);
+
+            if (! sharename)
+            {
+                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                goto FS32_ATTACHEXIT;
+            }
+
             rc = VbglR0SfMapFolder(&g_clientHandle, sharename, &pvboxsfvp->map);
+
             strncpy(pvboxsfvp->szLabel, (char *)pszParm, 12);
             pvboxsfvp->szLabel[11] = '\0';
             free_shflstring(sharename);
@@ -623,9 +631,22 @@ FS32_CHDIR(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszDir, ULONG iCurD
 
             log("pszFullName=%s\n", pszFullName);
             pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+
+            if (! pwsz)
+            {
+                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                goto FS32_CHDIREXIT;
+            }
+
             vboxfsStrToUtf8(pwsz, (char *)pszFullName);
 
             path = make_shflstring((char *)pwsz);
+
+            if (! path)
+            {
+                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                goto FS32_CHDIREXIT;
+            }
 
             params.Handle = SHFL_HANDLE_NIL;
             params.CreateFlags = SHFL_CF_DIRECTORY | SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW | SHFL_CF_ACCESS_READ;
@@ -644,7 +665,10 @@ FS32_CHDIR(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszDir, ULONG iCurD
                 pcdfsd->cwd = (PCWD)RTMemAllocZ(sizeof(CWD));
 
                 if (! pcdfsd->cwd)
-                    return ERROR_NOT_ENOUGH_MEMORY;
+                {
+                    hrc = ERROR_NOT_ENOUGH_MEMORY;
+                    goto FS32_CHDIREXIT;
+                }
 
                 pcdfsd->cwd->handle = params.Handle;
                 pcdfsd->cwd->map = map;
@@ -677,8 +701,6 @@ FS32_CHDIREXIT:
         RTMemFree(pwsz);
     if (pszFullName)
         RTMemFree(pszFullName);
-    if (tmp)
-        VbglR0SfUnmapFolder(&g_clientHandle, &map);
 
     log(" => %d\n", hrc);
     return hrc;
@@ -726,18 +748,51 @@ FS32_MKDIR(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     }
 
     pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+
+    if (! pwsz)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_MKDIREXIT;
+    }
+
     vboxfsStrToUtf8(pwsz, (char *)pszFullName);
     log("path=%s\n", pwsz);
 
     path = make_shflstring((char *)pwsz);
+
+    if (! path)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_MKDIREXIT;
+    }
+
     rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
 
-    /** @todo r=ramshankar: we should perhaps also check rc here and change
-     *        Handle initialization from 0 to SHFL_HANDLE_NIL. */
     if (params.Handle == SHFL_HANDLE_NIL)
     {
         log("fail\n");
-        hrc = ERROR_PATH_NOT_FOUND;
+
+        switch (params.Result)
+        {
+            case SHFL_FILE_EXISTS:
+                hrc = ERROR_FILE_EXISTS;
+                break;
+
+            case SHFL_PATH_NOT_FOUND:
+                hrc = ERROR_PATH_NOT_FOUND;
+                break;
+
+            default:
+                hrc = ERROR_FILE_NOT_FOUND;
+            }
+
+        goto FS32_MKDIREXIT;
+    }
+
+    if (! RT_SUCCESS(rc))
+    {
+        log("VbglR0SfCreate returned %d\n", rc);
+        hrc = vbox_err_to_os2_err(rc);
         goto FS32_MKDIREXIT;
     }
 
@@ -750,7 +805,7 @@ FS32_MKDIREXIT:
     if (pszFullName)
         RTMemFree(pszFullName);
     if (path)
-        RTMemFree(path);
+        free_shflstring(path);
     if (pwsz)
         RTMemFree(pwsz);
 
@@ -792,9 +847,23 @@ FS32_RMDIR(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd)
     }
 
     pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+
+    if (! pwsz)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_RMDIREXIT;
+    }
+
     vboxfsStrToUtf8(pwsz, (char *)pszFullName);
 
     path = make_shflstring((char *)pwsz);
+
+    if (! path)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_RMDIREXIT;
+    }
+
     rc = VbglR0SfRemove(&g_clientHandle, &map, path, SHFL_REMOVE_DIR);
 
     hrc = vbox_err_to_os2_err(rc);
@@ -879,13 +948,39 @@ FS32_MOVE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszSrc, ULONG iSrcCurDirEnd,
     }
 
     pwszSrc = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+
+    if (! pwszSrc)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_MOVEEXIT;
+    }
+
     pwszDst = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+
+    if (! pwszDst)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_MOVEEXIT;
+    }
 
     vboxfsStrToUtf8(pwszSrc, (char *)pszFullSrc);
     vboxfsStrToUtf8(pwszDst, (char *)pszFullDst);
 
     oldpath = make_shflstring((char *)pwszSrc);
+
+    if (! oldpath)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_MOVEEXIT;
+    }
+
     newpath = make_shflstring((char *)pwszDst);
+
+    if (! newpath)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_MOVEEXIT;
+    }
 
     params.Handle = SHFL_HANDLE_NIL;
     params.CreateFlags = SHFL_CF_ACT_FAIL_IF_NEW;
@@ -975,9 +1070,23 @@ FS32_DELETE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszFile, ULONG iCurDirEnd)
     }
 
     pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+
+    if (! pwsz)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_DELETEEXIT;
+    }
+
     vboxfsStrToUtf8(pwsz, (char *)pszFullName);
 
     path = make_shflstring((char *)pwsz);
+
+    if (! path)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_DELETEEXIT;
+    }
+
     rc = VbglR0SfRemove(&g_clientHandle, &map, path, SHFL_REMOVE_FILE);
 
     hrc = vbox_err_to_os2_err(rc);
@@ -1046,9 +1155,22 @@ FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd,
             }
 
             pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+
+            if (! pwsz)
+            {
+                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                goto FS32_FILEATTRIBUTEEXIT;
+            }
+
             vboxfsStrToUtf8(pwsz, (char *)pszFullName);
 
             path = make_shflstring((char *)pwsz);
+
+            if (! path)
+            {
+                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                goto FS32_FILEATTRIBUTEEXIT;
+            }
 
             params.Handle = SHFL_HANDLE_NIL;
             params.CreateFlags = SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW | SHFL_CF_ACCESS_READ;
@@ -1091,8 +1213,6 @@ FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd,
                 log("VbglR0SfFsInfo failed: %d\n", rc);
                 goto FS32_FILEATTRIBUTEEXIT;
             }
-
-            VbglR0SfClose(&g_clientHandle, &map, params.Handle);
 
             *pAttr = VBoxToOS2Attr(file->Info.Attr.fMode);
             break;
@@ -1158,9 +1278,22 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
     }
 
     pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+
+    if (! pwsz)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_PATHINFOEXIT;
+    }
+
     vboxfsStrToUtf8(pwsz, (char *)pszFullName);
 
     path = make_shflstring((char *)pwsz);
+
+    if (! path)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_PATHINFOEXIT;
+    }
 
     params.Handle = SHFL_HANDLE_NIL;
     params.CreateFlags = SHFL_CF_ACT_FAIL_IF_NEW;

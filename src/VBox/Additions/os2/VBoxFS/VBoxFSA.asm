@@ -486,7 +486,7 @@ VBOXFS_EP32_END     FSH32_GETVOLPARM
 ;;
 ; @cproto APIRET APIENTRY FSH32_QSYSINFO(USHORT index, char *pData, USHORT cbData);
 VBOXFS_EP32_BEGIN   FSH32_QSYSINFO, 'FSH32_QSYSINFO'
-    ; switch to 16-bits and reserve place in stack for FSH_QSYSINFO args (3)
+    ; switch to 16-bits and reserve place in stack for FSH_QSYSINFO args (2*4 bytes)
     VBOXFS_32_TO_16     FSH32_QSYSINFO, 2*4
 segment CODE16
     mov     cx, [ebp + 8h]            ; index
