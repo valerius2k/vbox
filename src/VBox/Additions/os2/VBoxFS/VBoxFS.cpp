@@ -38,7 +38,6 @@
 #include "VBoxFSInternal.h"
 
 #include <VBox/log.h>
-#include <iprt/path.h>
 #include <iprt/assert.h>
 #include <iprt/mem.h>
 
@@ -116,10 +115,10 @@ APIRET GetProcInfo(PPROCINFO pProcInfo, USHORT usSize)
 APIRET rc;
 
    memset(pProcInfo, 0xFF, usSize);
-   rc = FSH32_QSYSINFO(2, (char *)pProcInfo, 6);
+   rc = FSH32_QSYSINFO(2, (char *)pProcInfo, usSize);
    if (rc)
    {
-      log("GetProcInfo failed, rc = %d", rc);
+      log("GetProcInfo failed, rc = %d\n", rc);
    }
    return rc;
 }
@@ -127,11 +126,11 @@ APIRET rc;
 
 bool IsDosSession(void)
 {
-    PROCINFO pr;
+    PROCINFO proc;
 
-    GetProcInfo(&pr, sizeof pr);
+    GetProcInfo(&proc, sizeof(PROCINFO));
 
-    if (pr.usPdb)
+    if (proc.usPdb)
     {
         return true;
     }
@@ -414,7 +413,6 @@ FS32_FSINFO(ULONG flag, ULONG hVPB, PBYTE pbData, ULONG cbData, ULONG level)
     FSH32_GETVOLPARM(hVPB, &pvpfsi, &pvpfsd);
 
     pvboxsfvp = (PVBOXSFVP)pvpfsd;
-    log("pvboxsfvp->map=%lx\n", pvboxsfvp->map);
 
     rv = VbglR0SfFsInfo(&g_clientHandle, &pvboxsfvp->map, 0, 
         (SHFL_INFO_GET | SHFL_INFO_VOLUME), &bytes, (PSHFLDIRINFO)&volume_info);
@@ -430,6 +428,8 @@ FS32_FSINFO(ULONG flag, ULONG hVPB, PBYTE pbData, ULONG cbData, ULONG level)
         case FSIL_ALLOC: // query/set sector and cluster information
             if (flag == INFO_RETRIEVE)
             {
+                FSALLOCATE fsallocate;
+
                 // query sector and cluster information
                 if (cbData < sizeof(FSALLOCATE))
                 {
@@ -437,13 +437,35 @@ FS32_FSINFO(ULONG flag, ULONG hVPB, PBYTE pbData, ULONG cbData, ULONG level)
                     break;
                 }
 
-                FSALLOCATE fsallocate;
-
                 fsallocate.idFileSystem = 0;
-                fsallocate.cSectorUnit  = volume_info.ulBytesPerAllocationUnit / volume_info.ulBytesPerSector;
-                fsallocate.cUnit        = volume_info.ullTotalAllocationBytes / volume_info.ulBytesPerAllocationUnit;
-                fsallocate.cUnitAvail   = volume_info.ullAvailableAllocationBytes / volume_info.ulBytesPerAllocationUnit;
                 fsallocate.cbSector     = volume_info.ulBytesPerSector;
+
+                if (IsDosSession())
+                {
+                    ULONG ulTotalSectors = volume_info.ullTotalAllocationBytes / volume_info.ulBytesPerSector;
+                    ULONG ulFreeSectors  = volume_info.ullAvailableAllocationBytes / volume_info.ulBytesPerSector;
+
+                    if (ulTotalSectors > 32L * 65526L)
+                        fsallocate.cSectorUnit = 64;
+                    else if (ulTotalSectors > 16L * 65526L)
+                        fsallocate.cSectorUnit = 32;
+                    else if (ulTotalSectors > 8L * 65526L)
+                        fsallocate.cSectorUnit = 16;
+                    else
+                        fsallocate.cSectorUnit = 8;
+
+                    if (volume_info.ulBytesPerAllocationUnit > fsallocate.cSectorUnit)
+                        fsallocate.cSectorUnit = (USHORT)volume_info.ulBytesPerAllocationUnit;
+
+                    fsallocate.cUnit = MIN(65526L, ulTotalSectors / fsallocate.cSectorUnit);
+                    fsallocate.cUnitAvail = MIN(65526L, ulFreeSectors / fsallocate.cSectorUnit);
+                }
+                else
+                {
+                    fsallocate.cSectorUnit  = volume_info.ulBytesPerAllocationUnit / volume_info.ulBytesPerSector;
+                    fsallocate.cUnit        = volume_info.ullTotalAllocationBytes / volume_info.ulBytesPerAllocationUnit;
+                    fsallocate.cUnitAvail   = volume_info.ullAvailableAllocationBytes / volume_info.ulBytesPerAllocationUnit;
+                }
 
                 rc = KernCopyOut(pbData, &fsallocate, sizeof(FSALLOCATE));
             }
@@ -454,7 +476,6 @@ FS32_FSINFO(ULONG flag, ULONG hVPB, PBYTE pbData, ULONG cbData, ULONG level)
             break;
 
         case FSIL_VOLSER: // query/set volume label
-            log("pbData=%lx, cbData=%lu\n", pbData, cbData);
             if (flag == INFO_RETRIEVE)
             {
                 // query volume label
@@ -469,8 +490,12 @@ FS32_FSINFO(ULONG flag, ULONG hVPB, PBYTE pbData, ULONG cbData, ULONG level)
                 FsInfo.vol.cch = strlen(pvboxsfvp->szLabel);
                 strcpy((char *)&FsInfo.vol.szVolLabel, pvboxsfvp->szLabel);
 
+                if (IsDosSession())
+                {
+                    strupr(FsInfo.vol.szVolLabel);
+                }
+
                 rc = KernCopyOut(pbData, &FsInfo, sizeof(FSINFO));
-                log("rc=%lu\n", rc);
             }
             else if (flag == INFO_SET)
             {
@@ -554,39 +579,7 @@ FS32_FSCTLEXIT:
 DECLASM(int)
 FS32_PROCESSNAME(PSZ pszName)
 {
-    char *pszFilter = RTPathFilename((char const *)pszName);
-
     log("FS32_PROCESSNAME(%s)\n", pszName);
-
-    /* got the idea from bird's version of
-       vboxsf.ifs (but I made it a bit shorter) */
-    if ( pszFilter && ( strchr(pszFilter, '?') || strchr(pszFilter, '*') ) )
-    {
-        /* convert DOS-style wildcard characters to WinNT style */
-        for (; *pszFilter; pszFilter++)
-        {
-            switch (*pszFilter)
-            {
-                case '*':
-                    /* DOS star, matches any number of chars (including none), except DOS dot */
-                    if (pszFilter[1] == '.')
-                        *pszFilter = '<';
-                    break;
-
-                case '?':
-                    /* DOS query sign, matches one char, except a dot, and end of name eats it */
-                    *pszFilter = '>';
-                    break;
-
-                case '.':
-                    /* DOS dot, matches a dot or end of name */
-                    if (pszFilter[1] == '?' || pszFilter[1] == '*')
-                        *pszFilter = '"';
-            }
-        }
-    }
-
-
     return NO_ERROR;
 }
 
@@ -629,7 +622,6 @@ FS32_CHDIR(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszDir, ULONG iCurD
                 goto FS32_CHDIREXIT;
             }
 
-            log("pszFullName=%s\n", pszFullName);
             pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
 
             if (! pwsz)
@@ -756,7 +748,6 @@ FS32_MKDIR(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     }
 
     vboxfsStrToUtf8(pwsz, (char *)pszFullName);
-    log("path=%s\n", pwsz);
 
     path = make_shflstring((char *)pwsz);
 
@@ -1010,7 +1001,6 @@ FS32_MOVE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszSrc, ULONG iSrcCurDirEnd,
         flags |= SHFL_RENAME_FILE;
 
     rc = VbglR0SfRename(&g_clientHandle, &srcmap, oldpath, newpath, flags);
-    log("rc=%d\n", rc);
 
     hrc = vbox_err_to_os2_err(rc);
 
@@ -1198,11 +1188,6 @@ FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd,
                     goto FS32_FILEATTRIBUTEEXIT;
             }
 
-            log("path=%s\n", pszName);
-            log("map=%x\n", map);
-            log("params.Handle=%x\n", params.Handle);
-            log("len=%x\n", len);
-
             rc = VbglR0SfFsInfo(&g_clientHandle, &map, params.Handle,
                                 SHFL_INFO_GET | SHFL_INFO_FILE, &len, file);
 
@@ -1314,11 +1299,6 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
         goto FS32_PATHINFOEXIT;
     }
 
-    log("path=%s\n", pszName);
-    log("map=%x\n", map);
-    log("params.Handle=%x\n", params.Handle);
-    log("len=%x\n", len);
-
     switch (flag & 1)
     {
         case PI_RETRIEVE: // retrieve
@@ -1375,8 +1355,6 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                     goto FS32_PATHINFOEXIT;
                 }
 
-                log("file=%x\n", file);
-
                 rc = VbglR0SfFsInfo(&g_clientHandle, &map, params.Handle,
                                     SHFL_INFO_GET | SHFL_INFO_FILE, &len, file);
 
@@ -1397,6 +1375,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             FDATE Date;
                             FTIME Time;
                             /* Creation time   */
+                            RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.BirthTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -1407,6 +1386,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             memcpy(&filestatus.fdateCreation, &Date, sizeof(USHORT));
                             memcpy(&filestatus.ftimeCreation, &Time, sizeof(USHORT));
                             /* Last access time   */
+                            RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.AccessTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -1417,6 +1397,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             memcpy(&filestatus.fdateLastAccess, &Date, sizeof(USHORT));
                             memcpy(&filestatus.ftimeLastAccess, &Time, sizeof(USHORT));
                             /* Last write time   */
+                            RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.ModificationTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -1440,6 +1421,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             FDATE Date;
                             FTIME Time;
                             /* Creation time   */
+                            RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.BirthTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -1450,6 +1432,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             memcpy(&filestatus.fdateCreation, &Date, sizeof(USHORT));
                             memcpy(&filestatus.ftimeCreation, &Time, sizeof(USHORT));
                             /* Last access time   */
+                            RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.AccessTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -1460,6 +1443,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             memcpy(&filestatus.fdateLastAccess, &Date, sizeof(USHORT));
                             memcpy(&filestatus.ftimeLastAccess, &Time, sizeof(USHORT));
                             /* Last write time   */
+                            RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.ModificationTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -1483,6 +1467,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             FDATE Date;
                             FTIME Time;
                             /* Creation time   */
+                            RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.BirthTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -1493,6 +1478,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             memcpy(&filestatus.fdateCreation, &Date, sizeof(USHORT));
                             memcpy(&filestatus.ftimeCreation, &Time, sizeof(USHORT));
                             /* Last access time   */
+                            RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.AccessTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -1503,6 +1489,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             memcpy(&filestatus.fdateLastAccess, &Date, sizeof(USHORT));
                             memcpy(&filestatus.ftimeLastAccess, &Time, sizeof(USHORT));
                             /* Last write time   */
+                            RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.ModificationTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -1527,6 +1514,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             FDATE Date;
                             FTIME Time;
                             /* Creation time   */
+                            RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.BirthTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -1537,6 +1525,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             memcpy(&filestatus.fdateCreation, &Date, sizeof(USHORT));
                             memcpy(&filestatus.ftimeCreation, &Time, sizeof(USHORT));
                             /* Last access time   */
+                            RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.AccessTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -1547,6 +1536,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             memcpy(&filestatus.fdateLastAccess, &Date, sizeof(USHORT));
                             memcpy(&filestatus.ftimeLastAccess, &Time, sizeof(USHORT));
                             /* Last write time   */
+                            RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.ModificationTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -1647,35 +1637,59 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             KernCopyIn(&filestatus, pData, sizeof(filestatus));
 
                             /* Creation time   */
-                            memcpy(&Date, &filestatus.fdateCreation, sizeof(USHORT));
-                            memcpy(&Time, &filestatus.ftimeCreation, sizeof(USHORT));
+                            memset(&time, 0, sizeof(RTTIME));
+                            Date = filestatus.fdateCreation;
+                            Time = filestatus.ftimeCreation;
+                            time.u8WeekDay = UINT8_MAX;
+                            time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
                             time.u8Month = Date.month;
                             time.i32Year = Date.year + 1980;
                             time.u8Second = Time.twosecs * 2;
                             time.u8Minute = Time.minutes;
                             time.u8Hour = Time.hours;
+                            time.u32Nanosecond = 0;
+                            time.offUTC = 0;
+                            time.fFlags = RTTIME_FLAGS_TYPE_UTC;
+                            RTTimeNormalize(&time);
                             RTTimeImplode(&file->Info.BirthTime, &time);
+                            RTTimeSpecAddSeconds(&file->Info.BirthTime, 60 * VBoxTimezoneGetOffsetMin());
                             /* Last access time   */
-                            memcpy(&Date, &filestatus.fdateLastAccess, sizeof(USHORT));
-                            memcpy(&Time, &filestatus.ftimeLastAccess, sizeof(USHORT));
+                            memset(&time, 0, sizeof(RTTIME));
+                            Date = filestatus.fdateLastAccess;
+                            Time = filestatus.ftimeLastAccess;
+                            time.u8WeekDay = UINT8_MAX;
+                            time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
                             time.u8Month = Date.month;
                             time.i32Year = Date.year + 1980;
                             time.u8Second = Time.twosecs * 2;
                             time.u8Minute = Time.minutes;
                             time.u8Hour = Time.hours;
+                            time.u32Nanosecond = 0;
+                            time.offUTC = 0;
+                            time.fFlags = RTTIME_FLAGS_TYPE_UTC;
+                            RTTimeNormalize(&time);
                             RTTimeImplode(&file->Info.AccessTime, &time);
+                            RTTimeSpecAddSeconds(&file->Info.AccessTime, 60 * VBoxTimezoneGetOffsetMin());
                             /* Last write time   */
-                            memcpy(&Date, &filestatus.fdateLastWrite, sizeof(USHORT));
-                            memcpy(&Time, &filestatus.ftimeLastWrite, sizeof(USHORT));
+                            memset(&time, 0, sizeof(RTTIME));
+                            Date = filestatus.fdateLastWrite;
+                            Time = filestatus.ftimeLastWrite;
+                            time.u8WeekDay = UINT8_MAX;
+                            time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
                             time.u8Month = Date.month;
                             time.i32Year = Date.year + 1980;
                             time.u8Second = Time.twosecs * 2;
                             time.u8Minute = Time.minutes;
                             time.u8Hour = Time.hours;
+                            time.u32Nanosecond = 0;
+                            time.offUTC = 0;
+                            time.fFlags = RTTIME_FLAGS_TYPE_UTC;
+                            RTTimeNormalize(&time);
                             RTTimeImplode(&file->Info.ModificationTime, &time);
+                            RTTimeSpecAddSeconds(&file->Info.ModificationTime, 60 * VBoxTimezoneGetOffsetMin());
                             
                             file->Info.cbObject = filestatus.cbFile;
                             file->Info.cbAllocated = filestatus.cbFileAlloc;
@@ -1714,35 +1728,59 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             KernCopyIn(&filestatus, pData, sizeof(filestatus));
 
                             /* Creation time   */
-                            memcpy(&Date, &filestatus.fdateCreation, sizeof(USHORT));
-                            memcpy(&Time, &filestatus.ftimeCreation, sizeof(USHORT));
+                            memset(&time, 0, sizeof(RTTIME));
+                            Date = filestatus.fdateCreation;
+                            Time = filestatus.ftimeCreation;
+                            time.u8WeekDay = UINT8_MAX;
+                            time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
                             time.u8Month = Date.month;
                             time.i32Year = Date.year + 1980;
                             time.u8Second = Time.twosecs * 2;
                             time.u8Minute = Time.minutes;
                             time.u8Hour = Time.hours;
+                            time.u32Nanosecond = 0;
+                            time.offUTC = 0;
+                            time.fFlags = RTTIME_FLAGS_TYPE_UTC;
+                            RTTimeNormalize(&time);
                             RTTimeImplode(&file->Info.BirthTime, &time);
+                            RTTimeSpecAddSeconds(&file->Info.BirthTime, 60 * VBoxTimezoneGetOffsetMin());
                             /* Last access time   */
-                            memcpy(&Date, &filestatus.fdateLastAccess, sizeof(USHORT));
-                            memcpy(&Time, &filestatus.ftimeLastAccess, sizeof(USHORT));
+                            memset(&time, 0, sizeof(RTTIME));
+                            Date = filestatus.fdateLastAccess;
+                            Time = filestatus.ftimeLastAccess;
+                            time.u8WeekDay = UINT8_MAX;
+                            time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
                             time.u8Month = Date.month;
                             time.i32Year = Date.year + 1980;
                             time.u8Second = Time.twosecs * 2;
                             time.u8Minute = Time.minutes;
                             time.u8Hour = Time.hours;
+                            time.u32Nanosecond = 0;
+                            time.offUTC = 0;
+                            time.fFlags = RTTIME_FLAGS_TYPE_UTC;
+                            RTTimeNormalize(&time);
                             RTTimeImplode(&file->Info.AccessTime, &time);
+                            RTTimeSpecAddSeconds(&file->Info.AccessTime, 60 * VBoxTimezoneGetOffsetMin());
                             /* Last write time   */
-                            memcpy(&Date, &filestatus.fdateLastWrite, sizeof(USHORT));
-                            memcpy(&Time, &filestatus.ftimeLastWrite, sizeof(USHORT));
+                            memset(&time, 0, sizeof(RTTIME));
+                            Date = filestatus.fdateLastWrite;
+                            Time = filestatus.ftimeLastWrite;
+                            time.u8WeekDay = UINT8_MAX;
+                            time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
                             time.u8Month = Date.month;
                             time.i32Year = Date.year + 1980;
                             time.u8Second = Time.twosecs * 2;
                             time.u8Minute = Time.minutes;
                             time.u8Hour = Time.hours;
+                            time.u32Nanosecond = 0;
+                            time.offUTC = 0;
+                            time.fFlags = RTTIME_FLAGS_TYPE_UTC;
+                            RTTimeNormalize(&time);
                             RTTimeImplode(&file->Info.ModificationTime, &time);
+                            RTTimeSpecAddSeconds(&file->Info.ModificationTime, 60 * VBoxTimezoneGetOffsetMin());
                             
                             file->Info.cbObject = filestatus.cbFile;
                             file->Info.cbAllocated = filestatus.cbFileAlloc;

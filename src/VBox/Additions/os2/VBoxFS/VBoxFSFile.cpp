@@ -481,6 +481,7 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     psffsi->sfi_size = (LONG)params.Info.cbObject;
 
     /* Creation time   */
+    RTTimeSpecAddSeconds(&params.Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
     RTTimeExplode(&time, &params.Info.BirthTime);
 
     Time.hours = time.u8Hour;
@@ -493,6 +494,7 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     psffsi->sfi_cdate = *(PUSHORT)&Date;
 
     /* Last access time   */
+    RTTimeSpecAddSeconds(&params.Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
     RTTimeExplode(&time, &params.Info.AccessTime);
 
     Time.hours = time.u8Hour;
@@ -505,6 +507,7 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     psffsi->sfi_adate = *(PUSHORT)&Date;
 
     /* Last write time   */
+    RTTimeSpecAddSeconds(&params.Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
     RTTimeExplode(&time, &params.Info.ModificationTime);
 
     Time.hours = time.u8Hour;
@@ -707,45 +710,6 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                     goto FS32_FILEINFOEXIT;
                 }
 
-                if (level == FIL_STANDARD    || level == FIL_STANDARDL ||
-                    level == FIL_QUERYEASIZE || level == FIL_QUERYEASIZEL)
-                {
-                    RTTIME time;
-                    FDATE Date;
-                    FTIME Time;
-                    /* Creation time   */
-                    RTTimeExplode(&time, &file->Info.BirthTime);
-                    Date.day = time.u8MonthDay;
-                    Date.month = time.u8Month;
-                    Date.year = time.i32Year - 1980;
-                    Time.twosecs = time.u8Second / 2;
-                    Time.minutes = time.u8Minute;
-                    Time.hours = time.u8Hour;
-                    memcpy(&psffsi->sfi_cdate, &Date, sizeof(USHORT));
-                    memcpy(&psffsi->sfi_ctime, &Time, sizeof(USHORT));
-                    /* Last access time   */
-                    RTTimeExplode(&time, &file->Info.AccessTime);
-                    Date.day = time.u8MonthDay;
-                    Date.month = time.u8Month;
-                    Date.year = time.i32Year - 1980;
-                    Time.twosecs = time.u8Second / 2;
-                    Time.minutes = time.u8Minute;
-                    Time.hours = time.u8Hour;
-                    memcpy(&psffsi->sfi_adate, &Date, sizeof(USHORT));
-                    memcpy(&psffsi->sfi_atime, &Time, sizeof(USHORT));
-                    /* Last write time   */
-                    RTTimeExplode(&time, &file->Info.ModificationTime);
-                    Date.day = time.u8MonthDay;
-                    Date.month = time.u8Month;
-                    Date.year = time.i32Year - 1980;
-                    Time.twosecs = time.u8Second / 2;
-                    Time.minutes = time.u8Minute;
-                    Time.hours = time.u8Hour;
-                    memcpy(&psffsi->sfi_mdate, &Date, sizeof(USHORT));
-                    memcpy(&psffsi->sfi_mtime, &Time, sizeof(USHORT));
-                    psffsi->sfi_DOSattr = VBoxToOS2Attr(file->Info.Attr.fMode);
-                }
-
                 switch (level)
                 {
                     case FIL_STANDARD:
@@ -755,6 +719,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             FDATE Date;
                             FTIME Time;
                             /* Creation time   */
+                            RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.BirthTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -765,6 +730,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             memcpy(&filestatus.fdateCreation, &Date, sizeof(USHORT));
                             memcpy(&filestatus.ftimeCreation, &Time, sizeof(USHORT));
                             /* Last access time   */
+                            RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.AccessTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -775,6 +741,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             memcpy(&filestatus.fdateLastAccess, &Date, sizeof(USHORT));
                             memcpy(&filestatus.ftimeLastAccess, &Time, sizeof(USHORT));
                             /* Last write time   */
+                            RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.ModificationTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -799,6 +766,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             FDATE Date;
                             FTIME Time;
                             /* Creation time   */
+                            RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.BirthTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -809,6 +777,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             memcpy(&filestatus.fdateCreation, &Date, sizeof(USHORT));
                             memcpy(&filestatus.ftimeCreation, &Time, sizeof(USHORT));
                             /* Last access time   */
+                            RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.AccessTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -819,6 +788,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             memcpy(&filestatus.fdateLastAccess, &Date, sizeof(USHORT));
                             memcpy(&filestatus.ftimeLastAccess, &Time, sizeof(USHORT));
                             /* Last write time   */
+                            RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.ModificationTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -843,6 +813,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             FDATE Date;
                             FTIME Time;
                             /* Creation time   */
+                            RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.BirthTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -853,6 +824,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             memcpy(&filestatus.fdateCreation, &Date, sizeof(USHORT));
                             memcpy(&filestatus.ftimeCreation, &Time, sizeof(USHORT));
                             /* Last access time   */
+                            RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.AccessTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -863,6 +835,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             memcpy(&filestatus.fdateLastAccess, &Date, sizeof(USHORT));
                             memcpy(&filestatus.ftimeLastAccess, &Time, sizeof(USHORT));
                             /* Last write time   */
+                            RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.ModificationTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -888,6 +861,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             FDATE Date;
                             FTIME Time;
                             /* Creation time   */
+                            RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.BirthTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -898,6 +872,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             memcpy(&filestatus.fdateCreation, &Date, sizeof(USHORT));
                             memcpy(&filestatus.ftimeCreation, &Time, sizeof(USHORT));
                             /* Last access time   */
+                            RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.AccessTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -908,6 +883,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             memcpy(&filestatus.fdateLastAccess, &Date, sizeof(USHORT));
                             memcpy(&filestatus.ftimeLastAccess, &Time, sizeof(USHORT));
                             /* Last write time   */
+                            RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.ModificationTime);
                             Date.day = time.u8MonthDay;
                             Date.month = time.u8Month;
@@ -972,9 +948,7 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
 
         case FI_SET: // set
             {
-                // Local time from UTC offset in nanoseconds
                 RTTIMESPEC delta;
-                //RTTimeSpecSetNano(&delta, );
 
                 if (!(psffsi->sfi_mode & OPEN_ACCESS_WRITEONLY) &&
                     !(psffsi->sfi_mode & OPEN_ACCESS_READWRITE))
@@ -1010,37 +984,59 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             KernCopyIn(&filestatus, pData, sizeof(filestatus));
 
                             /* Creation time   */
-                            memcpy(&Date, &filestatus.fdateCreation, sizeof(USHORT));
-                            memcpy(&Time, &filestatus.ftimeCreation, sizeof(USHORT));
+                            memset(&time, 0, sizeof(RTTIME));
+                            Date = filestatus.fdateCreation;
+                            Time = filestatus.ftimeCreation;
+                            time.u8WeekDay = UINT8_MAX;
+                            time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
                             time.u8Month = Date.month;
                             time.i32Year = Date.year + 1980;
                             time.u8Second = Time.twosecs * 2;
                             time.u8Minute = Time.minutes;
                             time.u8Hour = Time.hours;
+                            time.u32Nanosecond = 0;
+                            time.offUTC = 0;
+                            time.fFlags |= RTTIME_FLAGS_TYPE_UTC;
+                            RTTimeNormalize(&time);
                             RTTimeImplode(&file->Info.BirthTime, &time);
-                            //RTTimeSpecSetNano(&delta, time.);
-                            //RTTimeSpecSub(&file->Info.BirthTime, &time);
+                            RTTimeSpecAddSeconds(&file->Info.BirthTime, 60 * VBoxTimezoneGetOffsetMin());
                             /* Last access time   */
-                            memcpy(&Date, &filestatus.fdateLastAccess, sizeof(USHORT));
-                            memcpy(&Time, &filestatus.ftimeLastAccess, sizeof(USHORT));
+                            memset(&time, 0, sizeof(RTTIME));
+                            Date = filestatus.fdateLastAccess;
+                            Time = filestatus.ftimeLastAccess;
+                            time.u8WeekDay = UINT8_MAX;
+                            time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
                             time.u8Month = Date.month;
                             time.i32Year = Date.year + 1980;
                             time.u8Second = Time.twosecs * 2;
                             time.u8Minute = Time.minutes;
                             time.u8Hour = Time.hours;
+                            time.u32Nanosecond = 0;
+                            time.offUTC = 0;
+                            time.fFlags |= RTTIME_FLAGS_TYPE_UTC;
+                            RTTimeNormalize(&time);
                             RTTimeImplode(&file->Info.AccessTime, &time);
+                            RTTimeSpecAddSeconds(&file->Info.AccessTime, 60 * VBoxTimezoneGetOffsetMin());
                             /* Last write time   */
-                            memcpy(&Date, &filestatus.fdateLastWrite, sizeof(USHORT));
-                            memcpy(&Time, &filestatus.ftimeLastWrite, sizeof(USHORT));
+                            memset(&time, 0, sizeof(RTTIME));
+                            Date = filestatus.fdateLastWrite;
+                            Time = filestatus.ftimeLastWrite;
+                            time.u8WeekDay = UINT8_MAX;
+                            time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
                             time.u8Month = Date.month;
                             time.i32Year = Date.year + 1980;
                             time.u8Second = Time.twosecs * 2;
                             time.u8Minute = Time.minutes;
                             time.u8Hour = Time.hours;
+                            time.u32Nanosecond = 0;
+                            time.offUTC = 0;
+                            time.fFlags = RTTIME_FLAGS_TYPE_UTC;
+                            RTTimeNormalize(&time);
                             RTTimeImplode(&file->Info.ModificationTime, &time);
+                            RTTimeSpecAddSeconds(&file->Info.ModificationTime, 60 * VBoxTimezoneGetOffsetMin());
                             
                             file->Info.cbObject = filestatus.cbFile;
                             file->Info.cbAllocated = filestatus.cbFileAlloc;
@@ -1111,35 +1107,59 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             KernCopyIn(&filestatus, pData, sizeof(filestatus));
 
                             /* Creation time   */
-                            memcpy(&Date, &filestatus.fdateCreation, sizeof(USHORT));
-                            memcpy(&Time, &filestatus.ftimeCreation, sizeof(USHORT));
+                            memset(&time, 0, sizeof(RTTIME));
+                            Date = filestatus.fdateCreation;
+                            Time = filestatus.ftimeCreation;
+                            time.u8WeekDay = UINT8_MAX;
+                            time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
                             time.u8Month = Date.month;
                             time.i32Year = Date.year + 1980;
                             time.u8Second = Time.twosecs * 2;
                             time.u8Minute = Time.minutes;
                             time.u8Hour = Time.hours;
+                            time.u32Nanosecond = 0;
+                            time.offUTC = 0;
+                            time.fFlags = RTTIME_FLAGS_TYPE_UTC;
+                            RTTimeNormalize(&time);
                             RTTimeImplode(&file->Info.BirthTime, &time);
+                            RTTimeSpecAddSeconds(&file->Info.BirthTime, 60 * VBoxTimezoneGetOffsetMin());
                             /* Last access time   */
-                            memcpy(&Date, &filestatus.fdateLastAccess, sizeof(USHORT));
-                            memcpy(&Time, &filestatus.ftimeLastAccess, sizeof(USHORT));
+                            memset(&time, 0, sizeof(RTTIME));
+                            Date = filestatus.fdateLastAccess;
+                            Time = filestatus.ftimeLastAccess;
+                            time.u8WeekDay = UINT8_MAX;
+                            time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
                             time.u8Month = Date.month;
                             time.i32Year = Date.year + 1980;
                             time.u8Second = Time.twosecs * 2;
                             time.u8Minute = Time.minutes;
                             time.u8Hour = Time.hours;
+                            time.u32Nanosecond = 0;
+                            time.offUTC = 0;
+                            time.fFlags = RTTIME_FLAGS_TYPE_UTC;
+                            RTTimeNormalize(&time);
                             RTTimeImplode(&file->Info.AccessTime, &time);
+                            RTTimeSpecAddSeconds(&file->Info.AccessTime, 60 * VBoxTimezoneGetOffsetMin());
                             /* Last write time   */
-                            memcpy(&Date, &filestatus.fdateLastWrite, sizeof(USHORT));
-                            memcpy(&Time, &filestatus.ftimeLastWrite, sizeof(USHORT));
+                            memset(&time, 0, sizeof(RTTIME));
+                            Date = filestatus.fdateLastWrite;
+                            Time = filestatus.ftimeLastWrite;
+                            time.u8WeekDay = UINT8_MAX;
+                            time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
                             time.u8Month = Date.month;
                             time.i32Year = Date.year + 1980;
                             time.u8Second = Time.twosecs * 2;
                             time.u8Minute = Time.minutes;
                             time.u8Hour = Time.hours;
+                            time.u32Nanosecond = 0;
+                            time.offUTC = 0;
+                            time.fFlags = RTTIME_FLAGS_TYPE_UTC;
+                            RTTimeNormalize(&time);
                             RTTimeImplode(&file->Info.ModificationTime, &time);
+                            RTTimeSpecAddSeconds(&file->Info.ModificationTime, 60 * VBoxTimezoneGetOffsetMin());
                             
                             file->Info.cbObject = filestatus.cbFile;
                             file->Info.cbAllocated = filestatus.cbFileAlloc;
@@ -1255,7 +1275,6 @@ DECLASM(int)
 FS32_NEWSIZEL(PSFFSI psffsi, PVBOXSFFSD psffsd, LONGLONG cbFile, ULONG IOflag)
 {
     APIRET hrc = NO_ERROR;
-    //PSHFLSTRING path;
     int rc;
 
     log("FS32_NEWSIZEL(%lld, %lx)\n", cbFile, IOflag);
@@ -1274,8 +1293,8 @@ extern "C" APIRET APIENTRY
 FS32_READ(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOflag)
 {
     APIRET hrc;
-    uint8_t *pBuf = NULL;
-    ULONG cb = *pcb;
+    uint8_t *pBuf = NULL, *p;
+    ULONG cb, cbBuf = 16 * 1024 * 1024;
     int rc;
 
     log("FS32_READ(%lx)\n", IOflag);
@@ -1286,7 +1305,37 @@ FS32_READ(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOfl
         goto FS32_READEXIT;
     }
 
-    pBuf = (uint8_t *)RTMemAllocZ(*pcb);
+    cb = *pcb;
+    *pcb = 0;
+    p = (uint8_t *)pvData;
+
+    if (! cb)
+    {
+        hrc = NO_ERROR;
+        goto FS32_READEXIT;
+    }
+
+    if (psffsi->sfi_positionl > psffsi->sfi_sizel)
+    {
+        cb = 0;
+    }
+    else if (cb > psffsi->sfi_sizel - psffsi->sfi_positionl)
+    {
+        cb = psffsi->sfi_sizel - psffsi->sfi_positionl;
+    }
+
+    if (! cb)
+    {
+        hrc = NO_ERROR;
+        goto FS32_READEXIT;
+    }
+
+    if (cbBuf > cb)
+    {
+        cbBuf = cb;
+    }
+
+    pBuf = (uint8_t *)RTMemAllocZ(cbBuf);
 
     if (! pBuf)
     {
@@ -1294,29 +1343,29 @@ FS32_READ(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOfl
         goto FS32_READEXIT;
     }
 
-    if (psffsi->sfi_positionl > psffsi->sfi_sizel)
+    while (cb)
     {
-        *pcb = 0;
-    }
-    else if (*pcb > psffsi->sfi_sizel - psffsi->sfi_positionl)
-    {
-        *pcb = psffsi->sfi_sizel - psffsi->sfi_positionl;
-    }
+        rc = VbglR0SfRead(&g_clientHandle, &psffsd->filebuf->map, psffsd->filebuf->handle, 
+                          psffsi->sfi_positionl, (uint32_t *)&cbBuf, pBuf, true); // false
 
-    if (! *pcb)
-    {
-        hrc = NO_ERROR;
-        goto FS32_READEXIT;
-    }
+        if (RT_SUCCESS(rc))
+        {
+            KernCopyOut((char *)p, pBuf, cbBuf);
+            psffsi->sfi_positionl += cbBuf;
+            psffsi->sfi_position  += (LONG)psffsi->sfi_positionl;
+            *pcb += cbBuf;
+            p += cbBuf;
 
-    rc = VbglR0SfRead(&g_clientHandle, &psffsd->filebuf->map, psffsd->filebuf->handle, 
-                      psffsi->sfi_positionl, (uint32_t *)pcb, pBuf, true); // false
-
-    if (RT_SUCCESS(rc))
-    {
-        KernCopyOut((char *)pvData, pBuf, *pcb);
-        psffsi->sfi_positionl += *pcb;
-        psffsi->sfi_position  += *pcb;
+            if (cb > cbBuf)
+                cb -= cbBuf;
+            else
+            {
+                cbBuf = cb;
+                cb = 0;
+            }
+        }
+        else
+            break;
     }
 
     psffsi->sfi_tstamp |= (ST_SREAD | ST_PREAD);
@@ -1337,7 +1386,8 @@ FS32_WRITE(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOf
 {
     APIRET hrc;
     uint32_t cbNewPos;
-    uint8_t *pBuf = NULL;
+    uint8_t *pBuf = NULL, *p;
+    ULONG cb, cbBuf = 16 * 1024 * 1024;
     int rc;
 
     log("FS32_WRITE(%lx)\n", IOflag);
@@ -1348,7 +1398,22 @@ FS32_WRITE(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOf
         goto FS32_WRITEEXIT;
     }
 
-    pBuf = (uint8_t *)RTMemAllocZ(*pcb);
+    cb = *pcb;
+    *pcb = 0;
+    p = (uint8_t *)pvData;
+
+    if (! cb)
+    {
+        hrc = NO_ERROR;
+        goto FS32_WRITEEXIT;
+    }
+
+    if (cbBuf > cb)
+    {
+        cbBuf = cb;
+    }
+
+    pBuf = (uint8_t *)RTMemAllocZ(cb);
 
     if (! pBuf)
     {
@@ -1356,25 +1421,42 @@ FS32_WRITE(PSFFSI psffsi, PVBOXSFFSD psffsd, PVOID pvData, PULONG pcb, ULONG IOf
         goto FS32_WRITEEXIT;
     }
 
-    KernCopyIn(pBuf, (char *)pvData, *pcb);
-
-    rc = VbglR0SfWrite(&g_clientHandle, &psffsd->filebuf->map, psffsd->filebuf->handle, 
-                       psffsi->sfi_positionl, (uint32_t *)pcb, pBuf, true); // false
-
-    if (RT_SUCCESS(rc))
+    while (cb)
     {
-        cbNewPos = psffsi->sfi_positionl + *pcb;
+        KernCopyIn(pBuf, (char *)p, cbBuf);
 
-        if (cbNewPos > psffsi->sfi_sizel)
+        rc = VbglR0SfWrite(&g_clientHandle, &psffsd->filebuf->map, psffsd->filebuf->handle, 
+                           psffsi->sfi_positionl, (uint32_t *)&cbBuf, pBuf, true); // false
+
+        if (RT_SUCCESS(rc))
         {
-            psffsi->sfi_sizel = cbNewPos;
-            psffsi->sfi_size  = (LONG)cbNewPos;
-        }
+            cbNewPos = psffsi->sfi_positionl + cbBuf;
 
-        psffsi->sfi_positionl = cbNewPos;
-        psffsi->sfi_position  = (LONG)cbNewPos;
-        psffsi->sfi_tstamp |= (ST_SWRITE | ST_PWRITE);
+            if (cbNewPos > psffsi->sfi_sizel)
+            {
+                psffsi->sfi_sizel = cbNewPos;
+                psffsi->sfi_size  = (LONG)cbNewPos;
+            }
+
+            psffsi->sfi_positionl = cbNewPos;
+            psffsi->sfi_position  = (LONG)cbNewPos;
+
+            *pcb += cbBuf;
+            p += cbBuf;
+
+            if (cb > cbBuf)
+                cb -= cbBuf;
+            else
+            {
+                cbBuf = cb;
+                cb = 0;
+            }
+        }
+        else
+            break;
     }
+
+    psffsi->sfi_tstamp |= (ST_SWRITE | ST_PWRITE);
 
     hrc = vbox_err_to_os2_err(rc);
 

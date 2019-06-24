@@ -39,10 +39,22 @@
 #include <VBox/log.h>
 #include <iprt/mem.h>
 #include <iprt/assert.h>
+#include <iprt/path.h>
 
 extern VBGLSFCLIENT g_clientHandle;
 extern PGINFOSEG    g_pGIS;
 
+int16_t VBoxTimezoneGetOffsetMin(void)
+{
+    int16_t off = 0;
+
+    if (g_pGIS && g_pGIS->timezone != 0xffff)
+    {
+        off = g_pGIS->timezone;
+    }
+
+    return off;
+}
 
 uint32_t VBoxToOS2Attr(uint32_t fMode)
 {
@@ -141,8 +153,8 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
     bool skip = false;
     int rc;
 
-    //log("g_pGIS=%lx\n", g_pGIS);
-    //log("timezone=%d minutes\n", (SHORT)g_pGIS->timezone);
+    log("g_pGIS=%lx\n", g_pGIS);
+    log("timezone=%d minutes\n", (SHORT)g_pGIS->timezone);
 
     usEntriesWanted = *pcMatch;
     *pcMatch = 0;
@@ -266,8 +278,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
     {
         PSHFLDIRINFO file = pFindBuf->bufpos;
 
-        log("num_files=%u\n", pFindBuf->num_files);
-        log("index=%u\n", pFindBuf->index);
         if (! skip)
         {
             if (flags == FF_GETPOS)
@@ -289,8 +299,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
         {
             ULONG oNextEntryOffset = 0;
 
-            log("file list ended\n");
-            log("*pcMatch=%u\n", *pcMatch);
             if (skip)
                 KernCopyOut(pbData - sizeof(ULONG), &oNextEntryOffset, sizeof(ULONG));
             else
@@ -318,6 +326,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
+                    RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.BirthTime);
                     findbuf.fdateCreation.day = time.u8MonthDay;
                     findbuf.fdateCreation.month = time.u8Month;
@@ -326,6 +335,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeCreation.minutes = time.u8Minute;
                     findbuf.ftimeCreation.hours = time.u8Hour;
                     /* Last access time   */
+                    RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.AccessTime);
                     findbuf.fdateLastAccess.day = time.u8MonthDay;
                     findbuf.fdateLastAccess.month = time.u8Month;
@@ -334,6 +344,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeLastAccess.minutes = time.u8Minute;
                     findbuf.ftimeLastAccess.hours = time.u8Hour;
                     /* Last write time   */
+                    RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.ModificationTime);
                     findbuf.fdateLastWrite.day = time.u8MonthDay;
                     findbuf.fdateLastWrite.month = time.u8Month;
@@ -372,6 +383,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
+                    RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.BirthTime);
                     findbuf.fdateCreation.day = time.u8MonthDay;
                     findbuf.fdateCreation.month = time.u8Month;
@@ -380,6 +392,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeCreation.minutes = time.u8Minute;
                     findbuf.ftimeCreation.hours = time.u8Hour;
                     /* Last access time   */
+                    RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.AccessTime);
                     findbuf.fdateLastAccess.day = time.u8MonthDay;
                     findbuf.fdateLastAccess.month = time.u8Month;
@@ -388,6 +401,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeLastAccess.minutes = time.u8Minute;
                     findbuf.ftimeLastAccess.hours = time.u8Hour;
                     /* Last write time   */
+                    RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.ModificationTime);
                     findbuf.fdateLastWrite.day = time.u8MonthDay;
                     findbuf.fdateLastWrite.month = time.u8Month;
@@ -426,6 +440,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
+                    RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.BirthTime);
                     findbuf.fdateCreation.day = time.u8MonthDay;
                     findbuf.fdateCreation.month = time.u8Month;
@@ -434,6 +449,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeCreation.minutes = time.u8Minute;
                     findbuf.ftimeCreation.hours = time.u8Hour;
                     /* Last access time   */
+                    RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.AccessTime);
                     findbuf.fdateLastAccess.day = time.u8MonthDay;
                     findbuf.fdateLastAccess.month = time.u8Month;
@@ -442,6 +458,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeLastAccess.minutes = time.u8Minute;
                     findbuf.ftimeLastAccess.hours = time.u8Hour;
                     /* Last write time   */
+                    RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.ModificationTime);
                     findbuf.fdateLastWrite.day = time.u8MonthDay;
                     findbuf.fdateLastWrite.month = time.u8Month;
@@ -481,6 +498,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
+                    RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.BirthTime);
                     findbuf.fdateCreation.day = time.u8MonthDay;
                     findbuf.fdateCreation.month = time.u8Month;
@@ -489,6 +507,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeCreation.minutes = time.u8Minute;
                     findbuf.ftimeCreation.hours = time.u8Hour;
                     /* Last access time   */
+                    RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.AccessTime);
                     findbuf.fdateLastAccess.day = time.u8MonthDay;
                     findbuf.fdateLastAccess.month = time.u8Month;
@@ -497,6 +516,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeLastAccess.minutes = time.u8Minute;
                     findbuf.ftimeLastAccess.hours = time.u8Hour;
                     /* Last write time   */
+                    RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.ModificationTime);
                     findbuf.fdateLastWrite.day = time.u8MonthDay;
                     findbuf.fdateLastWrite.month = time.u8Month;
@@ -521,7 +541,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     /* File name */
                     vboxfsStrFromUtf8(pszFn, (char *)pszFileName, 
                         CCHMAXPATHCOMP, file->name.u16Length);
-                    log("pszFn=%s\n", pszFn);
                     findbuf.cchName = strlen(pszFn);
                     KernCopyOut(pbData, &findbuf, cbSize);
                     KernCopyOut(pbData + cbSize, pszFn, findbuf.cchName + 1);
@@ -540,6 +559,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
+                    RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.BirthTime);
                     findbuf.fdateCreation.day = time.u8MonthDay;
                     findbuf.fdateCreation.month = time.u8Month;
@@ -548,6 +568,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeCreation.minutes = time.u8Minute;
                     findbuf.ftimeCreation.hours = time.u8Hour;
                     /* Last access time   */
+                    RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.AccessTime);
                     findbuf.fdateLastAccess.day = time.u8MonthDay;
                     findbuf.fdateLastAccess.month = time.u8Month;
@@ -556,6 +577,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeLastAccess.minutes = time.u8Minute;
                     findbuf.ftimeLastAccess.hours = time.u8Hour;
                     /* Last write time   */
+                    RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.ModificationTime);
                     findbuf.fdateLastWrite.day = time.u8MonthDay;
                     findbuf.fdateLastWrite.month = time.u8Month;
@@ -614,6 +636,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
+                    RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.BirthTime);
                     findbuf.fdateCreation.day = time.u8MonthDay;
                     findbuf.fdateCreation.month = time.u8Month;
@@ -622,6 +645,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeCreation.minutes = time.u8Minute;
                     findbuf.ftimeCreation.hours = time.u8Hour;
                     /* Last access time   */
+                    RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.AccessTime);
                     findbuf.fdateLastAccess.day = time.u8MonthDay;
                     findbuf.fdateLastAccess.month = time.u8Month;
@@ -630,6 +654,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     findbuf.ftimeLastAccess.minutes = time.u8Minute;
                     findbuf.ftimeLastAccess.hours = time.u8Hour;
                     /* Last write time   */
+                    RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.ModificationTime);
                     findbuf.fdateLastWrite.day = time.u8MonthDay;
                     findbuf.fdateLastWrite.month = time.u8Month;
@@ -716,6 +741,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
                PFSFSI pfsfsi, PVBOXFSFSD pfsfsd, PBYTE pbData, ULONG cbData, PUSHORT pcMatch,
                ULONG level, ULONG flags)
 {
+    char *pszFilter;
     SHFLCREATEPARMS params = {0};
     PFINDBUF pFindBuf = NULL;
     PSHFLSTRING path = NULL;
@@ -785,6 +811,38 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
     }
 
     log("pFile=%s\n", pFile); 
+
+    pszFilter = RTPathFilename((char const *)pFile);
+
+    /* got the idea from bird's version of
+       vboxsf.ifs (but I made it a bit shorter) */
+    if ( pszFilter && ( strchr(pszFilter, '?') || strchr(pszFilter, '*') ) )
+    {
+        /* convert DOS-style wildcard characters to WinNT style */
+        for (; *pszFilter; pszFilter++)
+        {
+            switch (*pszFilter)
+            {
+                case '*':
+                    /* DOS star, matches any number of chars (including none), except DOS dot */
+                    if (pszFilter[1] == '.')
+                        *pszFilter = '<';
+                    break;
+
+                case '?':
+                    /* DOS query sign, matches one char, except a dot, and end of name eats it */
+                    *pszFilter = '>';
+                    break;
+
+                case '.':
+                    /* DOS dot, matches a dot or end of name */
+                    if (pszFilter[1] == '?' || pszFilter[1] == '*')
+                        *pszFilter = '"';
+            }
+        }
+    }
+
+    log("pFile2=%s\n", pFile); 
 
     strcpy(pDir, pFile);
     p = pDir;

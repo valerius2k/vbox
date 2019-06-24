@@ -182,9 +182,13 @@ GLOBALNAME %1 %+ _16
     dw      CODE16
 segment CODE16
 GLOBALNAME %1 %+ _16
+    push    ax
+
     mov     ax, DATA16
     mov     ds, ax
     mov     es, ax
+
+    pop     ax
 
 %endmacro VBOXFS_32_TO_16 1
 
@@ -202,11 +206,15 @@ GLOBALNAME %1 %+ _16
     dw      TEXT32 wrt FLAT
 segment TEXT32
 GLOBALNAME %1 %+ _32
+    push    ax
+
     mov     ax, DATA32 wrt FLAT
     mov     ds, ax
     mov     es, ax
 
     call    KernThunkStackTo32
+
+    pop     ax
 
 %endmacro
 

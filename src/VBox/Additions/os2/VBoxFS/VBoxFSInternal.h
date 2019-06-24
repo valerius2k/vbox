@@ -278,6 +278,7 @@ RT_C_DECLS_END
 APIRET GetProcInfo(PPROCINFO pProcInfo, USHORT usSize);
 bool IsDosSession(void);
 
+int16_t VBoxTimezoneGetOffsetMin(void);
 uint32_t VBoxToOS2Attr(uint32_t fMode);
 uint32_t OS2ToVBoxAttr(uint32_t attr);
 

@@ -225,6 +225,40 @@ int tolower (int c)
     return c;
 }
 
+int toupper (int c)
+{
+    if (c >= 'a' && c <= 'z')
+    {
+        return (c - ('a' - 'A'));
+    }
+
+    return c;
+}
+
+char *strlwr( char *s )
+{
+    char *p;
+
+    for (p = s; *p; p++)
+    {
+        *p = tolower(*p);
+    }
+
+    return s;
+}
+
+char *strupr( char *s )
+{
+    char *p;
+
+    for (p = s; *p; p++)
+    {
+        *p = toupper(*p);
+    }
+
+    return s;
+}
+
 char *strncpy(char *dst, char *src, size_t len)
 {
     char *ret;
