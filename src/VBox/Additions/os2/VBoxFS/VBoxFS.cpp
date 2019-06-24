@@ -1109,6 +1109,7 @@ FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd,
     char *pszFullName = NULL;
     int cbFullName;
     VBGLSFMAP map;
+    USHORT usAttr;
     bool tmp;
     int rc;
 
@@ -1199,12 +1200,11 @@ FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd,
                 goto FS32_FILEATTRIBUTEEXIT;
             }
 
-            *pAttr = VBoxToOS2Attr(file->Info.Attr.fMode);
+            usAttr = VBoxToOS2Attr(file->Info.Attr.fMode);
+            KernCopyOut(pAttr, &usAttr, sizeof(USHORT));
             break;
 
         case FA_SET: // set
-            USHORT usAttr;
-
             KernCopyIn(&usAttr, pAttr, sizeof(USHORT));
             file->Info.Attr.fMode = OS2ToVBoxAttr(usAttr);
 
