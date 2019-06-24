@@ -1114,80 +1114,80 @@ FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd,
 
     log("FS32_FILEATTRIBUTE(%lx, %s)\n", flag, pszName);
 
+    file = (PSHFLDIRINFO)RTMemAlloc(len);
+
+    if (! file)
+    {
+        log("Not enough memory 1\n");
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_FILEATTRIBUTEEXIT;
+    }
+
+    pszFullName = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
+
+    if (! pszFullName)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_FILEATTRIBUTEEXIT;
+    }
+
+    cbFullName = CCHMAXPATHCOMP + 1;
+
+    hrc = parseFileName((char *)pszName, pcdfsi, pszFullName, &cbFullName, &map, &tmp);
+
+    if (hrc)
+    {
+        log("Filename parse error!\n");
+        goto FS32_FILEATTRIBUTEEXIT;
+    }
+
+    pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
+
+    if (! pwsz)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_FILEATTRIBUTEEXIT;
+    }
+
+    vboxfsStrToUtf8(pwsz, (char *)pszFullName);
+
+    path = make_shflstring((char *)pwsz);
+
+    if (! path)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_FILEATTRIBUTEEXIT;
+    }
+
+    params.Handle = SHFL_HANDLE_NIL;
+    params.CreateFlags = SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW | SHFL_CF_ACCESS_READ;
+            
+    rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
+
+    if (RT_FAILURE(rc))
+    {
+        log("VbglR0SfCreate returned %d\n", rc);
+        hrc = vbox_err_to_os2_err(rc);
+        goto FS32_FILEATTRIBUTEEXIT;
+    }
+
+    switch (params.Result)
+    {
+        case SHFL_PATH_NOT_FOUND:
+            hrc = ERROR_PATH_NOT_FOUND;
+            goto FS32_FILEATTRIBUTEEXIT;
+
+        case SHFL_FILE_EXISTS:
+            break;
+
+        default:
+            hrc = ERROR_FILE_NOT_FOUND;
+            goto FS32_FILEATTRIBUTEEXIT;
+    }
+
     switch (flag)
     {
         case FA_RETRIEVE: // retrieve
-            file = (PSHFLDIRINFO)RTMemAlloc(len);
-
-            if (! file)
-            {
-                log("Not enough memory 1\n");
-                hrc = ERROR_NOT_ENOUGH_MEMORY;
-                goto FS32_FILEATTRIBUTEEXIT;
-            }
-
-            pszFullName = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
-
-            if (! pszFullName)
-            {
-                hrc = ERROR_NOT_ENOUGH_MEMORY;
-                goto FS32_FILEATTRIBUTEEXIT;
-            }
-
-            cbFullName = CCHMAXPATHCOMP + 1;
-
-            hrc = parseFileName((char *)pszName, pcdfsi, pszFullName, &cbFullName, &map, &tmp);
-
-            if (hrc)
-            {
-                log("Filename parse error!\n");
-                goto FS32_FILEATTRIBUTEEXIT;
-            }
-
-            pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
-
-            if (! pwsz)
-            {
-                hrc = ERROR_NOT_ENOUGH_MEMORY;
-                goto FS32_FILEATTRIBUTEEXIT;
-            }
-
-            vboxfsStrToUtf8(pwsz, (char *)pszFullName);
-
-            path = make_shflstring((char *)pwsz);
-
-            if (! path)
-            {
-                hrc = ERROR_NOT_ENOUGH_MEMORY;
-                goto FS32_FILEATTRIBUTEEXIT;
-            }
-
-            params.Handle = SHFL_HANDLE_NIL;
-            params.CreateFlags = SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW | SHFL_CF_ACCESS_READ;
-            
-            rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
-
-            if (RT_FAILURE(rc))
-            {
-                log("VbglR0SfCreate returned %d\n", rc);
-                hrc = vbox_err_to_os2_err(rc);
-                goto FS32_FILEATTRIBUTEEXIT;
-            }
-
-            switch (params.Result)
-            {
-                case SHFL_PATH_NOT_FOUND:
-                    hrc = ERROR_PATH_NOT_FOUND;
-                    goto FS32_FILEATTRIBUTEEXIT;
-
-                case SHFL_FILE_EXISTS:
-                    break;
-
-                default:
-                    hrc = ERROR_FILE_NOT_FOUND;
-                    goto FS32_FILEATTRIBUTEEXIT;
-            }
-
             rc = VbglR0SfFsInfo(&g_clientHandle, &map, params.Handle,
                                 SHFL_INFO_GET | SHFL_INFO_FILE, &len, file);
 
@@ -1203,7 +1203,25 @@ FS32_FILEATTRIBUTE(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd,
             break;
 
         case FA_SET: // set
-            hrc = ERROR_NOT_SUPPORTED;
+            USHORT usAttr;
+
+            KernCopyIn(&usAttr, pAttr, sizeof(USHORT));
+            file->Info.Attr.fMode = OS2ToVBoxAttr(usAttr);
+
+            rc = VbglR0SfFsInfo(&g_clientHandle, &map, params.Handle,
+                                SHFL_INFO_SET | SHFL_INFO_FILE, &len, file);
+
+            hrc = vbox_err_to_os2_err(rc);
+
+            if (RT_FAILURE(rc))
+            {
+                log("VbglR0SfFsInfo failed: %d\n", rc);
+                goto FS32_FILEATTRIBUTEEXIT;
+            }
+            break;
+
+        default:
+            hrc = ERROR_INVALID_FUNCTION;
     }
 
 FS32_FILEATTRIBUTEEXIT:
