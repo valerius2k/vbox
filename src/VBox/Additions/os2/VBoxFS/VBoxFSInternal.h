@@ -234,6 +234,7 @@ typedef struct _FINDBUF
     uint32_t bMustAttr;
     VBGLSFMAP  map;
     bool tmp;
+    bool fLongNames;
 } FINDBUF, *PFINDBUF;
 
 /**
@@ -257,7 +258,12 @@ PSHFLSTRING clone_shflstring(PSHFLSTRING s);
 PSHFLSTRING concat_shflstring_cstr(PSHFLSTRING s1, const char* const s2);
 PSHFLSTRING concat_cstr_shflstring(const char* const s1, PSHFLSTRING s2);
 PSHFLSTRING build_path(PSHFLSTRING dir, const char* const name);
-APIRET APIENTRY vboxfsStrFromUtf8(char *dst, char *src, ULONG len, ULONG srclen);
+
+DECLASM(int) RTR0Os2DHQueryDOSVar(uint8_t iVar, uint16_t iSub, uint32_t *pfp);
+bool IsDBCSLead(UCHAR uch);
+APIRET APIENTRY vboxfsStrToUpper(char *src, int len, char *dst);
+APIRET APIENTRY vboxfsStrToLower(char *src, int len, char *dst);
+APIRET APIENTRY vboxfsStrFromUtf8(char *dst, char *src, ULONG len);
 APIRET APIENTRY vboxfsStrToUtf8(char *dst, char *src);
 APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
                               char *pszParsedPath, int *cbParsedPath,
@@ -286,13 +292,102 @@ USHORT vbox_err_to_os2_err(int rc);
 
 APIRET GetEmptyEAS(PEAOP pEAOP);
 
+#define MODE_START  0
+#define MODE_RETURN 1
+#define MODE_SCAN   2
+
+#define LONGNAME_OFF         0
+#define LONGNAME_OK          1
+#define LONGNAME_MAKE_UNIQUE 2
+#define LONGNAME_ERROR       3
+
+APIRET APIENTRY MakeShortName(ULONG ulFileNo, char *pszLongName, char *pszShortName);
+
+#define TRANSLATE_AUTO           0
+#define TRANSLATE_SHORT_TO_LONG  1
+#define TRANSLATE_LONG_TO_SHORT  2
+
+APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget, int cbTarget, ULONG ulTranslate);
+
+int toupper (int c);
 int tolower (int c);
+char *strlwr(char *s);
+char *strupr(char *s);
+char *utoa(unsigned value, char *buffer, int radix);
+char *itoa(int value, char *buffer, int radix);
 char *strrchr(const char *cp, int ch);
 char *strncpy(char *dst, char *src, size_t len);
 int stricmp(const char *s, const char *t);
 char *strstr(const char *s1, const char *s2);
 char *strcat(char *dst, const char *app);
 char *stpcpy(char *dst, const char *src);
+long strtol(const char *nptr, char **endptr, int base);
+int isspace( int c );
+int isdigit( int c );
+int isalpha(int c);
+char isupper (unsigned char c);
 
+#define SAS_SIG         "SAS "
+#define SAS_CBSIG       4
+
+#pragma pack(1)
+
+/* Base section */
+struct SAS {
+    unsigned char  SAS_signature[SAS_CBSIG];
+    unsigned short SAS_tables_data;
+    unsigned short SAS_flat_sel;
+    unsigned short SAS_config_data;
+    unsigned short SAS_dd_data;
+    unsigned short SAS_vm_data;
+    unsigned short SAS_task_data;
+    unsigned short SAS_RAS_data;
+    unsigned short SAS_file_data;
+    unsigned short SAS_info_data;
+};
+
+/* Information Segment section */
+struct SAS_info_section {
+    unsigned short SAS_info_global;
+    unsigned long SAS_info_local;
+    unsigned long SAS_info_localRM;
+    unsigned short SAS_info_CDIB;
+};
+
+struct	CDIB_codepage_data_section
+{
+unsigned short		     CDIB_cpd_length;
+unsigned short               CDIB_cpd_format_ptr;
+unsigned short               CDIB_cpd_collate_ptr;
+unsigned short               CDIB_cpd_casemap_ptr;
+unsigned short               CDIB_cpd_DBCS_ptr;
+};
+
+struct	CDIB_cp_id_section
+{
+unsigned short CDIB_cp_id;
+unsigned short CDIB_cp_data_ptr;
+};
+
+struct	CDIB_codepage_section
+{
+unsigned short CDIB_cp_length;
+unsigned short CDIB_cp_number_codepages;
+struct CDIB_cp_id_section CDIB_cp_first_id;
+};
+
+struct	CDIB
+{
+unsigned short		     CDIB_length;       /* length of the CDIB	     */
+unsigned short               CDIB_codepage_ptr; /* offset to code page sec. */
+unsigned short               CDIB_country_ptr;  /* offset to country sec.	  */
+unsigned short               CDIB_screen_ptr;   /* offset to screen section */
+unsigned short               CDIB_keyboard_ptr; /* offset to kbd section	  */
+unsigned short               CDIB_lpt1_ptr;     /* offset to LPT1 section	  */
+unsigned short               CDIB_lpt2_ptr;     /* offset to LPT2 section	  */
+unsigned short               CDIB_lpt3_ptr;     /* offset to LPT3 section	  */
+};
+
+#pragma pack()
 
 #endif

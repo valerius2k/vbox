@@ -524,7 +524,7 @@ VBOXFS_EP32_END     FSH32_QSYSINFO
 
 
 ;;
-; APIRET APIENTRY FSH32_PROBEBUF(ULONG operation, char *pData, ULONG cbData);
+; @cproto APIRET APIENTRY FSH32_PROBEBUF(ULONG operation, char *pData, ULONG cbData);
 VBOXFS_EP32_BEGIN   FSH32_PROBEBUF, 'FSH32_PROBEBUF'
     ; switch to 16-bits and reserve place in stack for one selector and three vars
     VBOXFS_32_TO_16     FSH32_PROBEBUF, 10

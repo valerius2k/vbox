@@ -32,6 +32,9 @@ OTHER_CLEAN += \
 	$(ISOIMG) \
 	$(PATH_STAGE_BIN)/additions/VBoxGuest.sym \
 	$(PATH_STAGE_BIN)/additions/VBoxFS.sym \
+	$(PATH_OBJ)/VBoxFS/VBoxFS.def \
+	$(PATH_OBJ)/VBoxFS/VBoxFS.vmp \
+	$(PATH_OBJ)/VBoxGuest/VBoxGuest.vmp \
 	$(CDDIR).flg \
 	$(CDDIR)/os2/VBoxControl.exe \
 	$(CDDIR)/os2/VBoxReplaceDll.exe \
@@ -45,6 +48,7 @@ OTHER_CLEAN += \
 	$(CDDIR)/os2/boot/VBoxFS.sym \
 	$(CDDIR)/os2/boot/vboxfs.cfg-sample \
 	$(CDDIR)/usr/lib/gcc1.dll \
+	$(CDDIR)/usr/lib/libc066.dll \
 	$(CDDIR)/usr/lib/libcn0.dll \
 	$(CDDIR)/usr/lib/libcx0.dll \
 	$(CDDIR)/docs/readme.txt \
@@ -60,6 +64,7 @@ DRIVER_FILES := \
 
 KLIBC_FILES := \
 	/@unixroot/usr/lib/gcc1.dll \
+	/@unixroot/usr/lib/libc066.dll \
 	/@unixroot/usr/lib/libcn0.dll \
 	/@unixroot/usr/lib/libcx0.dll
 

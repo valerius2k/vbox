@@ -58,7 +58,7 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
     PVPFSI pvpfsi;
     PVPFSD pvpfsd;
     PVBOXSFVP pvboxsfvp;
-    char *p, *pszShareName, *pszSrvName;
+    char *p, *pszShareName, *pszSrvName, *path = NULL;
     int len;
     APIRET hrc = 0;
 
@@ -67,7 +67,10 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
         ! pszParsedPath || 
         ! pcbParsedPath ||
         ! *pcbParsedPath)
-        return ERROR_INVALID_PARAMETER;
+    {
+        hrc = ERROR_INVALID_PARAMETER;
+        goto parse_exit;
+    }
 
     *tmp = false;
 
@@ -75,15 +78,26 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
 
     pvboxsfvp = (PVBOXSFVP)pvpfsd;
 
+    path = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
+
+    if (! path)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto parse_exit;
+    }
+
     if ( (p = strstr(pszPath, ":"))  && p == pszPath + 1 )
     {
         /* absolute pathname starting from "d:\" */
         len = strlen(p + 2);
 
         if (len > *pcbParsedPath)
-            return ERROR_FILENAME_EXCED_RANGE;
+        {
+            hrc = ERROR_FILENAME_EXCED_RANGE;
+            goto parse_exit;
+        }
 
-        strcpy(pszParsedPath, p + 2);
+        strcpy(path, p + 2);
         *map = pvboxsfvp->map;
         hrc = NO_ERROR;
     }
@@ -106,7 +120,8 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
 
         if (! p || p - pszSrvName > 11)
         {
-            return ERROR_INVALID_NAME;
+            hrc = ERROR_INVALID_NAME;
+            goto parse_exit;
         }
 
         strncpy(szSrvName, pszSrvName, p - pszSrvName);
@@ -126,7 +141,8 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
              strstr(szSrvName, "vboxfs") != szSrvName &&
              strstr(szSrvName, "vboxsf") != szSrvName )
         {
-            return ERROR_BAD_NET_NAME;
+            hrc = ERROR_BAD_NET_NAME;
+            goto parse_exit;
         }
 
         cMappings = sizeof(mappings);
@@ -134,7 +150,8 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
 
         if (RT_FAILURE(rc))
         {
-            return vbox_err_to_os2_err(rc);
+            hrc = vbox_err_to_os2_err(rc);
+            goto parse_exit;
         }
 
         if (p)
@@ -151,7 +168,8 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
 
             if (! p || p - pszShareName > CCHMAXPATHCOMP - 1)
             {
-                return ERROR_INVALID_NAME;
+                hrc = ERROR_INVALID_NAME;
+                goto parse_exit;
             }
 
             strncpy(szShareName, pszShareName, p - pszShareName);
@@ -167,22 +185,27 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
             }
             else
             {
-                return ERROR_INVALID_NAME;
+                hrc = ERROR_INVALID_NAME;
+                goto parse_exit;
             }
 
             len = strlen(p);
 
             if (len > *pcbParsedPath)
-                return ERROR_FILENAME_EXCED_RANGE;
+            {
+                hrc = ERROR_FILENAME_EXCED_RANGE;
+                goto parse_exit;
+            }
 
-            strcpy(pszParsedPath, p);
+            strcpy(path, p);
 
             len = sizeof(SHFLSTRING) + 2 * CCHMAXPATHCOMP + 2;
             str = (PSHFLSTRING)RTMemAlloc(len);
 
             if (! str)
             {
-                return ERROR_NOT_ENOUGH_MEMORY;
+                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                goto parse_exit;
             }
 
             for (i = 0; i < cMappings; i++)
@@ -193,7 +216,7 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
                 {
                     char szFileName[CCHMAXPATHCOMP];
 
-                    vboxfsStrFromUtf8(szFileName, (char *)str->String.utf8, CCHMAXPATHCOMP, str->u16Length);
+                    vboxfsStrFromUtf8(szFileName, (char *)str->String.utf8, CCHMAXPATHCOMP);
 
                     if (! stricmp(szShareName, szFileName) )
                     {
@@ -211,7 +234,8 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
 
                 if (! pwsz)
                 {
-                    return ERROR_NOT_ENOUGH_MEMORY;
+                    hrc = ERROR_NOT_ENOUGH_MEMORY;
+                    goto parse_exit;
                 }
 
                 vboxfsStrToUtf8(pwsz, szShareName);
@@ -236,7 +260,8 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
         {
             // root namespace, contains all share names
             //*map = 0;
-            return ERROR_INVALID_NAME;
+            hrc = ERROR_INVALID_NAME;
+            goto parse_exit;
         }
 
         hrc = vbox_err_to_os2_err(rc);
@@ -247,9 +272,12 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
         len = strlen(p + 1);
 
         if (len > *pcbParsedPath)
-            return ERROR_FILENAME_EXCED_RANGE;
+        {
+            hrc = ERROR_FILENAME_EXCED_RANGE;
+            goto parse_exit;
+        }
 
-        strcpy(pszParsedPath, p + 1);
+        strcpy(path, p + 1);
 
         *map = pvboxsfvp->map;
         hrc = NO_ERROR;
@@ -260,17 +288,28 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
         len = strlen(pcdfsi->cdi_curdir) + strlen(pszPath) + 1;
 
         if (len > *pcbParsedPath)
-            return ERROR_FILENAME_EXCED_RANGE;
+        {
+            hrc = ERROR_FILENAME_EXCED_RANGE;
+            goto parse_exit;
+        }
 
-        strcpy(pszParsedPath, pcdfsi->cdi_curdir);
-        strcat(pszParsedPath, "\\");
-        strcat(pszParsedPath, pszPath);
+        strcpy(path, pcdfsi->cdi_curdir);
+        strcat(path, "\\");
+        strcat(path, pszPath);
 
         *map = pvboxsfvp->map;
         hrc = NO_ERROR;
     }
 
-    *pcbParsedPath = strlen(pszParsedPath) + 1;
+    if ( TranslateName(map, path, pszParsedPath, *pcbParsedPath, TRANSLATE_SHORT_TO_LONG) )
+        strcpy( pszParsedPath, path );
+
+    //*pcbParsedPath = strlen(pszParsedPath) + 1;
+
+parse_exit:
+    if (path)
+        RTMemFree(path);
+
     return hrc;
 }
 

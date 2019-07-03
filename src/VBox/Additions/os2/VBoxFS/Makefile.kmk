@@ -23,6 +23,8 @@ VBoxFS_LDFLAGS      := $(addprefix -Zlinker , \
 	SEG TYPE CODE PRELOAD DYNAMIC SHARED NONPERMANENT, \
 	    TYPE DATA PRELOAD DYNAMIC)
 #VBoxFS_LDFLAGS      += -s -t -v
+VBoxFS_CXXFLAGS      += \
+	-funsigned-char
 VBoxFS_SOURCES       = \
 	VBoxFSA.asm \
 	VBoxFS.cpp \
@@ -30,6 +32,7 @@ VBoxFS_SOURCES       = \
 	VBoxFSFile.cpp \
 	VBoxFSFind.cpp \
 	VBoxFSInit.cpp \
+	strtol.cpp \
 	$(PATH_OBJ)/VBoxFS/VBoxFS.def
 VBoxFS_LIBS          = \
 	$(VBOX_LIB_VBGL_R0) \
