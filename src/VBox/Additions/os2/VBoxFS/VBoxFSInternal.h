@@ -235,6 +235,7 @@ typedef struct _FINDBUF
     VBGLSFMAP  map;
     bool tmp;
     bool fLongNames;
+    ULONG ulFileNum;
 } FINDBUF, *PFINDBUF;
 
 /**

@@ -173,7 +173,7 @@ void vboxfsCPInit(void)
 
     rc = KernCreateUconvObject(cp, &cp_uconv);
 
-    /* Get starter page address */
+    /* Get starter table address */
     starter_table = (UniChar *)KernSelToFlat((ULONG)cp_uconv.starter);
 
     log("*** starter_table: %lx\n", starter_table);
@@ -663,6 +663,7 @@ APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget,
     }
 
     len = 16384;
+    ulFileNo = 1;
 
     buf = (PSHFLDIRINFO)RTMemAlloc(len);
 
@@ -787,7 +788,6 @@ APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget,
 
         memset(pszLongName, 0, CCHMAXPATHCOMP + 1);
         fFound = FALSE;
-        ulFileNo = 1;
         while (usMode == MODE_SCAN && ! fEnd)
         {
             char *str2 = NULL;

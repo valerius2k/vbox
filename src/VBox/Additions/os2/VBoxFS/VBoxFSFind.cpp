@@ -375,6 +375,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     {
                         skip = true;
                         pFindBuf->index++;
+                        pFindBuf->ulFileNum++;
                         pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
                         continue;
                     }
@@ -388,7 +389,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     }
                     else
                     {
-                        MakeShortName((ULONG)pFindBuf->index + 1, pszUpper, szShort);
+                        MakeShortName(pFindBuf->ulFileNum + 1, pszUpper, szShort);
                     }
                     if (! pFindBuf->fLongNames)
                         strcpy(pszFn, szShort);
@@ -443,6 +444,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     {
                         skip = true;
                         pFindBuf->index++;
+                        pFindBuf->ulFileNum++;
                         pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
                         continue;
                     }
@@ -456,7 +458,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     }
                     else
                     {
-                        MakeShortName((ULONG)pFindBuf->index + 1, pszUpper, szShort);
+                        MakeShortName((ULONG)pFindBuf->ulFileNum + 1, pszUpper, szShort);
                     }
                     if (! pFindBuf->fLongNames)
                         strcpy(pszFn, szShort);
@@ -511,6 +513,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     {
                         skip = true;
                         pFindBuf->index++;
+                        pFindBuf->ulFileNum++;
                         pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
                         continue;
                     }
@@ -525,7 +528,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     }
                     else
                     {
-                        MakeShortName((ULONG)pFindBuf->index + 1, pszUpper, szShort);
+                        MakeShortName((ULONG)pFindBuf->ulFileNum + 1, pszUpper, szShort);
                     }
                     if (! pFindBuf->fLongNames)
                         strcpy(pszFn, szShort);
@@ -581,6 +584,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                         log("skip\n");
                         skip = true;
                         pFindBuf->index++;
+                        pFindBuf->ulFileNum++;
                         pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
                         continue;
                     }
@@ -595,7 +599,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     }
                     else
                     {
-                        MakeShortName((ULONG)pFindBuf->index + 1, pszUpper, szShort);
+                        MakeShortName((ULONG)pFindBuf->ulFileNum + 1, pszUpper, szShort);
                     }
                     if (! pFindBuf->fLongNames)
                         strcpy(pszFn, szShort);
@@ -652,6 +656,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     {
                         skip = true;
                         pFindBuf->index++;
+                        pFindBuf->ulFileNum++;
                         pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
                         continue;
                     }
@@ -668,7 +673,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     }
                     else
                     {
-                        MakeShortName((ULONG)pFindBuf->index + 1, pszUpper, szShort);
+                        MakeShortName((ULONG)pFindBuf->ulFileNum + 1, pszUpper, szShort);
                     }
                     if (! pFindBuf->fLongNames)
                         strcpy(pszFn, szShort);
@@ -740,6 +745,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     {
                         skip = true;
                         pFindBuf->index++;
+                        pFindBuf->ulFileNum++;
                         pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
                         continue;
                     }
@@ -756,7 +762,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     }
                     else
                     {
-                        MakeShortName((ULONG)pFindBuf->index + 1, pszUpper, szShort);
+                        MakeShortName((ULONG)pFindBuf->ulFileNum + 1, pszUpper, szShort);
                     }
                     if (! pFindBuf->fLongNames)
                         strcpy(pszFn, szShort);
@@ -797,6 +803,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
         }
 
         pFindBuf->index++;
+        pFindBuf->ulFileNum++;
 
         // next file
         pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
@@ -992,6 +999,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
                 pFindBuf->map = map;
                 pFindBuf->tmp = tmp;
                 pFindBuf->has_more_files = true;
+                pFindBuf->ulFileNum = 0;
 
                 cbDir = strlen((char *)pszName) + 1;
 

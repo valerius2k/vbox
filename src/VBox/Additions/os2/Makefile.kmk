@@ -35,6 +35,12 @@ endif
 include $(PATH_SUB_CURRENT)/VBoxFS/Makefile.kmk
 include $(PATH_SUB_CURRENT)/Installer/Makefile.kmk
 
+#
+# Cleaning list
+#
+OTHER_CLEAN += \
+	$(PATH_OBJ)/VBoxFSAttach/VBoxFSAttach.def \
+	$(PATH_OBJ)/VBoxReplaceDll/VBoxReplaceDll.def
 
 #
 # Installation helper.
