@@ -663,7 +663,6 @@ APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget,
     }
 
     len = 16384;
-    ulFileNo = 1;
 
     buf = (PSHFLDIRINFO)RTMemAlloc(len);
 
@@ -787,6 +786,7 @@ APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget,
         }
 
         memset(pszLongName, 0, CCHMAXPATHCOMP + 1);
+        ulFileNo = 1;
         fFound = FALSE;
         while (usMode == MODE_SCAN && ! fEnd)
         {
