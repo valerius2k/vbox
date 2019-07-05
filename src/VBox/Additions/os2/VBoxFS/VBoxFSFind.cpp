@@ -290,6 +290,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
 
     for (;;)
     {
+        char *pszFileName;
         PSHFLDIRINFO file = pFindBuf->bufpos;
 
         if (! skip)
@@ -329,12 +330,30 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
             break;
         }
 
+        pszFileName = (char *)file->name.String.utf8;
+
+        /* File name */
+        vboxfsStrFromUtf8(pszFn, (char *)pszFileName, CCHMAXPATHCOMP + 1);
+        vboxfsStrToUpper(pszFn, CCHMAXPATHCOMP + 1, pszUpper);
+
+        if (!strcmp(pszUpper, ".") || !strcmp(pszUpper, ".."))
+        {
+            // . and ..
+            strcpy(szShort, pszUpper);
+        }
+        else
+        {
+            MakeShortName(pFindBuf->ulFileNum + 1, pszUpper, szShort);
+        }
+
+        if (! pFindBuf->fLongNames)
+            strcpy(pszFn, szShort);
+
         switch (level)
         {
             case FIL_STANDARD:
                 {
                     FILEFNDBUF findbuf;
-                    char *pszFileName = (char *)file->name.String.utf8;
                     RTTIME time;
                     memset(&findbuf, 0, sizeof(findbuf));
                     /* File attributes */
@@ -379,20 +398,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                         pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
                         continue;
                     }
-                    /* File name */
-                    vboxfsStrFromUtf8(pszFn, (char *)pszFileName, CCHMAXPATHCOMP + 1);
-                    vboxfsStrToUpper(pszFn, CCHMAXPATHCOMP + 1, pszUpper);
-                    if (!strcmp(pszUpper, ".") || !strcmp(pszUpper, ".."))
-                    {
-                        // . and ..
-                        strcpy(szShort, pszUpper);
-                    }
-                    else
-                    {
-                        MakeShortName(pFindBuf->ulFileNum + 1, pszUpper, szShort);
-                    }
-                    if (! pFindBuf->fLongNames)
-                        strcpy(pszFn, szShort);
                     findbuf.cchName = strlen(pszFn);
                     KernCopyOut(pbData, &findbuf, cbSize);
                     KernCopyOut(pbData + cbSize, pszFn, findbuf.cchName + 1);
@@ -403,7 +408,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
             case FIL_STANDARDL:
                 {
                     FILEFNDBUF3L findbuf;
-                    char *pszFileName = (char *)file->name.String.utf8;
                     RTTIME time;
                     memset(&findbuf, 0, sizeof(findbuf));
                     /* File attributes */
@@ -448,20 +452,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                         pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
                         continue;
                     }
-                    /* File name */
-                    vboxfsStrFromUtf8(pszFn, (char *)pszFileName, CCHMAXPATHCOMP + 1);
-                    vboxfsStrToUpper(pszFn, CCHMAXPATHCOMP + 1, pszUpper);
-                    if (!strcmp(pszUpper, ".") || !strcmp(pszUpper, ".."))
-                    {
-                        // . and ..
-                        strcpy(szShort, pszUpper);
-                    }
-                    else
-                    {
-                        MakeShortName((ULONG)pFindBuf->ulFileNum + 1, pszUpper, szShort);
-                    }
-                    if (! pFindBuf->fLongNames)
-                        strcpy(pszFn, szShort);
                     findbuf.cchName = strlen(pszFn);
                     KernCopyOut(pbData, &findbuf, cbSize);
                     KernCopyOut(pbData + cbSize, pszFn, findbuf.cchName + 1);
@@ -472,7 +462,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
             case FIL_QUERYEASIZE:
                 {
                     FILEFNDBUF2 findbuf;
-                    char *pszFileName = (char *)file->name.String.utf8;
                     RTTIME time;
                     memset(&findbuf, 0, sizeof(findbuf));
                     /* File attributes */
@@ -518,20 +507,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                         continue;
                     }
                     findbuf.cbList = 0; //file->Info.Attr.u.EASize.cb;
-                    /* File name */
-                    vboxfsStrFromUtf8(pszFn, (char *)pszFileName, CCHMAXPATHCOMP + 1);
-                    vboxfsStrToUpper(pszFn, CCHMAXPATHCOMP + 1, pszUpper);
-                    if (!strcmp(pszUpper, ".") || !strcmp(pszUpper, ".."))
-                    {
-                        // . and ..
-                        strcpy(szShort, pszUpper);
-                    }
-                    else
-                    {
-                        MakeShortName((ULONG)pFindBuf->ulFileNum + 1, pszUpper, szShort);
-                    }
-                    if (! pFindBuf->fLongNames)
-                        strcpy(pszFn, szShort);
                     findbuf.cchName = strlen(pszFn);
                     KernCopyOut(pbData, &findbuf, cbSize);
                     KernCopyOut(pbData + cbSize, pszFn, findbuf.cchName + 1);
@@ -543,7 +518,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                 {
                     FILEFNDBUF4L findbuf;
                     RTTIME time;
-                    char *pszFileName = (char *)file->name.String.utf8;
                     memset(&findbuf, 0, sizeof(findbuf));
                     /* File attributes */
                     findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
@@ -589,20 +563,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                         continue;
                     }
                     findbuf.cbList = 0; //file->Info.Attr.u.EASize.cb;
-                    /* File name */
-                    vboxfsStrFromUtf8(pszFn, (char *)pszFileName, CCHMAXPATHCOMP + 1);
-                    vboxfsStrToUpper(pszFn, CCHMAXPATHCOMP + 1, pszUpper);
-                    if (!strcmp(pszUpper, ".") || !strcmp(pszUpper, ".."))
-                    {
-                        // . and ..
-                        strcpy(szShort, pszUpper);
-                    }
-                    else
-                    {
-                        MakeShortName((ULONG)pFindBuf->ulFileNum + 1, pszUpper, szShort);
-                    }
-                    if (! pFindBuf->fLongNames)
-                        strcpy(pszFn, szShort);
                     findbuf.cchName = strlen(pszFn);
                     KernCopyOut(pbData, &findbuf, cbSize);
                     KernCopyOut(pbData + cbSize, pszFn, findbuf.cchName + 1);
@@ -613,7 +573,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
             case FIL_QUERYEASFROMLIST:
                 {
                     FILEFNDBUF3 findbuf;
-                    char *pszFileName = (char *)file->name.String.utf8;
                     RTTIME time;
                     ULONG ulFeaSize;
                     BYTE len;
@@ -663,20 +622,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     KernCopyOut(pbData, &findbuf, cbSize);
                     cbData -= cbSize;
                     pbData += cbSize;
-                    /* File name */
-                    vboxfsStrFromUtf8(pszFn, (char *)pszFileName, CCHMAXPATHCOMP + 1);
-                    vboxfsStrToUpper(pszFn, CCHMAXPATHCOMP + 1, pszUpper);
-                    if (!strcmp(pszUpper, ".") || !strcmp(pszUpper, ".."))
-                    {
-                        // . and ..
-                        strcpy(szShort, pszUpper);
-                    }
-                    else
-                    {
-                        MakeShortName((ULONG)pFindBuf->ulFileNum + 1, pszUpper, szShort);
-                    }
-                    if (! pFindBuf->fLongNames)
-                        strcpy(pszFn, szShort);
                     len = strlen(pszFn);
                     eaop.fpFEAList->cbList = cbData - (len + 2);
                     hrc = GetEmptyEAS(&eaop);
@@ -702,7 +647,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
             case FIL_QUERYEASFROMLISTL:
                 {
                     FILEFNDBUF3L findbuf;
-                    char *pszFileName = (char *)file->name.String.utf8;
                     RTTIME time;
                     ULONG ulFeaSize;
                     BYTE len;
@@ -752,20 +696,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     KernCopyOut(pbData, &findbuf, cbSize);
                     cbData -= cbSize;
                     pbData += cbSize;
-                    /* File name */
-                    vboxfsStrFromUtf8(pszFn, (char *)pszFileName, CCHMAXPATHCOMP + 1);
-                    vboxfsStrToUpper(pszFn, CCHMAXPATHCOMP + 1, pszUpper);
-                    if (!strcmp(pszUpper, ".") || !strcmp(pszUpper, ".."))
-                    {
-                        // . and ..
-                        strcpy(szShort, pszUpper);
-                    }
-                    else
-                    {
-                        MakeShortName((ULONG)pFindBuf->ulFileNum + 1, pszUpper, szShort);
-                    }
-                    if (! pFindBuf->fLongNames)
-                        strcpy(pszFn, szShort);
                     len = strlen(pszFn);
                     eaop.fpFEAList->cbList = cbData - (len + 2);
                     hrc = GetEmptyEAS(&eaop);
