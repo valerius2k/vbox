@@ -41,7 +41,6 @@
 #include <iprt/assert.h>
 
 extern VBGLSFCLIENT g_clientHandle;
-extern ULONG        g_fHideLFN;
 
 uint32_t VBoxToOS2Attr(uint32_t fMode);
 

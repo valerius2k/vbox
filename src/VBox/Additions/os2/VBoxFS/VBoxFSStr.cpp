@@ -45,6 +45,7 @@
 #include <string.h>
 
 extern VBGLSFCLIENT g_clientHandle;
+extern ULONG        g_fHideLFN;
 
 UconvObj cp_uconv = {0};
 UconvObj utf8_uconv = {0};

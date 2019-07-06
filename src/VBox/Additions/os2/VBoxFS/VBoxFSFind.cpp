@@ -331,7 +331,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
         }
 
         vboxfsStrFromUtf8(pszFn, (char *)file->name.String.utf8, CCHMAXPATHCOMP + 1);
-        log("pszFn=%s\n", pszFn);
 
         if (g_fHideLFN)
         {
