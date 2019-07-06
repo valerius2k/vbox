@@ -651,6 +651,11 @@ APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget,
     int    rc;
     uint32_t len, num_files, index = 0;
 
+    if (g_fHideLFN)
+    {
+        return ERROR_FILE_NOT_FOUND;
+    }
+
     memset(pszTarget, 0, cbTarget);
     if (strlen(pszPath) >= 2)
     {

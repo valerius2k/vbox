@@ -302,15 +302,8 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
         hrc = NO_ERROR;
     }
 
-    if (g_fHideLFN)
-    {
+    if ( TranslateName(map, path, pszParsedPath, *pcbParsedPath, TRANSLATE_SHORT_TO_LONG) )
         strcpy( pszParsedPath, path );
-    }
-    else
-    {
-        if ( TranslateName(map, path, pszParsedPath, *pcbParsedPath, TRANSLATE_SHORT_TO_LONG) )
-            strcpy( pszParsedPath, path );
-    }
 
     //*pcbParsedPath = strlen(pszParsedPath) + 1;
 
@@ -537,8 +530,10 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     Date.year = time.i32Year - 1980;
     Date.month = time.u8Month;
     Date.day = time.u8MonthDay;
-    psffsi->sfi_ctime = *(PUSHORT)&Time;
-    psffsi->sfi_cdate = *(PUSHORT)&Date;
+    //psffsi->sfi_ctime = *(PUSHORT)&Time;
+    //psffsi->sfi_cdate = *(PUSHORT)&Date;
+    psffsi->sfi_ctime = Time;
+    psffsi->sfi_cdate = Date;
 
     /* Last access time   */
     RTTimeSpecAddSeconds(&params.Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
@@ -550,8 +545,10 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     Date.year = time.i32Year - 1980;
     Date.month = time.u8Month;
     Date.day = time.u8MonthDay;
-    psffsi->sfi_atime = *(PUSHORT)&Time;
-    psffsi->sfi_adate = *(PUSHORT)&Date;
+    //psffsi->sfi_atime = *(PUSHORT)&Time;
+    //psffsi->sfi_adate = *(PUSHORT)&Date;
+    psffsi->sfi_atime = Time;
+    psffsi->sfi_adate = Date;
 
     /* Last write time   */
     RTTimeSpecAddSeconds(&params.Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
@@ -563,8 +560,10 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     Date.year = time.i32Year - 1980;
     Date.month = time.u8Month;
     Date.day = time.u8MonthDay;
-    psffsi->sfi_mtime = *(PUSHORT)&Time;
-    psffsi->sfi_mdate = *(PUSHORT)&Date;
+    //psffsi->sfi_mtime = *(PUSHORT)&Time;
+    //psffsi->sfi_mdate = *(PUSHORT)&Date;
+    psffsi->sfi_mtime = Time;
+    psffsi->sfi_mdate = Date;
 
     psffsi->sfi_tstamp = ST_SREAD | ST_PREAD | ST_SWRITE | ST_PWRITE;
 

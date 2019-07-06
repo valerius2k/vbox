@@ -57,7 +57,7 @@ extern VBGLSFCLIENT g_clientHandle;
 extern PGINFOSEG g_pGIS;
 //extern USHORT    g_selEnv;
 //char            *g_pEnv = NULL;
-extern ULONG KernSISData;
+extern GINFOSEG  KernSISData;
 extern ULONG     g_fpLog_printf;
 void             LogPrintf(char *fmt, ...);
 RT_C_DECLS_END
