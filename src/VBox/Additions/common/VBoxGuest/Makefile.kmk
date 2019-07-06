@@ -115,6 +115,8 @@ if1of ($(KBUILD_TARGET), darwin freebsd haiku $(if $(defined VBOX_WITH_ADDITION_
   VBoxGuest_SOURCES       = \
   	VBoxGuestA-os2.asm \
   	$(PATH_OBJ)/VBoxGuest/VBoxGuest-os2.def
+  VBoxGuest_CLEAN         = \
+  	$(PATH_OBJ)/VBoxGuest/VBoxGuest-os2.def
   #VBoxGuest_LDFLAGS       = -s -t -v
   VBoxGuest_LIBS          = \
   	$(VBoxGuestLibOs2Hack_1_TARGET) \

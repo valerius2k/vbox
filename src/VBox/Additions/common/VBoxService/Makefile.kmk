@@ -116,6 +116,8 @@ VBoxService_SOURCES.os2   = \
 	$(PATH_OBJ)/VBoxService/VBoxService-os2.def \
 	VBoxServiceClipboard-os2.cpp \
 	VBoxServiceMouse-os2.cpp
+VBoxService_CLEAN.os2     = \
+	$(PATH_OBJ)/VBoxService/VBoxService-os2.def
 
 VBoxService_LDFLAGS.darwin = -framework IOKit
 
