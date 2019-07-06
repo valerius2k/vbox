@@ -201,7 +201,8 @@ APIRET APIENTRY vboxfsStrToUpper(char *src, int len, char *dst)
                       buf_ucs2,
                       src,
                       2 * CCHMAXPATHCOMP + 2,
-                      srclen);
+                      CCHMAXPATHCOMP + 1);
+                      //srclen);
 
     if (rc)
     {
@@ -245,7 +246,8 @@ APIRET APIENTRY vboxfsStrToLower(char *src, int len, char *dst)
                       buf_ucs2,
                       src,
                       2 * CCHMAXPATHCOMP + 2,
-                      srclen);
+                      CCHMAXPATHCOMP + 1);
+                      //srclen);
 
     if (rc)
     {
@@ -287,7 +289,8 @@ APIRET APIENTRY vboxfsStrFromUtf8(char *dst, char *src, ULONG len)
     rc = KernStrFromUcs(0,
                         dst,
                         pwsz,
-                        len,
+                        CCHMAXPATHCOMP + 1,
+                        //len,
                         2 * CCHMAXPATHCOMP + 2);
                         //RTStrUniLen(src));
 
@@ -320,7 +323,8 @@ APIRET APIENTRY vboxfsStrToUtf8(char *dst, char *src)
                       buf_ucs2,
                       src,
                       2 * CCHMAXPATHCOMP + 2,
-                      srclen);
+                      CCHMAXPATHCOMP + 1);
+                      //srclen);
 
     if (rc)
     {
@@ -330,7 +334,7 @@ APIRET APIENTRY vboxfsStrToUtf8(char *dst, char *src)
     rc = KernStrFromUcs(&utf8_uconv,
                         dst,
                         buf_ucs2,
-                        CCHMAXPATHCOMP,
+                        CCHMAXPATHCOMP + 1,
                         2 * CCHMAXPATHCOMP + 2);
 
     if (rc)
@@ -931,20 +935,7 @@ APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget,
     }
 
 TRANSLATENAME_EXIT:
-    if (params.Handle)
-        VbglR0SfClose(&g_clientHandle, map, params.Handle);
-    if (pszLongName)
-        RTMemFree(pszLongName);
-    if (buf)
-        RTMemFree(buf);
-    if (pszDir)
-        RTMemFree(pszDir);
-    if (pwsz)
-        RTMemFree(pwsz);
-    if (path)
-        RTMemFree(path);
-
-    if ( strchr(pszUpperPart, '*') || strchr(pszUpperPart, '?') )
+    if ( pszUpperPart && ( strchr(pszUpperPart, '*') || strchr(pszUpperPart, '?') ) )
     {
         hrc = NO_ERROR;
         fFound = true;
@@ -960,6 +951,19 @@ TRANSLATENAME_EXIT:
     {
         hrc = ERROR_FILE_NOT_FOUND;
     }
+
+    if (params.Handle)
+        VbglR0SfClose(&g_clientHandle, map, params.Handle);
+    if (pszLongName)
+        RTMemFree(pszLongName);
+    if (buf)
+        RTMemFree(buf);
+    if (pszDir)
+        RTMemFree(pszDir);
+    if (pwsz)
+        RTMemFree(pwsz);
+    if (path)
+        RTMemFree(path);
 
     return hrc;
 }
