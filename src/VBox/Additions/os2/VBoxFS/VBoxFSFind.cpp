@@ -44,6 +44,7 @@
 extern UniChar *starter_table;
 
 extern VBGLSFCLIENT g_clientHandle;
+extern ULONG        g_fHideLFN;
 extern PGINFOSEG    g_pGIS;
 
 int16_t VBoxTimezoneGetOffsetMin(void)
@@ -290,7 +291,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
 
     for (;;)
     {
-        char *pszFileName;
         PSHFLDIRINFO file = pFindBuf->bufpos;
 
         if (! skip)
@@ -330,24 +330,44 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
             break;
         }
 
-        pszFileName = (char *)file->name.String.utf8;
+        vboxfsStrFromUtf8(pszFn, (char *)file->name.String.utf8, CCHMAXPATHCOMP + 1);
+        log("pszFn=%s\n", pszFn);
 
-        /* File name */
-        vboxfsStrFromUtf8(pszFn, (char *)pszFileName, CCHMAXPATHCOMP + 1);
-        vboxfsStrToUpper(pszFn, CCHMAXPATHCOMP + 1, pszUpper);
-
-        if (!strcmp(pszUpper, ".") || !strcmp(pszUpper, ".."))
+        if (g_fHideLFN)
         {
-            // . and ..
-            strcpy(szShort, pszUpper);
+            char *s = strrchr(pszFn, '.');
+            int  len = strlen(pszFn);
+
+            if ( IsDosSession() &&
+                 ( ( s   && (s - pszFn > 8 || pszFn + len - s > 4) ) ||
+                   ( ! s && (len > 8) ) ) )
+            {
+                /* not a 8.3 filename, skip it */
+                skip = true;
+                pFindBuf->index++;
+                pFindBuf->ulFileNum++;
+                pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
+                continue;
+            }
         }
         else
         {
-            MakeShortName(pFindBuf->ulFileNum + 1, pszUpper, szShort);
-        }
+            /* File name */
+            vboxfsStrToUpper(pszFn, CCHMAXPATHCOMP + 1, pszUpper);
 
-        if (! pFindBuf->fLongNames)
-            strcpy(pszFn, szShort);
+            if (!strcmp(pszUpper, ".") || !strcmp(pszUpper, ".."))
+            {
+                // . and ..
+                strcpy(szShort, pszUpper);
+            }
+            else
+            {
+                MakeShortName(pFindBuf->ulFileNum + 1, pszUpper, szShort);
+            }
+
+            if (! pFindBuf->fLongNames)
+                strcpy(pszFn, szShort);
+        }
 
         switch (level)
         {

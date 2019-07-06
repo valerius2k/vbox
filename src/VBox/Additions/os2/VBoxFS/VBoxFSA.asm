@@ -783,6 +783,9 @@ g_pfnDos16Write:
 GLOBALNAME g_fLog_enable
     dd  0
 
+GLOBALNAME g_fHideLFN
+    dd  0
+
 ;GLOBALNAME g_selGIS
 ;    dw  0
 
@@ -1809,6 +1812,8 @@ VBOXFS_EP16_BEGIN FS_INIT, 'FS_INIT'
     je      .parse_error
     and     al, ~20h                    ; uppercase
 
+    cmp     al, 'H'                     ; /H - hide long file names for VDM's
+    je      .hidelfn
     cmp     al, 'D'                     ; /D - output debug messages
     je      .debug
     cmp     al, 'V'                     ; /V - verbose
@@ -1823,6 +1828,15 @@ VBOXFS_EP16_BEGIN FS_INIT, 'FS_INIT'
 
 .parse_quiet:
     mov     byte [es:NAME(g_fVerbose)], 0
+    jmp     .parse_next
+
+.hidelfn:
+    push    ds
+    mov     ax, DATA32 wrt FLAT
+    mov     ds, ax
+    mov     eax, NAME(g_fHideLFN wrt FLAT)
+    mov     dword [eax], 1
+    pop     ds
     jmp     .parse_next
 
 .debug:

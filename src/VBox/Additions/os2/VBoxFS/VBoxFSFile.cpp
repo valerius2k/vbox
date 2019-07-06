@@ -41,6 +41,7 @@
 #include <iprt/assert.h>
 
 extern VBGLSFCLIENT g_clientHandle;
+extern ULONG        g_fHideLFN;
 
 uint32_t VBoxToOS2Attr(uint32_t fMode);
 
@@ -301,8 +302,15 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
         hrc = NO_ERROR;
     }
 
-    if ( TranslateName(map, path, pszParsedPath, *pcbParsedPath, TRANSLATE_SHORT_TO_LONG) )
+    if (g_fHideLFN)
+    {
         strcpy( pszParsedPath, path );
+    }
+    else
+    {
+        if ( TranslateName(map, path, pszParsedPath, *pcbParsedPath, TRANSLATE_SHORT_TO_LONG) )
+            strcpy( pszParsedPath, path );
+    }
 
     //*pcbParsedPath = strlen(pszParsedPath) + 1;
 
