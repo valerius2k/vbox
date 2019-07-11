@@ -46,6 +46,7 @@
 
 extern VBGLSFCLIENT g_clientHandle;
 extern ULONG        g_fHideLFN;
+extern ULONG        g_Cp;
 
 UconvObj cp_uconv = {0};
 UconvObj utf8_uconv = {0};
@@ -159,8 +160,13 @@ void vboxfsCPInit(void)
     struct CDIB_codepage_section *cpsec;
     APIRET rc;
 
+    if (g_Cp)
+    {
+        cp = g_Cp;
+    }
+
     /* Get the 1st user codepage from prepared codepages list */
-    pSAS = (struct SAS *)KernSelToFlat(0x70 << 16);
+    /* pSAS = (struct SAS *)KernSelToFlat(0x70 << 16);
     pSas_info_data = (struct SAS_info_section *)((char *)pSAS + pSAS->SAS_info_data);
     cdib = (struct CDIB *)KernSelToFlat(pSas_info_data->SAS_info_CDIB << 16);
     cpsec = (struct CDIB_codepage_section *)((char *)cdib + cdib->CDIB_codepage_ptr);
@@ -168,7 +174,7 @@ void vboxfsCPInit(void)
     if (cpsec->CDIB_cp_length >= sizeof(struct CDIB_cp_id_section))
     {
         cp = cpsec->CDIB_cp_first_id.CDIB_cp_id;
-    }
+    } */
 
     log("*** Codepage: %u\n", cp);
 
@@ -437,6 +443,7 @@ APIRET APIENTRY MakeShortName(ULONG ulFileNo, char *pszLongName, char *pszShortN
 
             memcpy(pszShortName, szShortName, 11);
             RTMemFree(pszUpper);
+
             r = szShortName + 7;
             while (*r == ' ') r--;
             r++;

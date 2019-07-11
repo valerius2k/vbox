@@ -786,6 +786,9 @@ GLOBALNAME g_fLog_enable
 GLOBALNAME g_fHideLFN
     dd  0
 
+GLOBALNAME g_Cp
+    dd  0
+
 ;GLOBALNAME g_selGIS
 ;    dw  0
 
@@ -1812,6 +1815,8 @@ VBOXFS_EP16_BEGIN FS_INIT, 'FS_INIT'
     je      .parse_error
     and     al, ~20h                    ; uppercase
 
+    cmp     al, 'C'                     ; /CP:<codepage> - force codepage
+    je      .parse_cp
     cmp     al, 'H'                     ; /H - hide long file names for VDM's
     je      .hidelfn
     cmp     al, 'D'                     ; /D - output debug messages
@@ -1821,6 +1826,56 @@ VBOXFS_EP16_BEGIN FS_INIT, 'FS_INIT'
     cmp     al, 'Q'                     ; /Q - quiet.
     je      .parse_quiet
     jmp     .parse_error
+
+.parse_cp:
+    lodsb
+    cmp     al, 0
+    je      .parse_next
+    and     al, ~20h                    ; uppercase
+    cmp     al, 'P'                     ; 
+    jne     .parse_next
+    lodsb
+    cmp     al, ':'
+    jne     .parse_next
+
+    push    edx
+    push    ebx
+    xor     edx, edx
+    mov     ebx, 10
+
+.digit:
+    xor     eax, eax
+    lodsb
+    cmp     al, ' '
+    je      .end_cp
+    cmp     al, 0
+    je      .end_cp
+    cmp     al, '0'
+    jb      .end_cp
+    cmp     al, '9'
+    ja      .end_cp
+    sub     al, '0'
+    movzx   eax, al
+    add     edx, eax
+    mov     eax, edx
+    xor     edx, edx
+    mul     ebx
+    mov     edx, eax
+    jmp     .digit
+.end_cp:
+    mov     eax, edx
+    xor     edx, edx
+    div     ebx
+    mov     edx, eax
+    push    ds
+    mov     ax, DATA32 wrt FLAT
+    mov     ds, ax
+    mov     eax, NAME(g_Cp wrt FLAT)
+    mov     dword [eax], edx
+    pop     ds
+    pop     ebx
+    pop     edx
+    jmp     .parse_next
 
 .parse_verbose:
     mov     byte [es:NAME(g_fVerbose)], 1

@@ -73,13 +73,13 @@ program installed, plus a NULL-modem cable, attached to your debugee machine's C
 And yes, you'll need your debugee machine to have a COM port available.
 
 Or, if you are running your system in VBox, then it is possible to enable the COM port
-emulation in VBox (see "Serial Ports" section in VBox GUI) and use a terminal emulator
+emulation in VBox (see "Serial Ports" section in VBox Qt GUI) and use a terminal emulator
 in the host system, which will attach to a VM's COM port (see section "Debugging VBox
 VM's via a virtual COM port" below).
 
 But if you are running your system on a real machine, or redirected the VM log to a host
 COM port in "Serial Ports" section of VM settings in VBox GUI, getting the VM log via the
-serial cable on another machine, attached to it, then the following three paragraphs apply.
+serial cable on another machine, attached to it, then the following paragraphs apply.
 
 Many modern machines, especially laptops, have no COM port available. In such cases, you
 can use a COM port on a docking station, if available. Or, a PCMCIA/Express card COM port,
@@ -97,13 +97,16 @@ via network using a LAN cable (usually, a wired LAN only). Like this:
 
 Where "admin" is AMT login, "P@ssw0rd" is your AMT password, and <Intel AMT IP address>
 is your debugee machine IP, set in Intel AMT settings. Note that it is different from the
-IP that your machine OS has on the same LAN interface.
+IP that your machine OS has on the same LAN interface. See "Enabling and configuring
+Intel AMT" for details on Intel AMT configuration in your machine BIOS setup.
 
 I plan to port "amtterm" utility to OS/2 in the future, so, there will be no limitation
 to have a Linux machine. You will be able to run it from the OS/2 machine, but not yet. :(
+For now, you could use a Linux LiveCD, like Knoppix, and run "amtterm" utility from Linux
+started from the LiveCD.
 
 AMT SOL COM port, or PCMCIA/Express card COM ports are seen as a standard PCI COM port
-in the "pci.exe" utility output. So, you could note an I/O address there, and use it in
+in the "pci.exe" utility output. So, you could note down an I/O address there, and use it in
 "dbport" QSINIT / ARCALDR / OS4LDR command, instead of the default I/O address, which is
 0x3F8 (see below). Note that this does not require a PCMCIA or Express card driver stack
 to be installed in your OS! Your bootloader sends messages directly to an I/O port,
@@ -122,7 +125,7 @@ of your OS/2 boot disk. As a minimum, it should contain such lines:
 ! timeout=30   ; boot menu timeout: 30 sec
 ! dbport=0x3F8 ; COM port base address (0x3F8 for COM1)
 ! dbflags=0x11 ; debug flags (leave as is for a hardware COM port)
-! ; dbflags=0  ; if it's 0, then log is output to screen
+! ; dbflags=0  ; if it's 0, then log is output to screen in yellow
 ! logsize=2048 ; log size in kilobytes
 ! 
 ! [kernel]
@@ -137,6 +140,10 @@ other PCI com port), and "logsize", which specifies the log size in kilobytes. I
 zero, the log buffer is disabled. So, if the .ini file is missing, or these options are
 omitted, logging is disabled.
 
+Note that if you need a COM port base address for "dbport" parameter, you need to get
+a value from pci.exe (in my case, 50B0h..50B7h), then you should use "dbport=0x50E0"
+(add 0x30 to the value got from pci.exe).
+
 The "config" section sets global options. The "kernel" section specifies the list of
 menu entries (the list of kernels to boot). Each kernel has it's local options (local
 for that kernel). Most options from "config" section can be set locally for a particular
@@ -146,7 +153,7 @@ ARCALDR (renamed to "os2ldr.arc") can be booted as a second menu entry. For the 
 list of options, consult QSINIT documentation.
 
 If you have ArcaOS installed, you can enable the log buffer too. For that, you'll
-need to create the "os2ldr.cfg" file in the root directory, instead of an .ini file.
+need to create the "os2ldr.cfg" file in the root directory, instead of the .ini file.
 ARCALDR supports a subset of QSINIT options. So, for ARCALDR to support logging,
 you'll need the following minimal "os2ldr.cfg" file:
 
@@ -156,4 +163,12 @@ you'll need the following minimal "os2ldr.cfg" file:
 ! [================= os2ldr.cfg ===================]
 
 As you can see here, the options are the same. The difference is the file name and that
-it has no sections. It has a list of pairs "variable=value".
+it has no sections. It has a list of pairs "variable=value". Also, ARCALDR does not
+support booting multiple kernels.
+
+Debugging VBox VM's via a virtual COM port.
+------------------------------------------
+
+Enabling and configuring Intel AMT.
+----------------------------------
+

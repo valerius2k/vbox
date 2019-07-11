@@ -159,6 +159,15 @@ VBoxFS.ifs supports the following command line switches:
 
 ! /Q         Quiet initialization. Do not output any messages.
 ! /V         Verbose initialization. Output some diagnostic messages on init.
+! /CP:<cp>   Force code page to <cp>, where <cp> is a codepage number. The code page should
+!            be prepared. This should be useful if we e.g., have a secondary DBCS codepage,
+!            but primary is 850 (multilingual). This option affects short file name creation
+!            if /H option is not specified. So that, long file names will be correctly
+!            truncated to create short file names. (on a border of a two-byte symbol, not
+!            in the middle of such a symbol).
+! /H         Hide long file names for DOS sessions. If we're in a DOS session, then long
+!            file names are skipped in directory listings, and trying to open files or
+!            enter directories with long file names should fail.
 ! /D         Output debug messages. The messages are sent to VBox log (which is limited to
 !            32768 messages, after which messages from VBoxFS.ifs are muted by VBox). Also,
 !            messages are sent in parallel to QSINIT / ARCALDR / OS4LDR log buffer. These
@@ -177,6 +186,7 @@ Credits:
 OS/4-related problems (hardware-assisted virtualization support in VBox and more)
 - Dmitry Zavalskov (_dixie_) for help with QSINIT, ARCALDR and related problems
 (debugging and more).
+- Ko Myung Hun for hunting DBCS-relating errors and puching me into correct direction.
 
 The current version.
 -------------------
