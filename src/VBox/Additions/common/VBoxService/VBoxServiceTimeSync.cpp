@@ -363,58 +363,190 @@ static DECLCALLBACK(int) vgsvcTimeSyncInit(void)
     if (RT_SUCCESS(rc))
     {
         char *pszValue;
-        char *pHours, *pMinutes;
         int hours = 0;
         int minutes = 0;
+        int month = 0, week = 0, day = 0, start = 0;
+        int dmonth = 0, dweek = 0, dday = 0, dstart = 0;
+        int offset = 0;
         bool fNegative = false;
+        bool fLeapYear = false;
+        int monthdays[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
         DATETIME dt;
 
         if (! DosScanEnv((PCSZ)"TZ", (UCHAR **)&pszValue) )
         {
             // parse TZ variable and get an offset
             // between the local time and GMT
-            pHours = pszValue;
 
             // skip some letters at the beginning
-            while (*pHours && isalpha(*pHours))
+            while (*pszValue && isalpha(*pszValue))
             {
-                pHours++;
+                pszValue++;
             }
 
-            switch (*pHours)
+            switch (*pszValue)
             {
                 case '-':
                     fNegative = true;
-                    pHours++;
+                    pszValue++;
                     break;
 
                 case '+':
                     fNegative = false;
-                    pHours++;
+                    pszValue++;
                     break;
                     
                 default:
                     ;
             }
 
-            hours = strtol(pHours, &pMinutes, 0);
+            hours = strtol(pszValue, &pszValue, 0);
 
-            if (pMinutes && *pMinutes == ':')
+            if (pszValue && *pszValue == ':')
             {
                 // skip a colon separator
-                pMinutes++;
-                minutes = strtol(pMinutes, &pMinutes, 0);
+                pszValue++;
+                minutes = strtol(pszValue, &pszValue, 0);
             }
 
             minutes += hours * 60;
 
             if (fNegative)
             {
+                // negative minutes, east from Greenwich
                 minutes = -minutes;
             }
 
+            if (pszValue && *pszValue == ':')
+            {
+                // skip a colon separator
+                pszValue++;
+                // skip seconds (we need hours and minutes only)
+                while (*pszValue && isdigit(*pszValue))
+                    pszValue++;
+            }
+
+            // skip DST timezone
+            while (*pszValue && isalpha(*pszValue))
+                pszValue++;
+
+            do
+            {
+                if (*pszValue != ',')
+                    break;
+
+                // skip comma
+                pszValue++;
+                month = strtol(pszValue, &pszValue, 0);
+
+                if (*pszValue != ',')
+                    break;
+
+                // skip comma
+                pszValue++;
+                week = strtol(pszValue, &pszValue, 0);
+
+                if (*pszValue != ',')
+                    break;
+
+                // skip comma
+                pszValue++;
+                day = strtol(pszValue, &pszValue, 0);
+
+                if (*pszValue != ',')
+                    break;
+
+                // skip comma
+                pszValue++;
+                start = strtol(pszValue, &pszValue, 0);
+
+                if (*pszValue != ',')
+                    break;
+
+                // skip comma
+                pszValue++;
+                dmonth = strtol(pszValue, &pszValue, 0);
+
+                if (*pszValue != ',')
+                    break;
+
+                // skip comma
+                pszValue++;
+                dweek = strtol(pszValue, &pszValue, 0);
+
+                if (*pszValue != ',')
+                    break;
+
+                // skip comma
+                pszValue++;
+                dday = strtol(pszValue, &pszValue, 0);
+
+                if (*pszValue != ',')
+                    break;
+
+                // skip comma
+                pszValue++;
+                dstart = strtol(pszValue, &pszValue, 0);
+
+                if (*pszValue != ',')
+                    break;
+
+                // skip comma
+                pszValue++;
+                offset = strtol(pszValue, &pszValue, 0) / 60;
+            }
+            while (0);
+
             DosGetDateTime(&dt);
+
+            if (dt.year % 4 == 0)
+                fLeapYear = true;
+
+            if (dt.year % 400 == 0)
+                fLeapYear = false;
+
+            if (fLeapYear)
+            {
+                // leap year: 29 days
+                monthdays[1]++;
+            }
+
+            if (week < 0)
+            {
+                // week counts from the end of month
+                day  += monthdays[month - 1] + week * 7;
+            }
+            else if (week > 0)
+            {
+                // week counts from the beginning of month
+                day += week * 7;
+            }
+
+            if (dweek < 0)
+            {
+                // week counts from the end of month
+                dday  += monthdays[dmonth - 1] + dweek * 7;
+            }
+            else if (dweek > 0)
+            {
+                // week counts from the beginning of month
+                dday += dweek * 7;
+            }
+
+            if ( month && day && dmonth && dday &&
+                 ( (month == dt.month && day == dt.day && start <= dt.seconds + 60 * dt.minutes + 3600 * dt.hours) ||
+                   (month == dt.month && day <  dt.day) ||
+                   (month < dt.month) ) &&
+                 ( (dt.month <  dmonth) ||
+                   (dt.month == dmonth && dt.day <  dday) ||
+                   (dt.month == dmonth && dt.day == dday && dt.seconds + 60 * dt.minutes + 3600 * dt.hours <= dstart) ) )
+            {
+                // daylight saving time, subtract offset
+                minutes -= offset;
+            }
+
             dt.timezone = minutes;
+
             DosSetDateTime(&dt);
         }
     }
