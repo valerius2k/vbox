@@ -145,7 +145,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
 {
     USHORT usEntriesWanted;
     APIRET hrc = NO_ERROR;
-    char buf[260];
     char *p, *lastslash;
     USHORT usNeededLen;
     ULONG cbSize = 0;
@@ -372,273 +371,327 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
         {
             case FIL_STANDARD:
                 {
-                    FILEFNDBUF findbuf;
+                    PFILEFNDBUF findbuf;
                     RTTIME time;
-                    memset(&findbuf, 0, sizeof(findbuf));
+
+                    findbuf = (PFILEFNDBUF)RTMemAlloc(sizeof(FILEFNDBUF));
+
+                    if (! findbuf)
+                    {
+                        hrc = ERROR_NOT_ENOUGH_MEMORY;
+                        goto FILLFINDBUFEXIT;
+                    }
+
+                    memset(findbuf, 0, sizeof(FILEFNDBUF));
                     /* File attributes */
-                    findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
+                    findbuf->attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
                     RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.BirthTime);
-                    findbuf.fdateCreation.day = time.u8MonthDay;
-                    findbuf.fdateCreation.month = time.u8Month;
-                    findbuf.fdateCreation.year = time.i32Year - 1980;
-                    findbuf.ftimeCreation.twosecs = time.u8Second / 2;
-                    findbuf.ftimeCreation.minutes = time.u8Minute;
-                    findbuf.ftimeCreation.hours = time.u8Hour;
+                    findbuf->fdateCreation.day = time.u8MonthDay;
+                    findbuf->fdateCreation.month = time.u8Month;
+                    findbuf->fdateCreation.year = time.i32Year - 1980;
+                    findbuf->ftimeCreation.twosecs = time.u8Second / 2;
+                    findbuf->ftimeCreation.minutes = time.u8Minute;
+                    findbuf->ftimeCreation.hours = time.u8Hour;
                     /* Last access time   */
                     RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.AccessTime);
-                    findbuf.fdateLastAccess.day = time.u8MonthDay;
-                    findbuf.fdateLastAccess.month = time.u8Month;
-                    findbuf.fdateLastAccess.year = time.i32Year - 1980;
-                    findbuf.ftimeLastAccess.twosecs = time.u8Second / 2;
-                    findbuf.ftimeLastAccess.minutes = time.u8Minute;
-                    findbuf.ftimeLastAccess.hours = time.u8Hour;
+                    findbuf->fdateLastAccess.day = time.u8MonthDay;
+                    findbuf->fdateLastAccess.month = time.u8Month;
+                    findbuf->fdateLastAccess.year = time.i32Year - 1980;
+                    findbuf->ftimeLastAccess.twosecs = time.u8Second / 2;
+                    findbuf->ftimeLastAccess.minutes = time.u8Minute;
+                    findbuf->ftimeLastAccess.hours = time.u8Hour;
                     /* Last write time   */
                     RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.ModificationTime);
-                    findbuf.fdateLastWrite.day = time.u8MonthDay;
-                    findbuf.fdateLastWrite.month = time.u8Month;
-                    findbuf.fdateLastWrite.year = time.i32Year - 1980;
-                    findbuf.ftimeLastWrite.twosecs = time.u8Second / 2;
-                    findbuf.ftimeLastWrite.minutes = time.u8Minute;
-                    findbuf.ftimeLastWrite.hours = time.u8Hour;
-                    findbuf.cbFile = (ULONG)file->Info.cbObject;
-                    findbuf.cbFileAlloc = (ULONG)file->Info.cbAllocated;
+                    findbuf->fdateLastWrite.day = time.u8MonthDay;
+                    findbuf->fdateLastWrite.month = time.u8Month;
+                    findbuf->fdateLastWrite.year = time.i32Year - 1980;
+                    findbuf->ftimeLastWrite.twosecs = time.u8Second / 2;
+                    findbuf->ftimeLastWrite.minutes = time.u8Minute;
+                    findbuf->ftimeLastWrite.hours = time.u8Hour;
+                    findbuf->cbFile = (ULONG)file->Info.cbObject;
+                    findbuf->cbFileAlloc = (ULONG)file->Info.cbAllocated;
                     cbSize = sizeof(FILEFNDBUF) - 1;
                     /* Check for file attributes */
-                    if ( ( findbuf.attrFile & pFindBuf->bAttr ) ||
-                         ( pFindBuf->bMustAttr && ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
+                    if ( ( findbuf->attrFile & pFindBuf->bAttr ) ||
+                         ( pFindBuf->bMustAttr && ((findbuf->attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
                     {
                         skip = true;
                         pFindBuf->index++;
                         pFindBuf->ulFileNum++;
                         pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
+                        RTMemFree(findbuf);
                         continue;
                     }
-                    findbuf.cchName = strlen(pszFn);
-                    KernCopyOut(pbData, &findbuf, cbSize);
-                    KernCopyOut(pbData + cbSize, pszFn, findbuf.cchName + 1);
-                    cbSize += findbuf.cchName + 1;
+                    findbuf->cchName = strlen(pszFn);
+                    KernCopyOut(pbData, findbuf, cbSize);
+                    KernCopyOut(pbData + cbSize, pszFn, findbuf->cchName + 1);
+                    cbSize += findbuf->cchName + 1;
+                    RTMemFree(findbuf);
                     break;
                 }
 
             case FIL_STANDARDL:
                 {
-                    FILEFNDBUF3L findbuf;
+                    PFILEFNDBUF3L findbuf;
                     RTTIME time;
-                    memset(&findbuf, 0, sizeof(findbuf));
+
+                    findbuf = (PFILEFNDBUF3L)RTMemAlloc(sizeof(FILEFNDBUF3L));
+
+                    if (! findbuf)
+                    {
+                        hrc = ERROR_NOT_ENOUGH_MEMORY;
+                        goto FILLFINDBUFEXIT;
+                    }
+
+                    memset(findbuf, 0, sizeof(FILEFNDBUF3L));
                     /* File attributes */
-                    findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
+                    findbuf->attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
                     RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.BirthTime);
-                    findbuf.fdateCreation.day = time.u8MonthDay;
-                    findbuf.fdateCreation.month = time.u8Month;
-                    findbuf.fdateCreation.year = time.i32Year - 1980;
-                    findbuf.ftimeCreation.twosecs = time.u8Second / 2;
-                    findbuf.ftimeCreation.minutes = time.u8Minute;
-                    findbuf.ftimeCreation.hours = time.u8Hour;
+                    findbuf->fdateCreation.day = time.u8MonthDay;
+                    findbuf->fdateCreation.month = time.u8Month;
+                    findbuf->fdateCreation.year = time.i32Year - 1980;
+                    findbuf->ftimeCreation.twosecs = time.u8Second / 2;
+                    findbuf->ftimeCreation.minutes = time.u8Minute;
+                    findbuf->ftimeCreation.hours = time.u8Hour;
                     /* Last access time   */
                     RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.AccessTime);
-                    findbuf.fdateLastAccess.day = time.u8MonthDay;
-                    findbuf.fdateLastAccess.month = time.u8Month;
-                    findbuf.fdateLastAccess.year = time.i32Year - 1980;
-                    findbuf.ftimeLastAccess.twosecs = time.u8Second / 2;
-                    findbuf.ftimeLastAccess.minutes = time.u8Minute;
-                    findbuf.ftimeLastAccess.hours = time.u8Hour;
+                    findbuf->fdateLastAccess.day = time.u8MonthDay;
+                    findbuf->fdateLastAccess.month = time.u8Month;
+                    findbuf->fdateLastAccess.year = time.i32Year - 1980;
+                    findbuf->ftimeLastAccess.twosecs = time.u8Second / 2;
+                    findbuf->ftimeLastAccess.minutes = time.u8Minute;
+                    findbuf->ftimeLastAccess.hours = time.u8Hour;
                     /* Last write time   */
                     RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.ModificationTime);
-                    findbuf.fdateLastWrite.day = time.u8MonthDay;
-                    findbuf.fdateLastWrite.month = time.u8Month;
-                    findbuf.fdateLastWrite.year = time.i32Year - 1980;
-                    findbuf.ftimeLastWrite.twosecs = time.u8Second / 2;
-                    findbuf.ftimeLastWrite.minutes = time.u8Minute;
-                    findbuf.ftimeLastWrite.hours = time.u8Hour;
-                    findbuf.cbFile = file->Info.cbObject;
-                    findbuf.cbFileAlloc = file->Info.cbAllocated;
+                    findbuf->fdateLastWrite.day = time.u8MonthDay;
+                    findbuf->fdateLastWrite.month = time.u8Month;
+                    findbuf->fdateLastWrite.year = time.i32Year - 1980;
+                    findbuf->ftimeLastWrite.twosecs = time.u8Second / 2;
+                    findbuf->ftimeLastWrite.minutes = time.u8Minute;
+                    findbuf->ftimeLastWrite.hours = time.u8Hour;
+                    findbuf->cbFile = file->Info.cbObject;
+                    findbuf->cbFileAlloc = file->Info.cbAllocated;
                     cbSize = sizeof(FILEFNDBUF3L) - 1;
                     /* Check for file attributes */
-                    if ( ( findbuf.attrFile & pFindBuf->bAttr ) ||
-                         ( pFindBuf->bMustAttr && ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
+                    if ( ( findbuf->attrFile & pFindBuf->bAttr ) ||
+                         ( pFindBuf->bMustAttr && ((findbuf->attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
                     {
                         skip = true;
                         pFindBuf->index++;
                         pFindBuf->ulFileNum++;
                         pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
+                        RTMemFree(findbuf);
                         continue;
                     }
-                    findbuf.cchName = strlen(pszFn);
-                    KernCopyOut(pbData, &findbuf, cbSize);
-                    KernCopyOut(pbData + cbSize, pszFn, findbuf.cchName + 1);
-                    cbSize += findbuf.cchName + 1;
+                    findbuf->cchName = strlen(pszFn);
+                    KernCopyOut(pbData, findbuf, cbSize);
+                    KernCopyOut(pbData + cbSize, pszFn, findbuf->cchName + 1);
+                    cbSize += findbuf->cchName + 1;
+                    RTMemFree(findbuf);
                     break;
                 }
 
             case FIL_QUERYEASIZE:
                 {
-                    FILEFNDBUF2 findbuf;
+                    PFILEFNDBUF2 findbuf;
                     RTTIME time;
-                    memset(&findbuf, 0, sizeof(findbuf));
+
+                    findbuf = (PFILEFNDBUF2)RTMemAlloc(sizeof(FILEFNDBUF2));
+
+                    if (! findbuf)
+                    {
+                        hrc = ERROR_NOT_ENOUGH_MEMORY;
+                        goto FILLFINDBUFEXIT;
+                    }
+
+                    memset(findbuf, 0, sizeof(FILEFNDBUF2));
                     /* File attributes */
-                    findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
+                    findbuf->attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
                     RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.BirthTime);
-                    findbuf.fdateCreation.day = time.u8MonthDay;
-                    findbuf.fdateCreation.month = time.u8Month;
-                    findbuf.fdateCreation.year = time.i32Year - 1980;
-                    findbuf.ftimeCreation.twosecs = time.u8Second / 2;
-                    findbuf.ftimeCreation.minutes = time.u8Minute;
-                    findbuf.ftimeCreation.hours = time.u8Hour;
+                    findbuf->fdateCreation.day = time.u8MonthDay;
+                    findbuf->fdateCreation.month = time.u8Month;
+                    findbuf->fdateCreation.year = time.i32Year - 1980;
+                    findbuf->ftimeCreation.twosecs = time.u8Second / 2;
+                    findbuf->ftimeCreation.minutes = time.u8Minute;
+                    findbuf->ftimeCreation.hours = time.u8Hour;
                     /* Last access time   */
                     RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.AccessTime);
-                    findbuf.fdateLastAccess.day = time.u8MonthDay;
-                    findbuf.fdateLastAccess.month = time.u8Month;
-                    findbuf.fdateLastAccess.year = time.i32Year - 1980;
-                    findbuf.ftimeLastAccess.twosecs = time.u8Second / 2;
-                    findbuf.ftimeLastAccess.minutes = time.u8Minute;
-                    findbuf.ftimeLastAccess.hours = time.u8Hour;
+                    findbuf->fdateLastAccess.day = time.u8MonthDay;
+                    findbuf->fdateLastAccess.month = time.u8Month;
+                    findbuf->fdateLastAccess.year = time.i32Year - 1980;
+                    findbuf->ftimeLastAccess.twosecs = time.u8Second / 2;
+                    findbuf->ftimeLastAccess.minutes = time.u8Minute;
+                    findbuf->ftimeLastAccess.hours = time.u8Hour;
                     /* Last write time   */
                     RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.ModificationTime);
-                    findbuf.fdateLastWrite.day = time.u8MonthDay;
-                    findbuf.fdateLastWrite.month = time.u8Month;
-                    findbuf.fdateLastWrite.year = time.i32Year - 1980;
-                    findbuf.ftimeLastWrite.twosecs = time.u8Second / 2;
-                    findbuf.ftimeLastWrite.minutes = time.u8Minute;
-                    findbuf.ftimeLastWrite.hours = time.u8Hour;
-                    findbuf.cbFile = (ULONG)file->Info.cbObject;
-                    findbuf.cbFileAlloc = (ULONG)file->Info.cbAllocated;
+                    findbuf->fdateLastWrite.day = time.u8MonthDay;
+                    findbuf->fdateLastWrite.month = time.u8Month;
+                    findbuf->fdateLastWrite.year = time.i32Year - 1980;
+                    findbuf->ftimeLastWrite.twosecs = time.u8Second / 2;
+                    findbuf->ftimeLastWrite.minutes = time.u8Minute;
+                    findbuf->ftimeLastWrite.hours = time.u8Hour;
+                    findbuf->cbFile = (ULONG)file->Info.cbObject;
+                    findbuf->cbFileAlloc = (ULONG)file->Info.cbAllocated;
                     cbSize = sizeof(FILEFNDBUF2) - 1;
                     /* Check for file attributes */
-                    if ( ( findbuf.attrFile & pFindBuf->bAttr ) ||
-                         ( pFindBuf->bMustAttr && ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
+                    if ( ( findbuf->attrFile & pFindBuf->bAttr ) ||
+                         ( pFindBuf->bMustAttr && ((findbuf->attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
                     {
                         skip = true;
                         pFindBuf->index++;
                         pFindBuf->ulFileNum++;
                         pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
+                        RTMemFree(findbuf);
                         continue;
                     }
-                    findbuf.cbList = 0; //file->Info.Attr.u.EASize.cb;
-                    findbuf.cchName = strlen(pszFn);
-                    KernCopyOut(pbData, &findbuf, cbSize);
-                    KernCopyOut(pbData + cbSize, pszFn, findbuf.cchName + 1);
-                    cbSize += findbuf.cchName + 1;
+                    findbuf->cbList = 0; //file->Info.Attr.u.EASize.cb;
+                    findbuf->cchName = strlen(pszFn);
+                    KernCopyOut(pbData, findbuf, cbSize);
+                    KernCopyOut(pbData + cbSize, pszFn, findbuf->cchName + 1);
+                    cbSize += findbuf->cchName + 1;
+                    RTMemFree(findbuf);
                     break;
                 }
 
             case FIL_QUERYEASIZEL:
                 {
-                    FILEFNDBUF4L findbuf;
+                    PFILEFNDBUF4L findbuf;
                     RTTIME time;
-                    memset(&findbuf, 0, sizeof(findbuf));
+
+                    findbuf = (PFILEFNDBUF4L)RTMemAlloc(sizeof(FILEFNDBUF4L));
+
+                    if (! findbuf)
+                    {
+                        hrc = ERROR_NOT_ENOUGH_MEMORY;
+                        goto FILLFINDBUFEXIT;
+                    }
+
+                    memset(findbuf, 0, sizeof(FILEFNDBUF4L));
                     /* File attributes */
-                    findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
+                    findbuf->attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
                     RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.BirthTime);
-                    findbuf.fdateCreation.day = time.u8MonthDay;
-                    findbuf.fdateCreation.month = time.u8Month;
-                    findbuf.fdateCreation.year = time.i32Year - 1980;
-                    findbuf.ftimeCreation.twosecs = time.u8Second / 2;
-                    findbuf.ftimeCreation.minutes = time.u8Minute;
-                    findbuf.ftimeCreation.hours = time.u8Hour;
+                    findbuf->fdateCreation.day = time.u8MonthDay;
+                    findbuf->fdateCreation.month = time.u8Month;
+                    findbuf->fdateCreation.year = time.i32Year - 1980;
+                    findbuf->ftimeCreation.twosecs = time.u8Second / 2;
+                    findbuf->ftimeCreation.minutes = time.u8Minute;
+                    findbuf->ftimeCreation.hours = time.u8Hour;
                     /* Last access time   */
                     RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.AccessTime);
-                    findbuf.fdateLastAccess.day = time.u8MonthDay;
-                    findbuf.fdateLastAccess.month = time.u8Month;
-                    findbuf.fdateLastAccess.year = time.i32Year - 1980;
-                    findbuf.ftimeLastAccess.twosecs = time.u8Second / 2;
-                    findbuf.ftimeLastAccess.minutes = time.u8Minute;
-                    findbuf.ftimeLastAccess.hours = time.u8Hour;
+                    findbuf->fdateLastAccess.day = time.u8MonthDay;
+                    findbuf->fdateLastAccess.month = time.u8Month;
+                    findbuf->fdateLastAccess.year = time.i32Year - 1980;
+                    findbuf->ftimeLastAccess.twosecs = time.u8Second / 2;
+                    findbuf->ftimeLastAccess.minutes = time.u8Minute;
+                    findbuf->ftimeLastAccess.hours = time.u8Hour;
                     /* Last write time   */
                     RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.ModificationTime);
-                    findbuf.fdateLastWrite.day = time.u8MonthDay;
-                    findbuf.fdateLastWrite.month = time.u8Month;
-                    findbuf.fdateLastWrite.year = time.i32Year - 1980;
-                    findbuf.ftimeLastWrite.twosecs = time.u8Second / 2;
-                    findbuf.ftimeLastWrite.minutes = time.u8Minute;
-                    findbuf.ftimeLastWrite.hours = time.u8Hour;
-                    findbuf.cbFile = file->Info.cbObject;
-                    findbuf.cbFileAlloc = file->Info.cbAllocated;
+                    findbuf->fdateLastWrite.day = time.u8MonthDay;
+                    findbuf->fdateLastWrite.month = time.u8Month;
+                    findbuf->fdateLastWrite.year = time.i32Year - 1980;
+                    findbuf->ftimeLastWrite.twosecs = time.u8Second / 2;
+                    findbuf->ftimeLastWrite.minutes = time.u8Minute;
+                    findbuf->ftimeLastWrite.hours = time.u8Hour;
+                    findbuf->cbFile = file->Info.cbObject;
+                    findbuf->cbFileAlloc = file->Info.cbAllocated;
                     cbSize = sizeof(FILEFNDBUF4L) - 1;
                     /* Check for file attributes */
-                    if ( ( findbuf.attrFile & pFindBuf->bAttr ) ||
-                         ( pFindBuf->bMustAttr && ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
+                    if ( ( findbuf->attrFile & pFindBuf->bAttr ) ||
+                         ( pFindBuf->bMustAttr && ((findbuf->attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
                     {
                         log("skip\n");
                         skip = true;
                         pFindBuf->index++;
                         pFindBuf->ulFileNum++;
                         pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
+                        RTMemFree(findbuf);
                         continue;
                     }
-                    findbuf.cbList = 0; //file->Info.Attr.u.EASize.cb;
-                    findbuf.cchName = strlen(pszFn);
-                    KernCopyOut(pbData, &findbuf, cbSize);
-                    KernCopyOut(pbData + cbSize, pszFn, findbuf.cchName + 1);
-                    cbSize += findbuf.cchName + 1;
+                    findbuf->cbList = 0; //file->Info.Attr.u.EASize.cb;
+                    findbuf->cchName = strlen(pszFn);
+                    KernCopyOut(pbData, findbuf, cbSize);
+                    KernCopyOut(pbData + cbSize, pszFn, findbuf->cchName + 1);
+                    cbSize += findbuf->cchName + 1;
+                    RTMemFree(findbuf);
                     break;
                 }
 
             case FIL_QUERYEASFROMLIST:
                 {
-                    FILEFNDBUF3 findbuf;
+                    PFILEFNDBUF3 findbuf;
                     RTTIME time;
                     ULONG ulFeaSize;
                     BYTE len;
-                    memset(&findbuf, 0, sizeof(findbuf));
+
+                    findbuf = (PFILEFNDBUF3)RTMemAlloc(sizeof(FILEFNDBUF3));
+
+                    if (! findbuf)
+                    {
+                        hrc = ERROR_NOT_ENOUGH_MEMORY;
+                        goto FILLFINDBUFEXIT;
+                    }
+
+                    memset(findbuf, 0, sizeof(FILEFNDBUF3));
                     /* File attributes */
-                    findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
+                    findbuf->attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
                     RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.BirthTime);
-                    findbuf.fdateCreation.day = time.u8MonthDay;
-                    findbuf.fdateCreation.month = time.u8Month;
-                    findbuf.fdateCreation.year = time.i32Year - 1980;
-                    findbuf.ftimeCreation.twosecs = time.u8Second / 2;
-                    findbuf.ftimeCreation.minutes = time.u8Minute;
-                    findbuf.ftimeCreation.hours = time.u8Hour;
+                    findbuf->fdateCreation.day = time.u8MonthDay;
+                    findbuf->fdateCreation.month = time.u8Month;
+                    findbuf->fdateCreation.year = time.i32Year - 1980;
+                    findbuf->ftimeCreation.twosecs = time.u8Second / 2;
+                    findbuf->ftimeCreation.minutes = time.u8Minute;
+                    findbuf->ftimeCreation.hours = time.u8Hour;
                     /* Last access time   */
                     RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.AccessTime);
-                    findbuf.fdateLastAccess.day = time.u8MonthDay;
-                    findbuf.fdateLastAccess.month = time.u8Month;
-                    findbuf.fdateLastAccess.year = time.i32Year - 1980;
-                    findbuf.ftimeLastAccess.twosecs = time.u8Second / 2;
-                    findbuf.ftimeLastAccess.minutes = time.u8Minute;
-                    findbuf.ftimeLastAccess.hours = time.u8Hour;
+                    findbuf->fdateLastAccess.day = time.u8MonthDay;
+                    findbuf->fdateLastAccess.month = time.u8Month;
+                    findbuf->fdateLastAccess.year = time.i32Year - 1980;
+                    findbuf->ftimeLastAccess.twosecs = time.u8Second / 2;
+                    findbuf->ftimeLastAccess.minutes = time.u8Minute;
+                    findbuf->ftimeLastAccess.hours = time.u8Hour;
                     /* Last write time   */
                     RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.ModificationTime);
-                    findbuf.fdateLastWrite.day = time.u8MonthDay;
-                    findbuf.fdateLastWrite.month = time.u8Month;
-                    findbuf.fdateLastWrite.year = time.i32Year - 1980;
-                    findbuf.ftimeLastWrite.twosecs = time.u8Second / 2;
-                    findbuf.ftimeLastWrite.minutes = time.u8Minute;
-                    findbuf.ftimeLastWrite.hours = time.u8Hour;
-                    findbuf.cbFile = (ULONG)file->Info.cbObject;
-                    findbuf.cbFileAlloc = (ULONG)file->Info.cbAllocated;
+                    findbuf->fdateLastWrite.day = time.u8MonthDay;
+                    findbuf->fdateLastWrite.month = time.u8Month;
+                    findbuf->fdateLastWrite.year = time.i32Year - 1980;
+                    findbuf->ftimeLastWrite.twosecs = time.u8Second / 2;
+                    findbuf->ftimeLastWrite.minutes = time.u8Minute;
+                    findbuf->ftimeLastWrite.hours = time.u8Hour;
+                    findbuf->cbFile = (ULONG)file->Info.cbObject;
+                    findbuf->cbFileAlloc = (ULONG)file->Info.cbAllocated;
                     cbSize = sizeof(FILEFNDBUF3) - 2;
                     /* Check for file attributes */
-                    if ( ( findbuf.attrFile & pFindBuf->bAttr ) ||
-                         ( pFindBuf->bMustAttr && ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
+                    if ( ( findbuf->attrFile & pFindBuf->bAttr ) ||
+                         ( pFindBuf->bMustAttr && ((findbuf->attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
                     {
                         skip = true;
                         pFindBuf->index++;
                         pFindBuf->ulFileNum++;
                         pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
+                        RTMemFree(findbuf);
                         continue;
                     }
-                    KernCopyOut(pbData, &findbuf, cbSize);
+                    KernCopyOut(pbData, findbuf, cbSize);
                     cbData -= cbSize;
                     pbData += cbSize;
                     len = strlen(pszFn);
@@ -660,59 +713,70 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     cbSize += len + 1;
                     pbData += len + 1;
                     cbData -= len + 1;
+                    RTMemFree(findbuf);
                     break;
                 }
 
             case FIL_QUERYEASFROMLISTL:
                 {
-                    FILEFNDBUF3L findbuf;
+                    PFILEFNDBUF3L findbuf;
                     RTTIME time;
                     ULONG ulFeaSize;
                     BYTE len;
-                    memset(&findbuf, 0, sizeof(findbuf));
+
+                    findbuf = (PFILEFNDBUF3L)RTMemAlloc(sizeof(FILEFNDBUF3L));
+
+                    if (! findbuf)
+                    {
+                        hrc = ERROR_NOT_ENOUGH_MEMORY;
+                        goto FILLFINDBUFEXIT;
+                    }
+
+                    memset(findbuf, 0, sizeof(FILEFNDBUF3L));
                     /* File attributes */
-                    findbuf.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
+                    findbuf->attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
                     /* Creation time   */
                     RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.BirthTime);
-                    findbuf.fdateCreation.day = time.u8MonthDay;
-                    findbuf.fdateCreation.month = time.u8Month;
-                    findbuf.fdateCreation.year = time.i32Year - 1980;
-                    findbuf.ftimeCreation.twosecs = time.u8Second / 2;
-                    findbuf.ftimeCreation.minutes = time.u8Minute;
-                    findbuf.ftimeCreation.hours = time.u8Hour;
+                    findbuf->fdateCreation.day = time.u8MonthDay;
+                    findbuf->fdateCreation.month = time.u8Month;
+                    findbuf->fdateCreation.year = time.i32Year - 1980;
+                    findbuf->ftimeCreation.twosecs = time.u8Second / 2;
+                    findbuf->ftimeCreation.minutes = time.u8Minute;
+                    findbuf->ftimeCreation.hours = time.u8Hour;
                     /* Last access time   */
                     RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.AccessTime);
-                    findbuf.fdateLastAccess.day = time.u8MonthDay;
-                    findbuf.fdateLastAccess.month = time.u8Month;
-                    findbuf.fdateLastAccess.year = time.i32Year - 1980;
-                    findbuf.ftimeLastAccess.twosecs = time.u8Second / 2;
-                    findbuf.ftimeLastAccess.minutes = time.u8Minute;
-                    findbuf.ftimeLastAccess.hours = time.u8Hour;
+                    findbuf->fdateLastAccess.day = time.u8MonthDay;
+                    findbuf->fdateLastAccess.month = time.u8Month;
+                    findbuf->fdateLastAccess.year = time.i32Year - 1980;
+                    findbuf->ftimeLastAccess.twosecs = time.u8Second / 2;
+                    findbuf->ftimeLastAccess.minutes = time.u8Minute;
+                    findbuf->ftimeLastAccess.hours = time.u8Hour;
                     /* Last write time   */
                     RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                     RTTimeExplode(&time, &file->Info.ModificationTime);
-                    findbuf.fdateLastWrite.day = time.u8MonthDay;
-                    findbuf.fdateLastWrite.month = time.u8Month;
-                    findbuf.fdateLastWrite.year = time.i32Year - 1980;
-                    findbuf.ftimeLastWrite.twosecs = time.u8Second / 2;
-                    findbuf.ftimeLastWrite.minutes = time.u8Minute;
-                    findbuf.ftimeLastWrite.hours = time.u8Hour;
-                    findbuf.cbFile = file->Info.cbObject;
-                    findbuf.cbFileAlloc = file->Info.cbAllocated;
+                    findbuf->fdateLastWrite.day = time.u8MonthDay;
+                    findbuf->fdateLastWrite.month = time.u8Month;
+                    findbuf->fdateLastWrite.year = time.i32Year - 1980;
+                    findbuf->ftimeLastWrite.twosecs = time.u8Second / 2;
+                    findbuf->ftimeLastWrite.minutes = time.u8Minute;
+                    findbuf->ftimeLastWrite.hours = time.u8Hour;
+                    findbuf->cbFile = file->Info.cbObject;
+                    findbuf->cbFileAlloc = file->Info.cbAllocated;
                     cbSize = sizeof(FILEFNDBUF3L) - 2;
                     /* Check for file attributes */
-                    if ( ( findbuf.attrFile & pFindBuf->bAttr ) ||
-                         ( pFindBuf->bMustAttr && ((findbuf.attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
+                    if ( ( findbuf->attrFile & pFindBuf->bAttr ) ||
+                         ( pFindBuf->bMustAttr && ((findbuf->attrFile & pFindBuf->bMustAttr) != pFindBuf->bMustAttr) ) )
                     {
                         skip = true;
                         pFindBuf->index++;
                         pFindBuf->ulFileNum++;
                         pFindBuf->bufpos = (PSHFLDIRINFO)((char *)pFindBuf->bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
+                        RTMemFree(findbuf);
                         continue;
                     }
-                    KernCopyOut(pbData, &findbuf, cbSize);
+                    KernCopyOut(pbData, findbuf, cbSize);
                     cbData -= cbSize;
                     pbData += cbSize;
                     len = strlen(pszFn);
@@ -734,6 +798,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     cbSize += len + 1;
                     pbData += len + 1;
                     cbData -= len + 1;
+                    RTMemFree(findbuf);
                     break;
                 }
 
@@ -780,14 +845,15 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
                ULONG level, ULONG flags)
 {
     char *pszFilter;
-    SHFLCREATEPARMS params = {0};
+    PSHFLCREATEPARMS params = NULL;
     PFINDBUF pFindBuf = NULL;
     PSHFLSTRING path = NULL;
-    VBGLSFMAP map;
+    VBGLSFMAP *map = NULL;
     bool tmp;
     char *pFile = NULL;
     char *pDir = NULL;
-    int cbDir;
+    char *pszParsedPath = NULL;
+    int cbParsedPath;
     char *p, *str, *lastslash;
     APIRET hrc = NO_ERROR;
     char *pwsz = NULL;
@@ -795,10 +861,26 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
 
     log("FS32_FINDFIRST(%s, %lx, %lx, %lx)\n", pszName, attr, level, flags);
 
-    RT_ZERO(params);
+    params = (PSHFLCREATEPARMS)RTMemAlloc(sizeof(SHFLCREATEPARMS));
 
-    params.Handle = SHFL_HANDLE_NIL;
-    params.CreateFlags = SHFL_CF_DIRECTORY | SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW | SHFL_CF_ACCESS_READ;
+    if (! params)
+    {
+        rc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_FINDFIRSTEXIT;
+    }
+
+    map = (VBGLSFMAP *)RTMemAlloc(sizeof(VBGLSFMAP));
+
+    if (! map)
+    {
+        rc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_FINDFIRSTEXIT;
+    }
+
+    RT_ZERO(*params);
+
+    params->Handle = SHFL_HANDLE_NIL;
+    params->CreateFlags = SHFL_CF_DIRECTORY | SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW | SHFL_CF_ACCESS_READ;
 
     pFindBuf = (PFINDBUF)RTMemAllocZ(sizeof(FINDBUF));
 
@@ -827,10 +909,18 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
     pFindBuf->bAttr = (BYTE)~attr;
     pFindBuf->handle = SHFL_HANDLE_NIL;
 
-    cbDir = CCHMAXPATHCOMP + 1;
-    //cbDir = strlen((char *)pszName) + 1;
+    cbParsedPath = CCHMAXPATHCOMP + 1;
+    //cbParsedPath = strlen((char *)pszName) + 1;
 
-    pFile = (char *)RTMemAllocZ(cbDir);
+    pszParsedPath = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
+
+    if (! pszParsedPath)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_FINDFIRSTEXIT;
+    }
+
+    pFile = (char *)RTMemAllocZ(cbParsedPath);
 
     if (! pFile)
     {
@@ -838,7 +928,7 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
         goto FS32_FINDFIRSTEXIT;
     }
 
-    pDir = (char *)RTMemAllocZ(cbDir);
+    pDir = (char *)RTMemAllocZ(cbParsedPath);
 
     if (! pDir)
     {
@@ -847,13 +937,18 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
     }
 
     // get the directory name
-    hrc = parseFileName((char *)pszName, pcdfsi, pFile, &cbDir, &map, &tmp);
+    hrc = parseFileName((char *)pszName, pcdfsi, pszParsedPath, &cbParsedPath, map, &tmp);
 
     if (hrc)
     {
         log("Filename parse error!\n");
         goto FS32_FINDFIRSTEXIT;
     }
+
+    memset(pFile, 0, cbParsedPath);
+
+    if ( TranslateName(map, pszParsedPath, pFile, TRANSLATE_SHORT_TO_LONG) )
+        strcpy( pFile, pszParsedPath );
 
     log("pFile=%s\n", pFile); 
 
@@ -926,31 +1021,31 @@ FS32_FINDFIRST(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd, 
         goto FS32_FINDFIRSTEXIT;
     }
 
-    rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
+    rc = VbglR0SfCreate(&g_clientHandle, map, path, params);
 
     free_shflstring(path);
     RTMemFree(pwsz);
 
     if (RT_SUCCESS(rc))
     {
-        if (params.Result == SHFL_PATH_NOT_FOUND)
+        if (params->Result == SHFL_PATH_NOT_FOUND)
         {
             hrc = ERROR_PATH_NOT_FOUND;
             goto FS32_FINDFIRSTEXIT;
         }
 
-        if (params.Result == SHFL_FILE_EXISTS)
+        if (params->Result == SHFL_FILE_EXISTS)
         {
-            if (params.Handle != SHFL_HANDLE_NIL)
+            if (params->Handle != SHFL_HANDLE_NIL)
             {
                 pFindBuf->len = 16384;
-                pFindBuf->handle = params.Handle;
-                pFindBuf->map = map;
+                pFindBuf->handle = params->Handle;
+                pFindBuf->map = *map;
                 pFindBuf->tmp = tmp;
                 pFindBuf->has_more_files = true;
                 pFindBuf->ulFileNum = 0;
 
-                cbDir = strlen((char *)pszName) + 1;
+                cbParsedPath = strlen((char *)pszName) + 1;
 
                 str = pFile;
 
@@ -1004,6 +1099,12 @@ FS32_FINDFIRSTEXIT:
         FS32_FINDCLOSE(pfsfsi, pfsfsd);
     }
 
+    if (params)
+        RTMemFree(params);
+    if (map)
+        RTMemFree(map);
+    if (pszParsedPath)
+        RTMemFree(pszParsedPath);
     if (pDir)
         RTMemFree(pDir);
     if (pFile)

@@ -308,7 +308,7 @@ APIRET APIENTRY MakeShortName(ULONG ulFileNo, char *pszLongName, char *pszShortN
 #define TRANSLATE_SHORT_TO_LONG  1
 #define TRANSLATE_LONG_TO_SHORT  2
 
-APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget, int cbTarget, ULONG ulTranslate);
+APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget, ULONG ulTranslate);
 
 int toupper (int c);
 int tolower (int c);

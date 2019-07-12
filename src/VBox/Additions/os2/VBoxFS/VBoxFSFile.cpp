@@ -301,9 +301,7 @@ APIRET APIENTRY parseFileName(const char *pszPath, PCDFSI pcdfsi,
         hrc = NO_ERROR;
     }
 
-    if ( TranslateName(map, path, pszParsedPath, *pcbParsedPath, TRANSLATE_SHORT_TO_LONG) )
-        strcpy( pszParsedPath, path );
-
+    strcpy(pszParsedPath, path);
     //*pcbParsedPath = strlen(pszParsedPath) + 1;
 
 parse_exit:
@@ -318,11 +316,12 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
                 PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG ulOpenMode, ULONG usOpenFlags,
                 PUSHORT pusAction, ULONG usAttr, PBYTE pcEABuf, PUSHORT pfgenflag)
 {
-    SHFLCREATEPARMS params = {0};
+    PSHFLCREATEPARMS params = NULL;
     APIRET hrc = NO_ERROR;
     char *pszFullName = NULL;
-    int cbFullName;
-    VBGLSFMAP map;
+    char *pszParsedPath = NULL;
+    int cbParsedPath;
+    VBGLSFMAP *map = NULL;
     bool tmp;
     char *pwsz = NULL;
     PSHFLSTRING path;
@@ -333,8 +332,32 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
 
     log("FS32_OPENCREATE(%s, %lx, %lx, %lx)\n", pszName, ulOpenMode, usOpenFlags, usAttr);
 
-    RT_ZERO(params);
-    params.Handle = SHFL_HANDLE_NIL;
+    params = (PSHFLCREATEPARMS)RTMemAlloc(sizeof(SHFLCREATEPARMS));
+
+    if (! params)
+    {
+        rc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_OPENCREATEEXIT;
+    }
+
+    map = (VBGLSFMAP *)RTMemAlloc(sizeof(VBGLSFMAP));
+
+    if (! map)
+    {
+        rc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_OPENCREATEEXIT;
+    }
+
+    RT_ZERO(*params);
+    params->Handle = SHFL_HANDLE_NIL;
+
+    pszParsedPath = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
+
+    if (! pszParsedPath)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_OPENCREATEEXIT;
+    }
 
     pszFullName = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
 
@@ -344,15 +367,20 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
         goto FS32_OPENCREATEEXIT;
     }
 
-    cbFullName = CCHMAXPATHCOMP + 1;
+    cbParsedPath = CCHMAXPATHCOMP + 1;
 
-    hrc = parseFileName((char *)pszName, pcdfsi, pszFullName, &cbFullName, &map, &tmp);
+    hrc = parseFileName((char *)pszName, pcdfsi, pszParsedPath, &cbParsedPath, map, &tmp);
 
     if (hrc)
     {
         log("Filename parse error!\n");
         goto FS32_OPENCREATEEXIT;
     }
+
+    memset(pszFullName, 0, cbParsedPath);
+
+    if ( TranslateName(map, pszParsedPath, pszFullName, TRANSLATE_SHORT_TO_LONG) )
+        strcpy( pszFullName, pszParsedPath );
 
     log("pszFullName=%s\n", pszFullName); 
 
@@ -363,54 +391,54 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     }
 
     if (ulOpenMode & OPEN_ACCESS_READWRITE)
-        params.CreateFlags |= SHFL_CF_ACCESS_READWRITE | SHFL_CF_ACCESS_ATTR_READWRITE;
+        params->CreateFlags |= SHFL_CF_ACCESS_READWRITE | SHFL_CF_ACCESS_ATTR_READWRITE;
     else
     {
         if (ulOpenMode & OPEN_ACCESS_WRITEONLY)
-            params.CreateFlags |= SHFL_CF_ACCESS_WRITE | SHFL_CF_ACCESS_ATTR_WRITE;
+            params->CreateFlags |= SHFL_CF_ACCESS_WRITE | SHFL_CF_ACCESS_ATTR_WRITE;
         else
-            params.CreateFlags |= SHFL_CF_ACCESS_READ | SHFL_CF_ACCESS_ATTR_READ;
+            params->CreateFlags |= SHFL_CF_ACCESS_READ | SHFL_CF_ACCESS_ATTR_READ;
     }
 
     if (ulOpenMode & OPEN_SHARE_DENYREAD)
-        params.CreateFlags |= SHFL_CF_ACCESS_DENYREAD;
+        params->CreateFlags |= SHFL_CF_ACCESS_DENYREAD;
     else
     {
         if (ulOpenMode & OPEN_SHARE_DENYREADWRITE)
-            params.CreateFlags |= SHFL_CF_ACCESS_DENYALL;
+            params->CreateFlags |= SHFL_CF_ACCESS_DENYALL;
         else if ( (ulOpenMode & OPEN_SHARE_DENYWRITE) ||
                   (ulOpenMode & (OPEN_SHARE_DENYNONE | OPEN_SHARE_DENYREADWRITE |
                                  OPEN_SHARE_DENYREAD | OPEN_SHARE_DENYWRITE)) )
-            params.CreateFlags |= SHFL_CF_ACCESS_DENYWRITE;
+            params->CreateFlags |= SHFL_CF_ACCESS_DENYWRITE;
     }
 
     if (ulOpenMode & OPEN_SHARE_DENYNONE)
-            params.CreateFlags &= ~SHFL_CF_ACCESS_MASK_DENY;
+            params->CreateFlags &= ~SHFL_CF_ACCESS_MASK_DENY;
 
     switch (usOpenFlags & 0x13)
     {
         case OPEN_ACTION_OPEN_IF_EXISTS | OPEN_ACTION_CREATE_IF_NEW:
-            params.CreateFlags |= SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_CREATE_IF_NEW;
+            params->CreateFlags |= SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_CREATE_IF_NEW;
             break;
 
         case OPEN_ACTION_OPEN_IF_EXISTS | OPEN_ACTION_FAIL_IF_NEW:
-            params.CreateFlags |= SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW;
+            params->CreateFlags |= SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW;
             break;
 
         case OPEN_ACTION_REPLACE_IF_EXISTS | OPEN_ACTION_CREATE_IF_NEW:
-            params.CreateFlags |= SHFL_CF_ACT_REPLACE_IF_EXISTS | SHFL_CF_ACT_CREATE_IF_NEW;
+            params->CreateFlags |= SHFL_CF_ACT_REPLACE_IF_EXISTS | SHFL_CF_ACT_CREATE_IF_NEW;
             break;
 
         case OPEN_ACTION_REPLACE_IF_EXISTS | OPEN_ACTION_FAIL_IF_NEW:
-            params.CreateFlags |= SHFL_CF_ACT_REPLACE_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW;
+            params->CreateFlags |= SHFL_CF_ACT_REPLACE_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW;
             break;
 
         case OPEN_ACTION_FAIL_IF_EXISTS | OPEN_ACTION_CREATE_IF_NEW:
-            params.CreateFlags |= SHFL_CF_ACT_FAIL_IF_EXISTS | SHFL_CF_ACT_CREATE_IF_NEW;
+            params->CreateFlags |= SHFL_CF_ACT_FAIL_IF_EXISTS | SHFL_CF_ACT_CREATE_IF_NEW;
             break;
 
         case OPEN_ACTION_FAIL_IF_EXISTS | OPEN_ACTION_FAIL_IF_NEW:
-            params.CreateFlags |= SHFL_CF_ACT_FAIL_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW;
+            params->CreateFlags |= SHFL_CF_ACT_FAIL_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW;
             break;
 
         default:
@@ -419,7 +447,7 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
             goto FS32_OPENCREATEEXIT;
     }
 
-    params.Info.Attr.fMode = ((uint32_t)usAttr << RTFS_DOS_SHIFT) & RTFS_DOS_MASK_OS2;
+    params->Info.Attr.fMode = ((uint32_t)usAttr << RTFS_DOS_SHIFT) & RTFS_DOS_MASK_OS2;
 
     pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
 
@@ -439,9 +467,9 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
         goto FS32_OPENCREATEEXIT;
     }
 
-    rc = VbglR0SfCreate(&g_clientHandle, &map, path, &params);
+    rc = VbglR0SfCreate(&g_clientHandle, map, path, params);
 
-    if (params.Handle == SHFL_HANDLE_NIL)
+    if (params->Handle == SHFL_HANDLE_NIL)
     {
         log("fail\n");
 
@@ -451,7 +479,7 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
         }
         else
         {
-            switch (params.Result)
+            switch (params->Result)
             {
                 case SHFL_FILE_EXISTS:
                     hrc = ERROR_FILE_EXISTS;
@@ -480,7 +508,7 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
 
     *pusAction = 0;
 
-    switch (params.Result)
+    switch (params->Result)
     {
         case SHFL_FILE_EXISTS:
             *pusAction = FILE_EXISTED;
@@ -508,20 +536,20 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
         goto FS32_OPENCREATEEXIT;
     }
 
-    psffsd->filebuf->handle = params.Handle;
+    psffsd->filebuf->handle = params->Handle;
     psffsd->filebuf->path = path;
-    psffsd->filebuf->map = map;
+    psffsd->filebuf->map = *map;
     psffsd->filebuf->tmp = tmp;
 
     psffsi->sfi_positionl = 0;
     psffsi->sfi_position = 0;
 
-    psffsi->sfi_sizel = params.Info.cbObject;
-    psffsi->sfi_size = (LONG)params.Info.cbObject;
+    psffsi->sfi_sizel = params->Info.cbObject;
+    psffsi->sfi_size = (LONG)params->Info.cbObject;
 
     /* Creation time   */
-    RTTimeSpecAddSeconds(&params.Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
-    RTTimeExplode(&time, &params.Info.BirthTime);
+    RTTimeSpecAddSeconds(&params->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
+    RTTimeExplode(&time, &params->Info.BirthTime);
 
     Time.hours = time.u8Hour;
     Time.minutes = time.u8Minute;
@@ -529,14 +557,12 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     Date.year = time.i32Year - 1980;
     Date.month = time.u8Month;
     Date.day = time.u8MonthDay;
-    //psffsi->sfi_ctime = *(PUSHORT)&Time;
-    //psffsi->sfi_cdate = *(PUSHORT)&Date;
     psffsi->sfi_ctime = Time;
     psffsi->sfi_cdate = Date;
 
     /* Last access time   */
-    RTTimeSpecAddSeconds(&params.Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
-    RTTimeExplode(&time, &params.Info.AccessTime);
+    RTTimeSpecAddSeconds(&params->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
+    RTTimeExplode(&time, &params->Info.AccessTime);
 
     Time.hours = time.u8Hour;
     Time.minutes = time.u8Minute;
@@ -544,14 +570,12 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     Date.year = time.i32Year - 1980;
     Date.month = time.u8Month;
     Date.day = time.u8MonthDay;
-    //psffsi->sfi_atime = *(PUSHORT)&Time;
-    //psffsi->sfi_adate = *(PUSHORT)&Date;
     psffsi->sfi_atime = Time;
     psffsi->sfi_adate = Date;
 
     /* Last write time   */
-    RTTimeSpecAddSeconds(&params.Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
-    RTTimeExplode(&time, &params.Info.ModificationTime);
+    RTTimeSpecAddSeconds(&params->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
+    RTTimeExplode(&time, &params->Info.ModificationTime);
 
     Time.hours = time.u8Hour;
     Time.minutes = time.u8Minute;
@@ -559,8 +583,6 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     Date.year = time.i32Year - 1980;
     Date.month = time.u8Month;
     Date.day = time.u8MonthDay;
-    //psffsi->sfi_mtime = *(PUSHORT)&Time;
-    //psffsi->sfi_mdate = *(PUSHORT)&Date;
     psffsi->sfi_mtime = Time;
     psffsi->sfi_mdate = Date;
 
@@ -571,13 +593,19 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
         psffsi->sfi_tstamp |= ST_SCREAT | ST_PCREAT;
     }
 
-    psffsi->sfi_DOSattr = VBoxToOS2Attr(params.Info.Attr.fMode);
+    psffsi->sfi_DOSattr = VBoxToOS2Attr(params->Info.Attr.fMode);
 
 FS32_OPENCREATEEXIT:
     if (pwsz)
         RTMemFree(pwsz);
+    if (pszParsedPath)
+        RTMemFree(pszParsedPath);
     if (pszFullName)
         RTMemFree(pszFullName);
+    if (params)
+        RTMemFree(params);
+    if (map)
+        RTMemFree(map);
 
     log(" => %d\n", hrc);
     return hrc;
@@ -685,7 +713,6 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
               PBYTE pData, ULONG cbData, ULONG IOflag)
 {
     APIRET hrc = NO_ERROR;
-    SHFLCREATEPARMS params = {0};
     USHORT usNeededSize;
     PSHFLDIRINFO file = NULL;
     uint32_t len = sizeof(SHFLDIRINFO);
@@ -759,10 +786,19 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                 {
                     case FIL_STANDARD:
                         {
-                            FILESTATUS filestatus;
+                            PFILESTATUS filestatus;
                             RTTIME time;
                             FDATE Date;
                             FTIME Time;
+
+                            filestatus = (PFILESTATUS)RTMemAlloc(sizeof(FILESTATUS));
+
+                            if (! filestatus)
+                            {
+                                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                                goto FS32_FILEINFOEXIT;
+                            }
+
                             /* Creation time   */
                             RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.BirthTime);
@@ -772,8 +808,8 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             Time.twosecs = time.u8Second / 2;
                             Time.minutes = time.u8Minute;
                             Time.hours = time.u8Hour;
-                            memcpy(&filestatus.fdateCreation, &Date, sizeof(USHORT));
-                            memcpy(&filestatus.ftimeCreation, &Time, sizeof(USHORT));
+                            memcpy(&filestatus->fdateCreation, &Date, sizeof(USHORT));
+                            memcpy(&filestatus->ftimeCreation, &Time, sizeof(USHORT));
                             /* Last access time   */
                             RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.AccessTime);
@@ -783,8 +819,8 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             Time.twosecs = time.u8Second / 2;
                             Time.minutes = time.u8Minute;
                             Time.hours = time.u8Hour;
-                            memcpy(&filestatus.fdateLastAccess, &Date, sizeof(USHORT));
-                            memcpy(&filestatus.ftimeLastAccess, &Time, sizeof(USHORT));
+                            memcpy(&filestatus->fdateLastAccess, &Date, sizeof(USHORT));
+                            memcpy(&filestatus->ftimeLastAccess, &Time, sizeof(USHORT));
                             /* Last write time   */
                             RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.ModificationTime);
@@ -794,22 +830,32 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             Time.twosecs = time.u8Second / 2;
                             Time.minutes = time.u8Minute;
                             Time.hours = time.u8Hour;
-                            memcpy(&filestatus.fdateLastWrite, &Date, sizeof(USHORT));
-                            memcpy(&filestatus.ftimeLastWrite, &Time, sizeof(USHORT));
-                            filestatus.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
-                            filestatus.cbFile = (ULONG)file->Info.cbObject;
-                            filestatus.cbFileAlloc = (ULONG)file->Info.cbAllocated;
-                            KernCopyOut(pData, &filestatus, sizeof(FILESTATUS));
+                            memcpy(&filestatus->fdateLastWrite, &Date, sizeof(USHORT));
+                            memcpy(&filestatus->ftimeLastWrite, &Time, sizeof(USHORT));
+                            filestatus->attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
+                            filestatus->cbFile = (ULONG)file->Info.cbObject;
+                            filestatus->cbFileAlloc = (ULONG)file->Info.cbAllocated;
+                            KernCopyOut(pData, filestatus, sizeof(FILESTATUS));
+                            RTMemFree(filestatus);
                             hrc = NO_ERROR;
                             break;
                         }
  
                     case FIL_STANDARDL:
                         {
-                            FILESTATUS3L filestatus;
+                            PFILESTATUS3L filestatus;
                             RTTIME time;
                             FDATE Date;
                             FTIME Time;
+
+                            filestatus = (PFILESTATUS3L)RTMemAlloc(sizeof(FILESTATUS3L));
+
+                            if (! filestatus)
+                            {
+                                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                                goto FS32_FILEINFOEXIT;
+                            }
+
                             /* Creation time   */
                             RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.BirthTime);
@@ -819,8 +865,8 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             Time.twosecs = time.u8Second / 2;
                             Time.minutes = time.u8Minute;
                             Time.hours = time.u8Hour;
-                            memcpy(&filestatus.fdateCreation, &Date, sizeof(USHORT));
-                            memcpy(&filestatus.ftimeCreation, &Time, sizeof(USHORT));
+                            memcpy(&filestatus->fdateCreation, &Date, sizeof(USHORT));
+                            memcpy(&filestatus->ftimeCreation, &Time, sizeof(USHORT));
                             /* Last access time   */
                             RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.AccessTime);
@@ -830,8 +876,8 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             Time.twosecs = time.u8Second / 2;
                             Time.minutes = time.u8Minute;
                             Time.hours = time.u8Hour;
-                            memcpy(&filestatus.fdateLastAccess, &Date, sizeof(USHORT));
-                            memcpy(&filestatus.ftimeLastAccess, &Time, sizeof(USHORT));
+                            memcpy(&filestatus->fdateLastAccess, &Date, sizeof(USHORT));
+                            memcpy(&filestatus->ftimeLastAccess, &Time, sizeof(USHORT));
                             /* Last write time   */
                             RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.ModificationTime);
@@ -841,22 +887,32 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             Time.twosecs = time.u8Second / 2;
                             Time.minutes = time.u8Minute;
                             Time.hours = time.u8Hour;
-                            memcpy(&filestatus.fdateLastWrite, &Date, sizeof(USHORT));
-                            memcpy(&filestatus.ftimeLastWrite, &Time, sizeof(USHORT));
-                            filestatus.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
-                            filestatus.cbFile = file->Info.cbObject;
-                            filestatus.cbFileAlloc = file->Info.cbAllocated;
-                            KernCopyOut(pData, &filestatus, sizeof(FILESTATUS3L));
+                            memcpy(&filestatus->fdateLastWrite, &Date, sizeof(USHORT));
+                            memcpy(&filestatus->ftimeLastWrite, &Time, sizeof(USHORT));
+                            filestatus->attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
+                            filestatus->cbFile = file->Info.cbObject;
+                            filestatus->cbFileAlloc = file->Info.cbAllocated;
+                            KernCopyOut(pData, filestatus, sizeof(FILESTATUS3L));
+                            RTMemFree(filestatus);
                             hrc = NO_ERROR;
                             break;
                         }
 
                     case FIL_QUERYEASIZE:
                         {
-                            FILESTATUS2 filestatus;
+                            PFILESTATUS2 filestatus;
                             RTTIME time;
                             FDATE Date;
                             FTIME Time;
+
+                            filestatus = (PFILESTATUS2)RTMemAlloc(sizeof(FILESTATUS2));
+
+                            if (! filestatus)
+                            {
+                                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                                goto FS32_FILEINFOEXIT;
+                            }
+
                             /* Creation time   */
                             RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.BirthTime);
@@ -866,8 +922,8 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             Time.twosecs = time.u8Second / 2;
                             Time.minutes = time.u8Minute;
                             Time.hours = time.u8Hour;
-                            memcpy(&filestatus.fdateCreation, &Date, sizeof(USHORT));
-                            memcpy(&filestatus.ftimeCreation, &Time, sizeof(USHORT));
+                            memcpy(&filestatus->fdateCreation, &Date, sizeof(USHORT));
+                            memcpy(&filestatus->ftimeCreation, &Time, sizeof(USHORT));
                             /* Last access time   */
                             RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.AccessTime);
@@ -877,8 +933,8 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             Time.twosecs = time.u8Second / 2;
                             Time.minutes = time.u8Minute;
                             Time.hours = time.u8Hour;
-                            memcpy(&filestatus.fdateLastAccess, &Date, sizeof(USHORT));
-                            memcpy(&filestatus.ftimeLastAccess, &Time, sizeof(USHORT));
+                            memcpy(&filestatus->fdateLastAccess, &Date, sizeof(USHORT));
+                            memcpy(&filestatus->ftimeLastAccess, &Time, sizeof(USHORT));
                             /* Last write time   */
                             RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.ModificationTime);
@@ -888,23 +944,33 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             Time.twosecs = time.u8Second / 2;
                             Time.minutes = time.u8Minute;
                             Time.hours = time.u8Hour;
-                            memcpy(&filestatus.fdateLastWrite, &Date, sizeof(USHORT));
-                            memcpy(&filestatus.ftimeLastWrite, &Time, sizeof(USHORT));
-                            filestatus.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
-                            filestatus.cbFile = (ULONG)file->Info.cbObject;
-                            filestatus.cbFileAlloc = (ULONG)file->Info.cbAllocated;
-                            filestatus.cbList = sizeof(filestatus.cbList);
-                            KernCopyOut(pData, &filestatus, sizeof(FILESTATUS2));
+                            memcpy(&filestatus->fdateLastWrite, &Date, sizeof(USHORT));
+                            memcpy(&filestatus->ftimeLastWrite, &Time, sizeof(USHORT));
+                            filestatus->attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
+                            filestatus->cbFile = (ULONG)file->Info.cbObject;
+                            filestatus->cbFileAlloc = (ULONG)file->Info.cbAllocated;
+                            filestatus->cbList = sizeof(filestatus->cbList);
+                            KernCopyOut(pData, filestatus, sizeof(FILESTATUS2));
+                            RTMemFree(filestatus);
                             hrc = NO_ERROR;
                             break;
                         }
 
                     case FIL_QUERYEASIZEL:
                         {
-                            FILESTATUS4L filestatus;
+                            PFILESTATUS4L filestatus;
                             RTTIME time;
                             FDATE Date;
                             FTIME Time;
+
+                            filestatus = (PFILESTATUS4L)RTMemAlloc(sizeof(FILESTATUS4L));
+
+                            if (! filestatus)
+                            {
+                                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                                goto FS32_FILEINFOEXIT;
+                            }
+
                             /* Creation time   */
                             RTTimeSpecAddSeconds(&file->Info.BirthTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.BirthTime);
@@ -914,8 +980,8 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             Time.twosecs = time.u8Second / 2;
                             Time.minutes = time.u8Minute;
                             Time.hours = time.u8Hour;
-                            memcpy(&filestatus.fdateCreation, &Date, sizeof(USHORT));
-                            memcpy(&filestatus.ftimeCreation, &Time, sizeof(USHORT));
+                            memcpy(&filestatus->fdateCreation, &Date, sizeof(USHORT));
+                            memcpy(&filestatus->ftimeCreation, &Time, sizeof(USHORT));
                             /* Last access time   */
                             RTTimeSpecAddSeconds(&file->Info.AccessTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.AccessTime);
@@ -925,8 +991,8 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             Time.twosecs = time.u8Second / 2;
                             Time.minutes = time.u8Minute;
                             Time.hours = time.u8Hour;
-                            memcpy(&filestatus.fdateLastAccess, &Date, sizeof(USHORT));
-                            memcpy(&filestatus.ftimeLastAccess, &Time, sizeof(USHORT));
+                            memcpy(&filestatus->fdateLastAccess, &Date, sizeof(USHORT));
+                            memcpy(&filestatus->ftimeLastAccess, &Time, sizeof(USHORT));
                             /* Last write time   */
                             RTTimeSpecAddSeconds(&file->Info.ModificationTime, -60 * VBoxTimezoneGetOffsetMin());
                             RTTimeExplode(&time, &file->Info.ModificationTime);
@@ -936,13 +1002,14 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             Time.twosecs = time.u8Second / 2;
                             Time.minutes = time.u8Minute;
                             Time.hours = time.u8Hour;
-                            memcpy(&filestatus.fdateLastWrite, &Date, sizeof(USHORT));
-                            memcpy(&filestatus.ftimeLastWrite, &Time, sizeof(USHORT));
-                            filestatus.attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
-                            filestatus.cbFile = file->Info.cbObject;
-                            filestatus.cbFileAlloc = file->Info.cbAllocated;
-                            filestatus.cbList = sizeof(filestatus.cbList);
-                            KernCopyOut(pData, &filestatus, sizeof(FILESTATUS4L));
+                            memcpy(&filestatus->fdateLastWrite, &Date, sizeof(USHORT));
+                            memcpy(&filestatus->ftimeLastWrite, &Time, sizeof(USHORT));
+                            filestatus->attrFile = VBoxToOS2Attr(file->Info.Attr.fMode);
+                            filestatus->cbFile = file->Info.cbObject;
+                            filestatus->cbFileAlloc = file->Info.cbAllocated;
+                            filestatus->cbList = sizeof(filestatus->cbList);
+                            KernCopyOut(pData, filestatus, sizeof(FILESTATUS4L));
+                            RTMemFree(filestatus);
                             hrc = NO_ERROR;
                             break;
                         }
@@ -1015,23 +1082,31 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                     case FIL_STANDARD:
                         {
                             USHORT usMask;
-                            FILESTATUS filestatus;
+                            PFILESTATUS filestatus;
                             RTTIME time;
                             FDATE Date;
                             FTIME Time;
 
-                            if (cbData < sizeof(filestatus))
+                            if (cbData < sizeof(FILESTATUS))
                             {
                                 hrc = ERROR_INSUFFICIENT_BUFFER;
                                 goto FS32_FILEINFOEXIT;
                             }
 
-                            KernCopyIn(&filestatus, pData, sizeof(filestatus));
+                            filestatus = (PFILESTATUS)RTMemAlloc(sizeof(FILESTATUS));
+
+                            if (! filestatus)
+                            {
+                                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                                goto FS32_FILEINFOEXIT;
+                            }
+
+                            KernCopyIn(filestatus, pData, sizeof(FILESTATUS));
 
                             /* Creation time   */
                             memset(&time, 0, sizeof(RTTIME));
-                            Date = filestatus.fdateCreation;
-                            Time = filestatus.ftimeCreation;
+                            Date = filestatus->fdateCreation;
+                            Time = filestatus->ftimeCreation;
                             time.u8WeekDay = UINT8_MAX;
                             time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
@@ -1048,8 +1123,8 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             RTTimeSpecAddSeconds(&file->Info.BirthTime, 60 * VBoxTimezoneGetOffsetMin());
                             /* Last access time   */
                             memset(&time, 0, sizeof(RTTIME));
-                            Date = filestatus.fdateLastAccess;
-                            Time = filestatus.ftimeLastAccess;
+                            Date = filestatus->fdateLastAccess;
+                            Time = filestatus->ftimeLastAccess;
                             time.u8WeekDay = UINT8_MAX;
                             time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
@@ -1066,8 +1141,8 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             RTTimeSpecAddSeconds(&file->Info.AccessTime, 60 * VBoxTimezoneGetOffsetMin());
                             /* Last write time   */
                             memset(&time, 0, sizeof(RTTIME));
-                            Date = filestatus.fdateLastWrite;
-                            Time = filestatus.ftimeLastWrite;
+                            Date = filestatus->fdateLastWrite;
+                            Time = filestatus->ftimeLastWrite;
                             time.u8WeekDay = UINT8_MAX;
                             time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
@@ -1083,78 +1158,88 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             RTTimeImplode(&file->Info.ModificationTime, &time);
                             RTTimeSpecAddSeconds(&file->Info.ModificationTime, 60 * VBoxTimezoneGetOffsetMin());
                             
-                            file->Info.cbObject = filestatus.cbFile;
-                            file->Info.cbAllocated = filestatus.cbFileAlloc;
-                            file->Info.Attr.fMode = OS2ToVBoxAttr(filestatus.attrFile);
+                            file->Info.cbObject = filestatus->cbFile;
+                            file->Info.cbAllocated = filestatus->cbFileAlloc;
+                            file->Info.Attr.fMode = OS2ToVBoxAttr(filestatus->attrFile);
 
                             usMask = ~(FILE_READONLY | FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED);
 
-                            if (filestatus.attrFile & FILE_DIRECTORY)
+                            if (filestatus->attrFile & FILE_DIRECTORY)
                             {
                                 usMask &= ~FILE_DIRECTORY;
                             }
 
-                            if (filestatus.attrFile & usMask)
+                            if (filestatus->attrFile & usMask)
                             {
                                 hrc = ERROR_ACCESS_DENIED;
+                                RTMemFree(filestatus);
                                 goto FS32_FILEINFOEXIT;
                             }
 
                             usMask = 0;
-                            if (memcmp(&filestatus.fdateCreation, &usMask, sizeof(usMask)) ||
-                                memcmp(&filestatus.ftimeCreation, &usMask, sizeof(usMask)))
+                            if (memcmp(&filestatus->fdateCreation, &usMask, sizeof(usMask)) ||
+                                memcmp(&filestatus->ftimeCreation, &usMask, sizeof(usMask)))
                             {
                                 psffsi->sfi_tstamp &= ~ST_SCREAT;
                                 psffsi->sfi_tstamp |= ST_PCREAT;
-                                memcpy(&psffsi->sfi_ctime, &filestatus.ftimeCreation, sizeof(USHORT));
-                                memcpy(&psffsi->sfi_cdate, &filestatus.fdateCreation, sizeof(USHORT));
+                                memcpy(&psffsi->sfi_ctime, &filestatus->ftimeCreation, sizeof(USHORT));
+                                memcpy(&psffsi->sfi_cdate, &filestatus->fdateCreation, sizeof(USHORT));
                             }
 
-                            if (memcmp(&filestatus.fdateLastWrite, &usMask, sizeof(usMask)) ||
-                                memcmp(&filestatus.ftimeLastWrite, &usMask, sizeof(usMask)))
+                            if (memcmp(&filestatus->fdateLastWrite, &usMask, sizeof(usMask)) ||
+                                memcmp(&filestatus->ftimeLastWrite, &usMask, sizeof(usMask)))
                             {
                                 psffsi->sfi_tstamp &= ~ST_SWRITE;
                                 psffsi->sfi_tstamp |= ST_PWRITE;
-                                memcpy(&psffsi->sfi_mtime, &filestatus.ftimeLastWrite, sizeof(USHORT));
-                                memcpy(&psffsi->sfi_mdate, &filestatus.fdateLastWrite, sizeof(USHORT));
+                                memcpy(&psffsi->sfi_mtime, &filestatus->ftimeLastWrite, sizeof(USHORT));
+                                memcpy(&psffsi->sfi_mdate, &filestatus->fdateLastWrite, sizeof(USHORT));
                             }
 
-                            if (memcmp(&filestatus.fdateLastAccess, &usMask, sizeof(usMask)) ||
-                                memcmp(&filestatus.ftimeLastAccess, &usMask, sizeof(usMask)))
+                            if (memcmp(&filestatus->fdateLastAccess, &usMask, sizeof(usMask)) ||
+                                memcmp(&filestatus->ftimeLastAccess, &usMask, sizeof(usMask)))
                             {
                                 psffsi->sfi_tstamp &= ~ST_SREAD;
                                 psffsi->sfi_tstamp |= ST_PREAD;
-                                memcpy(&psffsi->sfi_atime, &filestatus.ftimeLastAccess, sizeof(USHORT));
-                                memcpy(&psffsi->sfi_adate, &filestatus.fdateLastAccess, sizeof(USHORT));
+                                memcpy(&psffsi->sfi_atime, &filestatus->ftimeLastAccess, sizeof(USHORT));
+                                memcpy(&psffsi->sfi_adate, &filestatus->fdateLastAccess, sizeof(USHORT));
                             }
 
-                            if (psffsi->sfi_DOSattr != (BYTE)filestatus.attrFile)
-                                psffsi->sfi_DOSattr = (BYTE)filestatus.attrFile;
+                            if (psffsi->sfi_DOSattr != (BYTE)filestatus->attrFile)
+                                psffsi->sfi_DOSattr = (BYTE)filestatus->attrFile;
 
                             hrc = NO_ERROR;
+                            RTMemFree(filestatus);
                             break;
                         }
 
                     case FIL_STANDARDL:
                         {
                             USHORT usMask;
-                            FILESTATUS3L filestatus;
+                            PFILESTATUS3L filestatus;
                             RTTIME time;
                             FDATE Date;
                             FTIME Time;
 
-                            if (cbData < sizeof(filestatus))
+                            if (cbData < sizeof(FILESTATUS3L))
                             {
                                 hrc = ERROR_INSUFFICIENT_BUFFER;
                                 goto FS32_FILEINFOEXIT;
                             }
 
-                            KernCopyIn(&filestatus, pData, sizeof(filestatus));
+                            filestatus = (PFILESTATUS3L)RTMemAlloc(sizeof(FILESTATUS3L));
+
+                            if (! filestatus)
+                            {
+                                hrc = ERROR_NOT_ENOUGH_MEMORY;
+                                goto FS32_FILEINFOEXIT;
+                            }
+
+                            KernCopyIn(filestatus, pData, sizeof(FILESTATUS3L));
 
                             /* Creation time   */
                             memset(&time, 0, sizeof(RTTIME));
-                            Date = filestatus.fdateCreation;
-                            Time = filestatus.ftimeCreation;
+                            Date = filestatus->fdateCreation;
+                            Time = filestatus->ftimeCreation;
                             time.u8WeekDay = UINT8_MAX;
                             time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
@@ -1171,8 +1256,8 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             RTTimeSpecAddSeconds(&file->Info.BirthTime, 60 * VBoxTimezoneGetOffsetMin());
                             /* Last access time   */
                             memset(&time, 0, sizeof(RTTIME));
-                            Date = filestatus.fdateLastAccess;
-                            Time = filestatus.ftimeLastAccess;
+                            Date = filestatus->fdateLastAccess;
+                            Time = filestatus->ftimeLastAccess;
                             time.u8WeekDay = UINT8_MAX;
                             time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
@@ -1189,8 +1274,8 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             RTTimeSpecAddSeconds(&file->Info.AccessTime, 60 * VBoxTimezoneGetOffsetMin());
                             /* Last write time   */
                             memset(&time, 0, sizeof(RTTIME));
-                            Date = filestatus.fdateLastWrite;
-                            Time = filestatus.ftimeLastWrite;
+                            Date = filestatus->fdateLastWrite;
+                            Time = filestatus->ftimeLastWrite;
                             time.u8WeekDay = UINT8_MAX;
                             time.u16YearDay = 0;
                             time.u8MonthDay = Date.day;
@@ -1206,55 +1291,58 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             RTTimeImplode(&file->Info.ModificationTime, &time);
                             RTTimeSpecAddSeconds(&file->Info.ModificationTime, 60 * VBoxTimezoneGetOffsetMin());
                             
-                            file->Info.cbObject = filestatus.cbFile;
-                            file->Info.cbAllocated = filestatus.cbFileAlloc;
-                            file->Info.Attr.fMode = OS2ToVBoxAttr(filestatus.attrFile);
+                            file->Info.cbObject = filestatus->cbFile;
+                            file->Info.cbAllocated = filestatus->cbFileAlloc;
+                            file->Info.Attr.fMode = OS2ToVBoxAttr(filestatus->attrFile);
 
                             usMask = ~(FILE_READONLY | FILE_HIDDEN | FILE_SYSTEM | FILE_ARCHIVED);
 
-                            if (filestatus.attrFile & FILE_DIRECTORY)
+                            if (filestatus->attrFile & FILE_DIRECTORY)
                             {
                                 usMask &= ~FILE_DIRECTORY;
                             }
 
-                            if (filestatus.attrFile & usMask)
+                            if (filestatus->attrFile & usMask)
                             {
                                 hrc = ERROR_ACCESS_DENIED;
+                                RTMemFree(filestatus);
                                 goto FS32_FILEINFOEXIT;
                             }
 
                             usMask = 0;
-                            if (memcmp(&filestatus.fdateCreation, &usMask, sizeof(usMask)) ||
-                                memcmp(&filestatus.ftimeCreation, &usMask, sizeof(usMask)))
+                            if (memcmp(&filestatus->fdateCreation, &usMask, sizeof(usMask)) ||
+                                memcmp(&filestatus->ftimeCreation, &usMask, sizeof(usMask)))
                             {
                                 psffsi->sfi_tstamp &= ~ST_SCREAT;
                                 psffsi->sfi_tstamp |= ST_PCREAT;
-                                memcpy(&psffsi->sfi_ctime, &filestatus.ftimeCreation, sizeof(USHORT));
-                                memcpy(&psffsi->sfi_cdate, &filestatus.fdateCreation, sizeof(USHORT));
+                                memcpy(&psffsi->sfi_ctime, &filestatus->ftimeCreation, sizeof(USHORT));
+                                memcpy(&psffsi->sfi_cdate, &filestatus->fdateCreation, sizeof(USHORT));
                             }
 
-                            if (memcmp(&filestatus.fdateLastWrite, &usMask, sizeof(usMask)) ||
-                                memcmp(&filestatus.ftimeLastWrite, &usMask, sizeof(usMask)))
+                            if (memcmp(&filestatus->fdateLastWrite, &usMask, sizeof(usMask)) ||
+                                memcmp(&filestatus->ftimeLastWrite, &usMask, sizeof(usMask)))
                             {
                                 psffsi->sfi_tstamp &= ~ST_SWRITE;
                                 psffsi->sfi_tstamp |= ST_PWRITE;
-                                memcpy(&psffsi->sfi_mtime, &filestatus.ftimeLastWrite, sizeof(USHORT));
-                                memcpy(&psffsi->sfi_mdate, &filestatus.fdateLastWrite, sizeof(USHORT));
+                                memcpy(&psffsi->sfi_mtime, &filestatus->ftimeLastWrite, sizeof(USHORT));
+                                memcpy(&psffsi->sfi_mdate, &filestatus->fdateLastWrite, sizeof(USHORT));
                             }
 
-                            if (memcmp(&filestatus.fdateLastAccess, &usMask, sizeof(usMask)) ||
-                                memcmp(&filestatus.ftimeLastAccess, &usMask, sizeof(usMask)))
+                            if (memcmp(&filestatus->fdateLastAccess, &usMask, sizeof(usMask)) ||
+                                memcmp(&filestatus->ftimeLastAccess, &usMask, sizeof(usMask)))
                             {
                                 psffsi->sfi_tstamp &= ~ST_SREAD;
                                 psffsi->sfi_tstamp |= ST_PREAD;
-                                memcpy(&psffsi->sfi_atime, &filestatus.ftimeLastAccess, sizeof(USHORT));
-                                memcpy(&psffsi->sfi_adate, &filestatus.fdateLastAccess, sizeof(USHORT));
+                                memcpy(&psffsi->sfi_atime, &filestatus->ftimeLastAccess, sizeof(USHORT));
+                                memcpy(&psffsi->sfi_adate, &filestatus->fdateLastAccess, sizeof(USHORT));
                             }
 
-                            if (psffsi->sfi_DOSattr != (BYTE)filestatus.attrFile)
-                                psffsi->sfi_DOSattr = (BYTE)filestatus.attrFile;
+                            if (psffsi->sfi_DOSattr != (BYTE)filestatus->attrFile)
+                                psffsi->sfi_DOSattr = (BYTE)filestatus->attrFile;
 
                             hrc = NO_ERROR;
+
+                            RTMemFree(filestatus);
                             break;
                         }
 

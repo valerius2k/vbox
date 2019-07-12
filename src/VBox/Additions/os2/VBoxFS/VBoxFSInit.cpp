@@ -63,58 +63,6 @@ void             LogPrintf(char *fmt, ...);
 RT_C_DECLS_END
 
 
-#if 0
-
-/*!
-  @brief         Gets an environment variable by name
-
-  @param         pszName       variable name
-  @param         ppszValue     pointer to returned pointer variable (to an environment variable)
-
-  @return
-    NO_ERROR                   if env. var found successfully
-    ERROR_ENVVAR_NOT_FOUND     env. var. not found
-*/
-
-APIRET APIENTRY doScanEnv(PCSZ  pszName,
-                          PSZ  *ppszValue)
-{
-  char varname[CCHMAXPATH];
-  int  i;
-  char *p, *q, *env;
-
-  /* get the environment */
-  env = g_pEnv;
-
-  /* search for needed env variable */
-  log("env=%s\n", env);
-  for (p = env; *p; p += strlen(p) + 1)
-  {
-    // move until '=' sign is encountered
-    for (i = 0, q = p; *q && *q != '=' && i < CCHMAXPATH - 1; q++, i++) ;
-
-    /* copy to name buffer  */
-    strncpy(varname, p, i);
-    /* add ending zero byte */
-    varname[i] = '\0';
-
-    log("var[%d]=%s\n", i, varname);
-    if (! stricmp(varname, (const char *)pszName))
-    {
-      /* variable found */
-      *ppszValue = (PSZ)(q + 1);
-
-      return NO_ERROR;
-    }
-  }
-
-  log("none found!\n");
-  return ERROR_ENVVAR_NOT_FOUND;
-}
-
-#endif
-
-
 /**
  * 32-bit Ring-0 init routine.
  *
