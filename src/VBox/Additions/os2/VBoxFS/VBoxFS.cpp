@@ -2007,7 +2007,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                                 goto FS32_PATHINFOEXIT;
                             }
 
-                            KernCopyIn(filestatus, pData, sizeof(PFILESTATUS));
+                            KernCopyIn(filestatus, pData, sizeof(FILESTATUS));
 
                             /* Creation time   */
                             memset(&time, 0, sizeof(RTTIME));
@@ -2227,8 +2227,8 @@ FS32_PATHINFOEXIT:
         RTMemFree(path);
     if (file)
         RTMemFree(file);
-    if (pszFullName)
-        RTMemFree(pszFullName);
+    if (pszParsedPath)
+        RTMemFree(pszParsedPath);
     if (pszFullName)
         RTMemFree(pszFullName);
 

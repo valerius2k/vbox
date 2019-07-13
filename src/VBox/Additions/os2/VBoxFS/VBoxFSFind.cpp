@@ -698,7 +698,10 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     eaop.fpFEAList->cbList = cbData - (len + 2);
                     hrc = GetEmptyEAS(&eaop);
                     if (hrc && (hrc != ERROR_EAS_DIDNT_FIT))
+                    {
+                        RTMemFree(findbuf);
                         goto FILLFINDBUFEXIT;
+                    }
                     else if (hrc == ERROR_EAS_DIDNT_FIT)
                         ulFeaSize = sizeof(eaop.fpFEAList->cbList);
                     else
@@ -783,7 +786,10 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     eaop.fpFEAList->cbList = cbData - (len + 2);
                     hrc = GetEmptyEAS(&eaop);
                     if (hrc && (hrc != ERROR_EAS_DIDNT_FIT))
+                    {
+                        RTMemFree(findbuf);
                         goto FILLFINDBUFEXIT;
+                    }
                     else if (hrc == ERROR_EAS_DIDNT_FIT)
                         ulFeaSize = sizeof(eaop.fpFEAList->cbList);
                     else

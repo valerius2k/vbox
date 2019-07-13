@@ -322,7 +322,7 @@ bool IsDBCSLead(UCHAR uch)
     return false;
 }
 
-static char rgValidChars[]="01234567890 ABCDEFGHIJKLMNOPQRSTUVWXYZ!#$%&'()-_@^`{}~";
+static const char rgValidChars[]="01234567890 ABCDEFGHIJKLMNOPQRSTUVWXYZ!#$%&'()-_@^`{}~";
 
 APIRET APIENTRY MakeShortName(ULONG ulFileNo, char *pszLongName, char *pszShortName)
 {
@@ -618,13 +618,11 @@ APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget,
     int    rc;
     uint32_t len, num_files, index = 0;
 
-    if (g_fHideLFN)
+    if (g_fHideLFN || (! IsDosSession() && ulTranslate == TRANSLATE_SHORT_TO_LONG))
     {
         return ERROR_FILE_NOT_FOUND;
     }
 
-    //log("xx000\n");
-    //log("xx001\n");
     if (strlen(pszPath) >= 2)
     {
         if (pszPath[1] == ':')
@@ -635,7 +633,6 @@ APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget,
         }
     }
 
-    //log("xx002\n");
     len = 16384;
 
     params = (PSHFLCREATEPARMS)RTMemAllocZ(sizeof(SHFLCREATEPARMS));
@@ -654,17 +651,14 @@ APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget,
         goto TRANSLATENAME_EXIT;
     }
 
-    //log("xx003\n");
     pszDir = (char *)RTMemAlloc((size_t)CCHMAXPATHCOMP + 1);
     if (! pszDir)
     {
         hrc = ERROR_NOT_ENOUGH_MEMORY;
         goto TRANSLATENAME_EXIT;
     }
-    //log("xx004\n");
     memset(pszDir, 0, CCHMAXPATHCOMP + 1);
 
-    //log("xx005\n");
     pszLongName = (char *)RTMemAlloc((size_t)CCHMAXPATHCOMP * 4 + 4);
     if (! pszLongName)
     {
@@ -673,12 +667,10 @@ APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget,
     }
     memset(pszLongName, 0, CCHMAXPATHCOMP * 4 + 4);
 
-    //log("xx006\n");
     pszPart      = pszLongName + CCHMAXPATHCOMP + 1;
     pszUpperPart = pszPart + CCHMAXPATHCOMP + 1;
     pszUpperName = pszUpperPart + CCHMAXPATHCOMP + 1;
 
-    //log("xx007\n");
     if (ulTranslate == TRANSLATE_AUTO)
     {
         if (IsDosSession())
@@ -688,7 +680,6 @@ APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget,
     }
 
     usMode = MODE_SCAN;
-    //log("xx008\n");
     while (usMode != MODE_RETURN && ! fEnd)
     {
         usMode = MODE_SCAN;
@@ -696,89 +687,67 @@ APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget,
         if (*pszPath == '\\')
             *pszTarget++ = *pszPath++;
 
-        //log("xx009\n");
         if (!strlen(pszPath))
             break;
 
-        //log("xx010\n");
         p = strchr(pszPath, '\\');
         if (!p)
             p = pszPath + strlen(pszPath);
 
-        //log("xx011\n");
         if (p - pszPath > CCHMAXPATHCOMP - 1)
         {
             hrc = ERROR_BUFFER_OVERFLOW;
-            //log("xx012\n");
             goto TRANSLATENAME_EXIT;
         }
 
-        //log("xx013\n");
         memset(pszPart, 0, CCHMAXPATHCOMP + 1);
         memcpy(pszPart, pszPath, p - pszPath);
-        //log("xx014\n");
         vboxfsStrToUpper(pszPart, CCHMAXPATHCOMP + 1, pszUpperPart);
         pszPath = p;
 
-        //log("xx015\n");
         pszNumber = strchr(pszUpperPart, '~');
         if (pszNumber)
         {
             ulNum = strtol(pszNumber + 1, NULL, 16);
         }
 
-        //log("xx016\n");
         RT_ZERO(*params);
 
-        //log("xx017\n");
         pwsz = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
 
         if (! pwsz)
         {
-            //log("xx018\n");
             hrc = ERROR_NOT_ENOUGH_MEMORY;
             goto TRANSLATENAME_EXIT;
         }
 
-        //log("xx019\n");
         vboxfsStrToUtf8(pwsz, pszDir);
 
-        //log("xx020\n");
         path = make_shflstring(pwsz);
 
-        //log("xx021\n");
         if (! path)
         {
-            //log("xx022\n");
             hrc = ERROR_NOT_ENOUGH_MEMORY;
             goto TRANSLATENAME_EXIT;
         }
 
-        //log("xx023\n");
         params->Handle = SHFL_HANDLE_NIL;
         params->CreateFlags = SHFL_CF_DIRECTORY | SHFL_CF_ACT_OPEN_IF_EXISTS | SHFL_CF_ACT_FAIL_IF_NEW | SHFL_CF_ACCESS_READ;
 
-        //log("xx024\n");
-        //asm("int   $3\n");
         rc = VbglR0SfCreate(&g_clientHandle, map, path, params);
 
-        //log("xx025\n");
         if (RT_SUCCESS(rc))
         {
-            //log("xx026\n");
             if (params->Result == SHFL_PATH_NOT_FOUND)
             {
-                //log("xx027\n");
                 hrc = ERROR_PATH_NOT_FOUND;
                 goto TRANSLATENAME_EXIT;
             }
 
-            //log("xx028\n");
             if (params->Result == SHFL_FILE_EXISTS)
             {
                 if (params->Handle != SHFL_HANDLE_NIL)
                 {
-                    //log("xx029\n");
                     len = 16384;
                 }
             }
@@ -791,77 +760,60 @@ APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget,
         }
         else
         {
-            //log("xx030\n");
             hrc = vbox_err_to_os2_err(rc);
             goto TRANSLATENAME_EXIT;
         }
 
-        //log("xx031\n");
         memset(pszLongName, 0, CCHMAXPATHCOMP + 1);
         ulFileNo = 1;
         fFound = FALSE;
-        //log("xx032\n");
         while (usMode == MODE_SCAN && ! fEnd)
         {
             char *str2 = NULL;
             PSHFLSTRING path2 = NULL;
             char *pwsz2 = NULL;
 
-            //log("xx033\n");
             str2 = (char *)RTMemAlloc(CCHMAXPATHCOMP + 1);
 
             if (! str2)
             {
-                //log("xx034\n");
                 hrc = ERROR_NOT_ENOUGH_MEMORY;
                 goto TRANSLATENAME_EXIT;
             }
 
-            //log("xx035\n");
             pwsz2 = (char *)RTMemAlloc(2 * CCHMAXPATHCOMP + 2);
 
             if (! pwsz2)
             {
-                //log("xx036\n");
                 RTMemFree(str2);
                 hrc = ERROR_NOT_ENOUGH_MEMORY;
                 goto TRANSLATENAME_EXIT;
             }
 
-            //log("xx037\n");
             strcpy(str2, pszDir);
             strcat(str2, "\\*");
 
-            //log("xx038\n");
             vboxfsStrToUtf8(pwsz2, str2);
 
-            //log("xx039\n");
             path2 = make_shflstring(pwsz2);
 
-            //log("xx040\n");
             if (! path2)
             {
-                //log("xx041\n");
                 RTMemFree(str2);
                 RTMemFree(pwsz2);
                 hrc = ERROR_NOT_ENOUGH_MEMORY;
                 goto TRANSLATENAME_EXIT;
             }
          
-            //log("xx042\n");
             num_files = index = 0;
             bufpos = buf;
 
-            //log("xx043\n");
-            //asm("int   $3\n");
             rc = VbglR0SfDirInfo(&g_clientHandle, map, params->Handle,
                                  path2, 0, index, &len, buf, &num_files);
-            //log("xx044\n");
             RTMemFree(path2);
             RTMemFree(pwsz2);
             RTMemFree(str2);
 
-            //log("xx045\n");
             if (rc && rc != VERR_NO_MORE_FILES)
             {
                 log("VbglR0SfDirInfo failed: %d\n", rc);
@@ -869,15 +821,12 @@ APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget,
                 goto TRANSLATENAME_EXIT;
             }
 
-            //log("xx046\n");
             if (rc == VERR_NO_MORE_FILES)
             {
-                //log("xx047\n");
                 hrc = ERROR_NO_MORE_FILES;
                 goto TRANSLATENAME_EXIT;
             }
 
-            //log("xx048\n");
             while (usMode == MODE_SCAN && index < num_files && bufpos < buf + len)
             {
                 PSHFLDIRINFO file = bufpos;
@@ -886,141 +835,109 @@ APIRET APIENTRY TranslateName(VBGLSFMAP *map, char *pszPath, char *pszTarget,
 #ifdef CALL_YIELD
                 Yield();
 #endif
-                //log("xx049\n");
                 vboxfsStrFromUtf8(pszLongName, (char *)pszFileName, CCHMAXPATHCOMP + 1);
 
-                //log("xx050\n");
                 usFileAttr = VBoxToOS2Attr(file->Info.Attr.fMode);
 
-                //log("xx051\n");
                 vboxfsStrToUpper(pszLongName, CCHMAXPATHCOMP + 1, pszUpperName);
 
-                //log("xx052\n");
-                if (ulTranslate == TRANSLATE_LONG_TO_SHORT) /* OS/2 session, translate to DOS */
+                if (ulTranslate == TRANSLATE_LONG_TO_SHORT)
                 {
-                    //log("xx053\n");
+                    /* OS/2 session, translate to DOS */
                     MakeShortName(ulFileNo, pszUpperName, szShortName);
                     if (
                         ( !stricmp(pszUpperName, pszUpperPart) ||
                           !stricmp(szShortName,  pszUpperPart) ) )
                     {
-                        //log("xx054\n");
                         strcat(pszTarget, szShortName);
                         pszTarget += strlen(pszTarget);
                         fFound = TRUE;
                     }
                 }
-                else /* translate from DOS to OS/2 */
+                else
                 {
-                    //log("xx055\n");
+                    /* translate from DOS to OS/2 */
                     if ( (pszNumber && ulNum == ulFileNo) ||
                          (! pszNumber && ! stricmp(pszUpperName, pszUpperPart) ) )
                     {
-                        //log("xx056\n");
                         strcat(pszTarget, pszLongName);
                         pszTarget += strlen(pszTarget);
                         fFound = TRUE;
                     }
                 }
 
-                //log("xx057\n");
                 if (fFound)
                 {
-                    //log("xx058\n");
                     if (strlen(pszPath))
                     {
-                        //log("xx059\n");
                         if (usFileAttr & FILE_DIRECTORY)
                         {
-                            //log("xx060\n");
                             usMode = MODE_START;
                             break;
                         }
-                        //log("xx061\n");
                         fEnd = true;
                     }
-                    //log("xx062\n");
                     usMode = MODE_RETURN;
                     break;
                 }
-                //log("xx063\n");
                 memset(pszLongName, 0, CCHMAXPATHCOMP + 1);
                 ulFileNo++;
                 index++;
                 bufpos = (PSHFLDIRINFO)((char *)bufpos + offsetof(SHFLDIRINFO, name.String) + file->name.u16Size);
             }
-            //log("xx064\n");
             if (usMode != MODE_SCAN)
                 break;
-            //log("xx065\n");
             if (fEnd)
             {
                 strcat(pszTarget, pszPart);
             }
-            //log("xx066\n");
         }
 
-        //log("xx067\n");
         if (*pszDir)
             strcat(pszDir, "\\");
 
-        //log("xx068\n");
         strcat(pszDir, pszLongName);
 
-        //log("xx069\n");
         RTMemFree(pwsz); pwsz = NULL;
         RTMemFree(path); path = NULL;
-        //log("xx070\n");
         rc = VbglR0SfClose(&g_clientHandle, map, params->Handle);
-        //log("xx071\n");
         params->Handle = SHFL_HANDLE_NIL;
         hrc = vbox_err_to_os2_err(rc);
     }
 
 TRANSLATENAME_EXIT:
-    //log("xx072\n");
     if ( pszUpperPart && ( strchr(pszUpperPart, '*') || strchr(pszUpperPart, '?') ) )
     {
-        //log("xx073\n");
         hrc = NO_ERROR;
         fFound = true;
         strcat(pszTarget, pszUpperPart);
     }
 
-    //log("xx074\n");
     if (fEnd)
     {
         strcat(pszTarget, pszPath);
     }
 
-    //log("xx075\n");
     if (! fFound)
     {
         hrc = ERROR_FILE_NOT_FOUND;
     }
 
-    //log("xx076\n");
     if (params->Handle)
         VbglR0SfClose(&g_clientHandle, map, params->Handle);
     if (params)
         RTMemFree(params);
-    //log("xx077\n");
     if (pszLongName)
         RTMemFree(pszLongName);
-    //log("xx078\n");
     if (buf)
         RTMemFree(buf);
-    //log("xx079\n");
     if (pszDir)
         RTMemFree(pszDir);
-    //log("xx080\n");
     if (pwsz)
         RTMemFree(pwsz);
-    //log("xx081\n");
     if (path)
         RTMemFree(path);
 
-    //log("xx082\n");
     return hrc;
 }
 

@@ -459,6 +459,12 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
 
     vboxfsStrToUtf8(pwsz, (char *)pszFullName);
 
+    if (! pwsz)
+    {
+        hrc = ERROR_NOT_ENOUGH_MEMORY;
+        goto FS32_OPENCREATEEXIT;
+    }
+
     path = make_shflstring((char *)pwsz);
 
     if (! path)
@@ -472,6 +478,7 @@ FS32_OPENCREATE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG iCurDirEnd,
     if (params->Handle == SHFL_HANDLE_NIL)
     {
         log("fail\n");
+        log("rc=%d\n", rc);
 
         if (! (usOpenFlags & OPEN_ACTION_CREATE_IF_NEW) )
         {
