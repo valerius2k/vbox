@@ -41,7 +41,6 @@
 #include <iprt/assert.h>
 #include <iprt/path.h>
 
-extern UniChar *starter_table;
 
 extern VBGLSFCLIENT g_clientHandle;
 extern ULONG        g_fHideLFN;
@@ -159,8 +158,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
 
     log("g_pGIS=%lx\n", g_pGIS);
     log("timezone=%d minutes\n", (SHORT)g_pGIS->timezone);
-
-    log("starter table: %lx\n", starter_table);
 
     usEntriesWanted = *pcMatch;
     *pcMatch = 0;
@@ -699,6 +696,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     hrc = GetEmptyEAS(&eaop);
                     if (hrc && (hrc != ERROR_EAS_DIDNT_FIT))
                     {
+                        log("FIL_QUERYEASFROMLIST: hrc=%u\n", hrc);
                         RTMemFree(findbuf);
                         goto FILLFINDBUFEXIT;
                     }
@@ -787,6 +785,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     hrc = GetEmptyEAS(&eaop);
                     if (hrc && (hrc != ERROR_EAS_DIDNT_FIT))
                     {
+                        log("FIL_QUERYEASFROMLISTL: hrc=%u\n", hrc);
                         RTMemFree(findbuf);
                         goto FILLFINDBUFEXIT;
                     }

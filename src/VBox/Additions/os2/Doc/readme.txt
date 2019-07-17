@@ -25,6 +25,12 @@ The full source code for our version of OS/2 additions is available
 at Netlabs svn: http://svn.netlabs.org/repos/vbox/trunk, together
 with full sources for our VirtualBox OS/2 port.
 
+Features.
+--------
+
+Prerequisites.
+-------------
+
 Installation instructions:
 -------------------------
 

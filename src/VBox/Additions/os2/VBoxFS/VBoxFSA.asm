@@ -409,8 +409,6 @@ extern DOS16GETINFOSEG
 extern DOS16GETENV
 extern FSH_GETVOLPARM
 extern FSH_QSYSINFO
-extern FSH_PROBEBUF
-extern FSH_WILDMATCH
 
 segment TEXT32
 ;segment CODE32
@@ -522,125 +520,6 @@ segment CODE16
     ret
 VBOXFS_EP32_END     FSH32_QSYSINFO
 
-
-;;
-; @cproto APIRET APIENTRY FSH32_PROBEBUF(ULONG operation, char *pData, ULONG cbData);
-VBOXFS_EP32_BEGIN   FSH32_PROBEBUF, 'FSH32_PROBEBUF'
-    ; switch to 16-bits and reserve place in stack for one selector and three vars
-    VBOXFS_32_TO_16     FSH32_PROBEBUF, 10
-segment CODE16
-    mov     cx, [ebp + 8h]             ; operation
-    mov     [esp + 6], cx
-
-    ; alloc a GDT selector for pData
-    VBOXFS_ALLOCGDTSEL     8
-    jnc   FSH32_PROBEBUF_ok1
-    mov   ebx, ERROR_PROTECTION_VIOLATION
-    jmp   NAME(FSH32_PROBEBUF_exit2)
-FSH32_PROBEBUF_ok1:
-    ; Convert address from current process address space to system one
-    VBOXFS_PROCESSTOGLOBAL 0xc, [ebp + 10h], [ebp + 8h]
-    jnc   FSH32_PROBEBUF_ok2
-    mov   ebx, ERROR_PROTECTION_VIOLATION
-    jmp   NAME(FSH32_PROBEBUF_exit1)
-FSH32_PROBEBUF_ok2:
-    mov   [ebp + 0ch], eax
-    ; map pData FLAT addr to an allocated selector
-    VBOXFS_LINTOGDTSEL     8, 0xc, [ebp + 10h]
-    jnc   FSH32_PROBEBUF_ok3
-    mov   ebx, ERROR_PROTECTION_VIOLATION
-    jmp   NAME(FSH32_PROBEBUF_exit1)
-FSH32_PROBEBUF_ok3:
-    ; store a far pointer to pData
-    mov   eax, [esp + 8]
-    shl   eax, 16
-    mov   [esp + 2], eax
-
-    mov     cx, [ebp + 10h]            ; cbData
-    mov     [esp], cx
-
-    call  far FSH_PROBEBUF
-
-    ; save return code
-    xor   ebx, ebx
-    mov   bx, ax
-
-    ; -2*4 is because of "ret 8" command at the end of last function
-    sub   esp, 8
-
-GLOBALNAME FSH32_PROBEBUF_exit1
-    ; free GDT selectors
-    VBOXFS_FREEGDTSEL 8
-GLOBALNAME FSH32_PROBEBUF_exit2
-
-    add   esp, 8
-
-    ; switch back to 32 bits
-    VBOXFS_16_TO_32     FSH32_PROBEBUF
-
-    ; restore return code
-    mov   eax, ebx
-
-    ; restore stack
-    VBOXFS_EPILOGUE
-    ret
-VBOXFS_EP32_END     FSH32_PROBEBUF
-
-;;
-; APIRET APIENTRY FSH32_WILDMATCH(char *pPat, char *pStr);
-VBOXFS_EP32_BEGIN   FSH32_WILDMATCH, 'FSH32_WILDMATCH'
-    ; switch to 16-bits and reserve place in stack for two selectors and two far ptrs (2+2=4)
-    VBOXFS_32_TO_16     FSH32_WILDMATCH, 4*4
-segment CODE16
-    ; alloc a GDT selector for pPat
-    VBOXFS_ALLOCGDTSEL     3*4
-    jc    NAME(FSH32_WILDMATCH_exit2)
-    ; map pPat FLAT addr to an allocated selector
-    VBOXFS_LINTOGDTSEL     3*4, 0x8, 0x10000
-    jc    NAME(FSH32_WILDMATCH_exit2)
-    ; store a far pointer to pPat
-    mov   eax, [esp + 3*4]
-    shl   eax, 16
-    mov   [esp + 1*4], eax
-
-    ; alloc a GDT selector for pStr
-    VBOXFS_ALLOCGDTSEL     2*4
-    jc    NAME(FSH32_WILDMATCH_exit1)
-    ; map pStr FLAT addr to an allocated selector
-    VBOXFS_LINTOGDTSEL     2*4, 0xc, 0x10000
-    jc    NAME(FSH32_WILDMATCH_exit1)
-    ; store a far pointer to pStr
-    mov   eax, [esp + 2*4]
-    shl   eax, 16
-    mov   [esp + 0*4], eax
-
-    call  far FSH_WILDMATCH
-
-    ; save return code
-    xor   ebx, ebx
-    mov   bx, ax
-
-    ; -2*4 is because of "ret 8" command at the end of last function
-    sub   esp, 2*4
-
-    ; free GDT selectors
-    VBOXFS_FREEGDTSEL 2*4
-GLOBALNAME FSH32_WILDMATCH_exit1
-    VBOXFS_FREEGDTSEL 3*4
-GLOBALNAME FSH32_WILDMATCH_exit2
-
-    add   esp, 2*4
-
-    ; switch back to 32 bits
-    VBOXFS_16_TO_32     FSH32_WILDMATCH
-
-    ; restore return code
-    mov   eax, ebx
-
-    ; restore stack
-    VBOXFS_EPILOGUE
-    ret
-VBOXFS_EP32_END     FSH32_WILDMATCH
 
 ;;
 ;   void LogPrint(const char *str);

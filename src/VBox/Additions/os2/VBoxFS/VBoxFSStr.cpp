@@ -50,7 +50,7 @@ extern ULONG        g_Cp;
 
 UconvObj cp_uconv = {0};
 UconvObj utf8_uconv = {0};
-UniChar *starter_table = NULL;
+char *starter_table = NULL;
 static char initted = 0;
 
 PSHFLSTRING make_shflstring(const char* const s)
@@ -83,12 +83,7 @@ void free_shflstring(PSHFLSTRING s)
 
 void vboxfsCPInit(void)
 {
-    uint32_t cpg = 0;
     int16_t cp = 0;
-    struct SAS *pSAS;
-    struct SAS_info_section *pSas_info_data;
-    struct CDIB *cdib;
-    struct CDIB_codepage_section *cpsec;
     APIRET rc;
 
     if (g_Cp)
@@ -96,24 +91,11 @@ void vboxfsCPInit(void)
         cp = g_Cp;
     }
 
-    /* Get the 1st user codepage from prepared codepages list */
-    /* pSAS = (struct SAS *)KernSelToFlat(0x70 << 16);
-    pSas_info_data = (struct SAS_info_section *)((char *)pSAS + pSAS->SAS_info_data);
-    cdib = (struct CDIB *)KernSelToFlat(pSas_info_data->SAS_info_CDIB << 16);
-    cpsec = (struct CDIB_codepage_section *)((char *)cdib + cdib->CDIB_codepage_ptr);
-
-    if (cpsec->CDIB_cp_length >= sizeof(struct CDIB_cp_id_section))
-    {
-        cp = cpsec->CDIB_cp_first_id.CDIB_cp_id;
-    } */
-
     log("*** Codepage: %u\n", cp);
-
     rc = KernCreateUconvObject(cp, &cp_uconv);
 
     /* Get starter table address */
-    starter_table = (UniChar *)KernSelToFlat((ULONG)cp_uconv.starter);
-
+    starter_table = (char *)KernSelToFlat((ULONG)cp_uconv.starter);
     log("*** starter_table: %lx\n", starter_table);
 
     KernCreateUconvObject(1208, &utf8_uconv);

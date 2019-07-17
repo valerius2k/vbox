@@ -193,12 +193,18 @@ APIRET GetEmptyEAS(PEAOP peaop)
       usMaxSize = (USHORT)pTarFeal->cbList;
 
    if (usMaxSize < sizeof (ULONG))
-      return ERROR_BUFFER_OVERFLOW;
+   {
+      rc = ERROR_BUFFER_OVERFLOW;
+      goto GetEmptyEAS_exit;
+   }
 
    pGeaList = pGeal;
 
    if (pGeaList->cbList > MAX_EA_SIZE)
-      return ERROR_EA_LIST_TOO_LONG;
+   {
+      rc = ERROR_EA_LIST_TOO_LONG;
+      goto GetEmptyEAS_exit;
+   }
 
    ulFeaSize = sizeof(pTarFeal->cbList);
    ulGeaSize = sizeof(pGeaList->cbList);
@@ -257,6 +263,7 @@ GetEmptyEAS_exit:
     if (pGeal)
         RTMemFree(pGeal);
 
+    log("GetEmptyEAs: rc=%u\n", rc);
     return rc;
 }
 
