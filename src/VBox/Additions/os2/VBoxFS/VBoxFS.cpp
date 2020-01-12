@@ -144,8 +144,11 @@ APIRET GetEmptyEAS(PEAOP peaop)
    APIRET rc;
 
    PFEALIST pTarFeal = NULL;
-   USHORT   usMaxSize;
+   ULONG    ulMaxSize;
    PFEA     pCurrFea;
+
+   FEALIST  feal;
+   GEALIST  geal;
 
    PGEALIST pGeaList;
    PGEA     pCurrGea;
@@ -161,7 +164,21 @@ APIRET GetEmptyEAS(PEAOP peaop)
    PGEALIST pGeal = NULL;
    ULONG    cbGeal = 0;
 
-   KernCopyIn(&cbFeal, &peaop->fpFEAList->cbList, sizeof(peaop->fpFEAList->cbList));
+   KernCopyIn(&feal, peaop->fpFEAList, sizeof(feal));
+   KernCopyIn(&geal, peaop->fpGEAList, sizeof(geal));
+
+   cbFeal = feal.cbList;
+
+   if (cbFeal > MAX_EA_SIZE)
+      cbFeal = MAX_EA_SIZE;
+
+   ulMaxSize = cbFeal;
+
+   if (ulMaxSize < sizeof (ULONG))
+   {
+      rc = ERROR_BUFFER_OVERFLOW;
+      goto GetEmptyEAS_exit;
+   }
 
    pFeal = (PFEALIST)RTMemAlloc(cbFeal);
 
@@ -173,7 +190,15 @@ APIRET GetEmptyEAS(PEAOP peaop)
 
    KernCopyIn(pFeal, peaop->fpFEAList, cbFeal);
 
-   KernCopyIn(&cbGeal, &peaop->fpGEAList->cbList, sizeof(peaop->fpGEAList->cbList));
+   pTarFeal = pFeal;
+
+   cbGeal = geal.cbList;
+
+   if (cbGeal > MAX_EA_SIZE)
+   {
+      rc = ERROR_EA_LIST_TOO_LONG;
+      goto GetEmptyEAS_exit;
+   }
 
    pGeal = (PGEALIST)RTMemAlloc(cbGeal);
 
@@ -185,26 +210,7 @@ APIRET GetEmptyEAS(PEAOP peaop)
 
    KernCopyIn(pGeal, peaop->fpGEAList, cbGeal);
 
-   pTarFeal = pFeal;
-
-   if (pTarFeal->cbList > MAX_EA_SIZE)
-      usMaxSize = (USHORT)MAX_EA_SIZE;
-   else
-      usMaxSize = (USHORT)pTarFeal->cbList;
-
-   if (usMaxSize < sizeof (ULONG))
-   {
-      rc = ERROR_BUFFER_OVERFLOW;
-      goto GetEmptyEAS_exit;
-   }
-
    pGeaList = pGeal;
-
-   if (pGeaList->cbList > MAX_EA_SIZE)
-   {
-      rc = ERROR_EA_LIST_TOO_LONG;
-      goto GetEmptyEAS_exit;
-   }
 
    ulFeaSize = sizeof(pTarFeal->cbList);
    ulGeaSize = sizeof(pGeaList->cbList);
@@ -219,7 +225,7 @@ APIRET GetEmptyEAS(PEAOP peaop)
       ulGeaSize += ulCurrGeaLen;
       }
 
-   if (ulFeaSize > usMaxSize)
+   if (ulFeaSize > ulMaxSize)
       {
       /* this is what HPFS.IFS returns */
       /* when a file does not have any EAs */
@@ -255,7 +261,7 @@ APIRET GetEmptyEAS(PEAOP peaop)
        rc = 0;
        }
 
-    memcpy(peaop->fpFEAList, pTarFeal, pTarFeal->cbList);
+    KernCopyOut(peaop->fpFEAList, pTarFeal, pTarFeal->cbList);
 
 GetEmptyEAS_exit:
     if (pFeal)

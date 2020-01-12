@@ -204,7 +204,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
 
     if (level == FIL_QUERYEASFROMLIST || level == FIL_QUERYEASFROMLISTL)
     {
-        memcpy(&eaop, pbData, sizeof (EAOP));
+        KernCopyIn(&eaop, pbData, sizeof (EAOP));
         pFeal = (PFEALIST)RTMemAlloc(MIN_EA_SIZE);
         
         if (! pFeal)
@@ -212,6 +212,9 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
             hrc = ERROR_NOT_ENOUGH_MEMORY;
             goto FILLFINDBUFEXIT;
         }
+
+        eaop.fpFEAList = pFeal;
+        eaop.fpGEAList = (PGEALIST)KernSelToFlat((ULONG)eaop.fpGEAList);
     }
 
     memset(pbData, 0, cbData);
@@ -221,9 +224,6 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
         KernCopyOut(pbData, &eaop, sizeof(EAOP));
         pbData += sizeof(EAOP);
         cbData -= sizeof(EAOP);
-
-        eaop.fpFEAList = pFeal;
-        eaop.fpGEAList = (PGEALIST)KernSelToFlat((ULONG)eaop.fpGEAList);
     }
 
     if (! pFindBuf->has_more_files)
@@ -692,7 +692,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     cbData -= cbSize;
                     pbData += cbSize;
                     len = strlen(pszFn);
-                    eaop.fpFEAList->cbList = cbData - (len + 2);
+                    eaop.fpFEAList->cbList = MIN_EA_SIZE; //cbData - (len + 2);
                     hrc = GetEmptyEAS(&eaop);
                     if (hrc && (hrc != ERROR_EAS_DIDNT_FIT))
                     {
@@ -781,7 +781,7 @@ APIRET APIENTRY FillFindBuf(PFINDBUF pFindBuf,
                     cbData -= cbSize;
                     pbData += cbSize;
                     len = strlen(pszFn);
-                    eaop.fpFEAList->cbList = cbData - (len + 2);
+                    eaop.fpFEAList->cbList = MIN_EA_SIZE; //cbData - (len + 2);
                     hrc = GetEmptyEAS(&eaop);
                     if (hrc && (hrc != ERROR_EAS_DIDNT_FIT))
                     {
