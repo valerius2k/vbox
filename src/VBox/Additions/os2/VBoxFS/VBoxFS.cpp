@@ -1220,6 +1220,8 @@ FS32_MOVE(PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszSrc, ULONG iSrcCurDirEnd,
 
     rc = VbglR0SfRename(&g_clientHandle, srcmap, oldpath, newpath, flags);
 
+    log("rc=%d\n", rc);
+
     hrc = vbox_err_to_os2_err(rc);
 
 FS32_MOVEEXIT:
@@ -1936,35 +1938,32 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                     case FIL_QUERYEASFROMLISTL:
                         {
                             EAOP filestatus;
+                            FEALIST feal;
+                            ULONG cbList;
+
                             KernCopyIn(&filestatus, pData, sizeof(EAOP));
                             filestatus.fpFEAList = (PFEALIST)KernSelToFlat((ULONG)filestatus.fpFEAList);
                             filestatus.fpGEAList = (PGEALIST)KernSelToFlat((ULONG)filestatus.fpGEAList);
+                            KernCopyIn(&feal, filestatus.fpFEAList, sizeof(feal));
+                            cbList = feal.cbList;
                             hrc = GetEmptyEAS(&filestatus);
-                            KernCopyOut(pData, &filestatus, sizeof(EAOP));
+                            KernCopyOut(filestatus.fpFEAList, &feal, sizeof(feal));
                             break;
                         }
 
                     case FIL_QUERYALLEAS:
                         {
                             EAOP filestatus;
-                            PFEALIST pFeal;
+                            FEALIST feal;
                             ULONG cbList;
 
                             KernCopyIn(&filestatus, pData, sizeof(EAOP));
                             filestatus.fpFEAList = (PFEALIST)KernSelToFlat((ULONG)filestatus.fpFEAList);
-                            KernCopyIn(&cbList, &filestatus.fpFEAList->cbList, sizeof(filestatus.fpFEAList->cbList));
-                            pFeal = (PFEALIST)RTMemAlloc(cbList);
-                            if (! pFeal)
-                            {
-                                hrc = ERROR_NOT_ENOUGH_MEMORY;
-                                break;
-                            }
-                            KernCopyIn(pFeal, filestatus.fpFEAList, cbList);
-                            memset(pFeal, 0, cbList);
-                            pFeal->cbList = sizeof(pFeal->cbList);
-                            KernCopyOut(filestatus.fpFEAList, pFeal, cbList);
-                            KernCopyOut(pData, &filestatus, sizeof(EAOP));
-                            RTMemFree(pFeal);
+                            KernCopyIn(&feal, filestatus.fpFEAList, sizeof(feal));
+                            cbList = feal.cbList;
+                            feal.cbList = sizeof(feal.cbList);
+                            KernCopyOut(filestatus.fpFEAList, &feal, sizeof(feal));
+                            hrc = NO_ERROR;
                             break;
                         }
 
@@ -2202,7 +2201,21 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
 
                     case FIL_QUERYEASIZE:
                     case FIL_QUERYEASIZEL:
-                        hrc = NO_ERROR;
+                        /* {
+                            EAOP filestatus;
+                            FEALIST feal;
+                            ULONG cbList;
+
+                            KernCopyIn(&filestatus, pData, sizeof(EAOP));
+                            filestatus.fpFEAList = (PFEALIST)KernSelToFlat((ULONG)filestatus.fpFEAList);
+                            filestatus.fpGEAList = (PGEALIST)KernSelToFlat((ULONG)filestatus.fpGEAList);
+                            KernCopyIn(&feal, filestatus.fpFEAList, sizeof(feal));
+                            cbList = feal.cbList;
+                            hrc = GetEmptyEAS(&filestatus);
+                            KernCopyOut(filestatus.fpFEAList, &feal, cbList);
+                            break;
+                        } */
+                        hrc = 0;
                         break;
 
                     default:
