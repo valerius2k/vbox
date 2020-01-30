@@ -1030,16 +1030,12 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                     case FIL_QUERYEASFROMLISTL:
                         {
                             EAOP filestatus;
-                            FEALIST feal;
-                            ULONG cbList;
 
                             KernCopyIn(&filestatus, pData, sizeof(EAOP));
                             filestatus.fpFEAList = (PFEALIST)KernSelToFlat((ULONG)filestatus.fpFEAList);
                             filestatus.fpGEAList = (PGEALIST)KernSelToFlat((ULONG)filestatus.fpGEAList);
-                            KernCopyIn(&feal, filestatus.fpFEAList, sizeof(feal));
-                            cbList = feal.cbList;
+                            filestatus.fpFEAList->cbList = MIN_EA_SIZE;
                             hrc = GetEmptyEAS(&filestatus);
-                            KernCopyOut(filestatus.fpFEAList, &feal, sizeof(feal));
                             break;
                         }
 

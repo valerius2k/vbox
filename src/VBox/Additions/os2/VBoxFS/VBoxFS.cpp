@@ -1683,6 +1683,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                 if (cbData < usNeededSize)
                 {
                     hrc = ERROR_BUFFER_OVERFLOW;
+                    log("usNeededSize=%u, cbData=%lu\n", usNeededSize, cbData);
                     goto FS32_PATHINFOEXIT;
                 }
 
@@ -1938,16 +1939,12 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                     case FIL_QUERYEASFROMLISTL:
                         {
                             EAOP filestatus;
-                            FEALIST feal;
-                            ULONG cbList;
 
                             KernCopyIn(&filestatus, pData, sizeof(EAOP));
                             filestatus.fpFEAList = (PFEALIST)KernSelToFlat((ULONG)filestatus.fpFEAList);
                             filestatus.fpGEAList = (PGEALIST)KernSelToFlat((ULONG)filestatus.fpGEAList);
-                            KernCopyIn(&feal, filestatus.fpFEAList, sizeof(feal));
-                            cbList = feal.cbList;
+                            filestatus.fpFEAList->cbList = MIN_EA_SIZE;
                             hrc = GetEmptyEAS(&filestatus);
-                            KernCopyOut(filestatus.fpFEAList, &feal, sizeof(feal));
                             break;
                         }
 
@@ -1962,7 +1959,7 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             KernCopyIn(&feal, filestatus.fpFEAList, sizeof(feal));
                             cbList = feal.cbList;
                             feal.cbList = sizeof(feal.cbList);
-                            KernCopyOut(filestatus.fpFEAList, &feal, sizeof(feal));
+                            KernCopyOut(filestatus.fpFEAList, &feal, cbList);
                             hrc = NO_ERROR;
                             break;
                         }
