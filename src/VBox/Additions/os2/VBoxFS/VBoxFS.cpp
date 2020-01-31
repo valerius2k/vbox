@@ -1959,7 +1959,8 @@ FS32_PATHINFO(ULONG flag, PCDFSI pcdfsi, PVBOXSFCD pcdfsd, PCSZ pszName, ULONG i
                             KernCopyIn(&feal, filestatus.fpFEAList, sizeof(feal));
                             cbList = feal.cbList;
                             feal.cbList = sizeof(feal.cbList);
-                            KernCopyOut(filestatus.fpFEAList, &feal, cbList);
+                            //KernCopyOut(filestatus.fpFEAList, &feal, cbList);
+                            KernCopyOut(filestatus.fpFEAList, &feal, sizeof(feal));
                             hrc = NO_ERROR;
                             break;
                         }

@@ -1050,7 +1050,8 @@ FS32_FILEINFO(ULONG flag, PSFFSI psffsi, PVBOXSFFSD psffsd, ULONG level,
                             KernCopyIn(&feal, filestatus.fpFEAList, sizeof(feal));
                             cbList = feal.cbList;
                             feal.cbList = sizeof(feal.cbList);
-                            KernCopyOut(filestatus.fpFEAList, &feal, cbList);
+                            //KernCopyOut(filestatus.fpFEAList, &feal, cbList);
+                            KernCopyOut(filestatus.fpFEAList, &feal, sizeof(feal));
                             hrc = NO_ERROR;
                             break;
                         }
