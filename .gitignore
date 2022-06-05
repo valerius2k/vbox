@@ -1,0 +1,8 @@
+*~
+.git
+
+out
+build.txt
+commit.txt
+gitlog.txt
+git.diff
